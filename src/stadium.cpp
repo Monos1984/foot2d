@@ -1,0 +1,349 @@
+// Statut des clubs (PRO / SEMI-PRO / AMATEUR), contrats des joueurs, vie du stade (affluence, billetterie, boutique, travaux)
+#include "game.h"
+#include <cstring>
+
+const char* statusName(int s) { return s == CS_PRO ? "PRO" : s == CS_SEMIPRO ? "SEMI-PRO" : "AMATEUR"; }
+
+int playerWage(const Player& p) {
+    if (p.contract == 2) return 0;
+    int w = p.wage();
+    return p.contract == 1 ? std::max(1, w * 35 / 100) : w;
+}
+
+// contrats selon le statut (clubs de l'IA, ou changement de statut)
+void applyContracts(Team& t, bool keepUser) {
+    if (!t.squadGen) return;
+    if (t.status == CS_PRO) { for (auto& p : t.squad) p.contract = 0; return; }
+    if (t.status == CS_AMATEUR) { for (auto& p : t.squad) p.contract = 2; return; }
+    if (keepUser) { for (auto& p : t.squad) if (p.contract == 0) p.contract = 1; return; }
+    std::vector<int> idx(t.squad.size());
+    for (int i = 0; i < (int)idx.size(); i++) idx[i] = i;
+    std::sort(idx.begin(), idx.end(), [&](int a, int b) { return t.squad[a].overall() > t.squad[b].overall(); });
+    for (int k = 0; k < (int)idx.size(); k++) t.squad[idx[k]].contract = k < 14 ? 1 : 2;
+}
+
+static int frTier(const Career& K, int team, int* dom = nullptr) {
+    int p, q, g;
+    int t = K.tierOfTeam(team, &p, &q, &g);
+    if (t < 0) return -1;
+    if (dom) *dom = K.pyramids[p].dom >= 0 ? 1 : K.pyramids[p].country == "FRA" ? 0 : 2;
+    return t;
+}
+
+int Career::forcedStatus(int team) const {
+    int dom = 0;
+    int t = frTier(*this, team, &dom);
+    if (t < 0) return CS_AMATEUR;
+    if (dom == 2) return t <= 3 ? CS_PRO : CS_SEMIPRO;       // championnats étrangers
+    if (dom == 1) return t == 0 ? -1 : CS_AMATEUR;           // outre-mer : R1 au choix
+    if (t <= 2) return CS_PRO;                               // Ligue 1, 2, 3
+    if (t <= 4) return CS_SEMIPRO;                           // National 1 et 2
+    if (t <= 7) return -1;                                   // Régional : semi-pro ou amateur
+    return CS_AMATEUR;                                       // Départemental
+}
+
+// capacités réelles (approximatives) des principaux stades
+static const struct { const char* key; int cap; } REAL_STADIUMS[] = {
+    { "Parc des Princes", 47929 }, { "Vélodrome", 67394 }, { "Groupama Stadium", 59186 }, { "Pierre-Mauroy", 50186 }, { "Allianz Riviera", 36178 },
+    { "Roazhon Park", 29778 }, { "Bollaert-Delelis", 38223 }, { "Louis-II", 16360 }, { "Meinau", 29230 }, { "Raymond-Kopa", 19350 },
+    { "Stade de l'Aube", 21684 }, { "Francis-Le Blé", 15220 }, { "Moustoir", 18110 }, { "Stadium de Toulouse", 33150 }, { "Océane", 25178 },
+    { "Charléty", 19151 }, { "Marie-Marvingt", 25064 }, { "Abbé-Deschamps", 18541 }, { "Geoffroy-Guichard", 41965 }, { "Stade Bauer", 10000 },
+    { "Auguste-Delaune", 21029 }, { "Mosson", 32900 }, { "Saint-Symphorien", 28786 }, { "Marcel-Picot", 20087 }, { "Parc des Sports d'Annecy", 15660 },
+    { "Auguste-Bonal", 20005 }, { "Gaston-Gérard", 15995 }, { "Nouste Camp", 4000 }, { "Roudourou", 18378 }, { "Marcel-Tribut", 4200 },
+    { "Stade des Alpes", 20068 }, { "Paul-Lignon", 5955 }, { "Beaujoire", 35322 }, { "Gabriel-Montpied", 11980 }, { "Stade de la Libération", 9500 },
+    { "Francis-Le Basser", 18739 }, { "Michel-d'Ornano", 20453 }, { "Guy-Piriou", 6500 }, { "Stade du Hainaut", 25172 }, { "Armand-Chouffet", 3500 },
+    { "Robert-Diochon", 8200 }, { "Marcel-Verchère", 11400 }, { "Licorne", 12097 }, { "Armand-Cesari", 16078 }, { "Henri-Desgrange", 5000 },
+    { "Pierre-de-Coubertin", 6000 }, { "Charles-Massot", 5000 }, { "Stade de la Source", 7000 }, { "Stade Jean-Bouin", 20000 },
+    { "Santiago Bernabéu", 83186 }, { "Spotify Camp Nou", 99354 }, { "Metropolitano", 70460 }, { "Old Trafford", 74310 }, { "Anfield", 61276 },
+    { "Etihad", 53400 }, { "Emirates", 60704 }, { "Stamford Bridge", 40343 }, { "Tottenham Hotspur Stadium", 62850 }, { "St James", 52305 },
+    { "Villa Park", 42640 }, { "Allianz Arena", 75024 }, { "Signal Iduna", 81365 }, { "BayArena", 30210 }, { "San Siro", 75817 }, { "Giuseppe Meazza", 75817 },
+    { "Allianz Stadium", 41507 }, { "Olimpico", 70634 }, { "Diego Armando Maradona", 54726 }, { "Estádio da Luz", 64642 }, { "Dragão", 50033 },
+    { "Johan Cruijff", 55865 }, { "Philips Stadion", 35000 }, { "Celtic Park", 60411 }, { "Ibrox", 50817 },
+};
+
+// capacité selon le niveau (plage par division) et le rang du club dans sa division, sauf stade réel connu
+void initStadium(Team& t, int tier, float tierAvg) {
+    StadiumInfo& S = t.sta;
+    S = StadiumInfo();
+    S.init = 1;
+    int cap = -1;
+    for (auto& r : REAL_STADIUMS) if (!t.stadium.empty() && t.stadium.find(r.key) != std::string::npos && t.parent < 0) { cap = r.cap; break; }
+    bool foreign = t.nation >= 0 && strcmp(NATIONS[t.nation].code, "FRA") != 0;
+    if (cap < 0) {
+        static const int LO[13] = { 16000, 8000, 4000, 2000, 1000, 500, 300, 250, 200, 150, 150, 150, 150 };
+        static const int HI[13] = { 48000, 30000, 20000, 8000, 5000, 2500, 1500, 1000, 800, 500, 450, 400, 350 };
+        static const int FLO[4] = { 20000, 10000, 5000, 3000 }, FHI[4] = { 75000, 35000, 20000, 12000 };
+        int tr = tier < 0 ? (t.rating >= 70 ? 0 : t.rating >= 60 ? 1 : t.rating >= 50 ? 3 : t.rating >= 40 ? 5 : 8) : std::min(12, tier);
+        float lo = foreign ? FLO[std::min(3, tr)] : LO[tr], hi = foreign ? FHI[std::min(3, tr)] : HI[tr];
+        float avg = tierAvg > 0 ? tierAvg : t.rating;
+        float x = std::max(0.f, std::min(1.f, 0.5f + (t.rating - avg) / 12.f));
+        cap = (int)(lo * std::pow(hi / lo, x));
+        if (t.parent >= 0) cap = std::max(150, cap / 3);   // réserves : terrain annexe
+    }
+    cap = std::max(150, std::min(100000, cap));
+    bool pro = cap >= 8000;
+    int ref = cap >= 20000 ? 25 : cap >= 8000 ? 15 : cap >= 3000 ? 8 : cap >= 1000 ? 5 : 3;
+    int share[4] = { 35, 29, 18, 18 };
+    if (cap < 1000) { share[0] = 55; share[1] = 25; share[2] = 10; share[3] = 10; }   // petit stade : une tribune et des mains courantes
+    for (int i = 0; i < 4; i++) {
+        Stand& st = S.s[i];
+        st.seats = cap * share[i] / 100;
+        st.kind = pro ? STK_COVERED : i == 0 ? (cap >= 400 ? STK_COVERED : STK_SEATS) : cap >= 2000 ? STK_SEATS : STK_STANDING;
+        st.price = (int16_t)(i == 0 ? ref + ref / 2 : ref);
+        st.vip = (i == 0 && cap >= 5000) ? cap / 60 : 0;
+        st.vipPrice = (int16_t)(ref * 5);
+    }
+    S.fans = (int)(cap * 0.75f);
+    S.buvette = cap >= 1000 ? 2 : 1;
+    S.boutique = cap >= 15000 ? 3 : cap >= 5000 ? 2 : cap >= 2000 ? 1 : 0;
+    S.parking = cap >= 10000 ? 2 : cap >= 3000 ? 1 : 0;
+    S.lights = cap >= 5000 ? 3 : cap >= 1500 ? 2 : 1;
+    S.pitch = 0;
+    S.screen = cap >= 20000 ? 1 : 0;
+    S.vestiaires = cap >= 8000 ? 3 : cap >= 2000 ? 2 : 1;
+    S.shirtPrice = (int16_t)(pro ? 85 : cap >= 2000 ? 45 : 30);
+}
+
+void stadiumSetCapacity(StadiumInfo& S, int cap) {
+    int share[4] = { 35, 29, 18, 18 };
+    if (cap < 1000) { share[0] = 55; share[1] = 25; share[2] = 10; share[3] = 10; }
+    for (int i = 0; i < 4; i++) S.s[i].seats = cap * share[i] / 100;
+    S.fans = std::max(S.fans, cap * 3 / 4);
+}
+
+void ensureStadium(int team) {
+    Team& t = g_world.teams[team];
+    if (!t.sta.init) initStadium(t, teamLevel(team) < 99 ? teamLevel(team) : -1, -1);
+}
+
+void Career::updateStatuses() {
+    for (auto& P : pyramids) {
+        // note moyenne par niveau (choix de l'IA en régional)
+        std::vector<float> avg(P.tiers.size(), 0); std::vector<int> cnt(P.tiers.size(), 0);
+        for (auto& pl : P.pools) for (int t : pl.clubs) { avg[pl.tier] += g_world.teams[t].rating; cnt[pl.tier]++; }
+        for (size_t i = 0; i < avg.size(); i++) if (cnt[i]) avg[i] /= cnt[i];
+        for (auto& pl : P.pools) for (int t : pl.clubs) {
+            Team& T = g_world.teams[t];
+            if (!T.sta.init) initStadium(T, pl.tier, avg[pl.tier]);
+            int f = forcedStatus(t);
+            int old = T.status;
+            if (t == userTeam && kind == CK_CLUB) {
+                if (f >= 0) { T.status = f; mgr.needStatus = false; }
+                else {
+                    if (mgr.statusChoice == CS_SEMIPRO || mgr.statusChoice == CS_AMATEUR) T.status = mgr.statusChoice;
+                    else if (T.status == CS_PRO) T.status = CS_SEMIPRO;
+                    mgr.needStatus = true;
+                }
+                if (old != T.status) {
+                    applyContracts(T, true);
+                    season.news.push_back(fmt("Statut du club : %s (%s).", statusName(T.status), f >= 0 ? "imposé par la division" : "choisi par le club"));
+                }
+            } else {
+                T.status = f >= 0 ? f : (T.rating >= avg[pl.tier] + 2 ? CS_SEMIPRO : CS_AMATEUR);
+                if (old != T.status || !T.squadGen) applyContracts(T, false);
+            }
+        }
+    }
+}
+
+void Career::setUserStatus(int st) {
+    Team& T = g_world.teams[userTeam];
+    int f = forcedStatus(userTeam);
+    if (f >= 0) st = f;
+    mgr.statusChoice = st;
+    mgr.needStatus = false;
+    if (T.status != st) {
+        T.status = st;
+        g_world.ensureSquad(userTeam);
+        if (st == CS_AMATEUR) for (auto& p : T.squad) p.contract = 2;
+        else if (st == CS_SEMIPRO) for (auto& p : T.squad) if (p.contract == 0) p.contract = 1;
+        season.news.push_back(fmt("Le club passe sous statut %s.", statusName(st)));
+    }
+}
+
+// ------------------------------------------------------------------ affluence et recettes
+static int refPrice(int cap) { return cap >= 20000 ? 25 : cap >= 8000 ? 15 : cap >= 3000 ? 8 : cap >= 1000 ? 5 : 3; }
+static float kindWeight(int k) { return k == STK_COVERED ? 1.2f : k == STK_SEATS ? 1.0f : 0.9f; }
+
+int Career::expectedAttendance(int stand, bool vip) const {
+    const Team& T = g_world.teams[userTeam];
+    const StadiumInfo& S = T.sta;
+    int cap = S.capacity();
+    float ref = (float)refPrice(cap);
+    float D = S.fans * (0.8f + 0.03f * S.lights + 0.04f * S.screen + 0.03f * S.pitch + 0.02f * S.parking);
+    float wsum = 0;
+    for (auto& x : S.s) wsum += kindWeight(x.kind) * x.seats;
+    const Stand& st = S.s[stand];
+    if (vip) {
+        float d = S.fans * 0.02f * std::exp(-1.0f * (st.vipPrice / (ref * 5.f) - 1.f));
+        return std::min(st.vip, (int)d);
+    }
+    if (wsum <= 0) return 0;
+    float pf = std::max(0.03f, std::min(1.7f, std::exp(-1.1f * (st.price / ref - 1.f))));
+    float d = D * kindWeight(st.kind) * st.seats / wsum * pf;
+    return std::min(st.seats, (int)d);
+}
+
+static int64_t g_eurRem = 0;
+static void addEuros(Career& K, int64_t eur, int64_t* bucket) {
+    g_eurRem += eur;
+    int64_t k = g_eurRem / 1000;
+    g_eurRem -= k * 1000;
+    K.mgr.budget += k;
+    if (k >= 0) K.mgr.seasonIncome += k; else K.mgr.seasonStadiumCost -= k;
+    if (bucket) *bucket += k;
+}
+
+void Career::homeMatchDay(int comp, int mi) {
+    Team& T = g_world.teams[userTeam];
+    StadiumInfo& S = T.sta;
+    if (!S.init) initStadium(T, tierOfTeam(userTeam), -1);
+    const Competition& C = season.comps[comp];
+    const MatchRes& m = C.matches[mi];
+    const Team& O = g_world.teams[m.away];
+    // attractivité : adversaire, enjeu, forme
+    float att = 1.0f;
+    att += std::max(-0.3f, std::min(0.5f, (O.rating - T.rating) * 0.02f));
+    if (C.format != FMT_LEAGUE) att += 0.15f;
+    if (C.kind == 3 || C.kind == 8 || C.format == FMT_SINGLE) att += 0.4f;
+    if (O.dept == T.dept && O.dept >= 0) att += 0.2f;              // derby
+    int total = 0; int64_t gate = 0;
+    for (int i = 0; i < 4; i++) {
+        Stand& st = S.s[i];
+        int a = std::min(st.seats, (int)(expectedAttendance(i, false) * att * g_rng.frange(0.9f, 1.1f)));
+        int v = std::min(st.vip, (int)(expectedAttendance(i, true) * att));
+        st.lastAtt = a + v;
+        total += a + v;
+        gate += (int64_t)a * st.price + (int64_t)v * st.vipPrice;
+    }
+    int64_t buv = (int64_t)(total * (0.8 + 1.2 * S.buvette));
+    float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
+    int64_t shop = (int64_t)(total * 0.012 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0)) * S.shirtPrice);
+    int64_t park = (int64_t)(total * 0.25 * S.parking * 3);
+    S.lastAtt = total; S.lastGate = (int32_t)(gate / 1000);
+    S.bestAtt = std::max(S.bestAtt, total);
+    S.seasonAttTotal += total; S.seasonHomeMatches++;
+    addEuros(*this, gate, &mgr.seasonGate);
+    addEuros(*this, -(gate / 4) - total * 1500LL / 1000, nullptr);   // organisation : sécurité, stadiers, billetterie (25 %) + 1,5 EUR par spectateur
+    addEuros(*this, buv + park, &mgr.seasonGate);
+    addEuros(*this, shop, &mgr.seasonShop);
+    // supporters : les victoires attirent du monde
+    bool win = m.hg > m.ag || (m.hg == m.ag && m.ph > m.pa);
+    bool loss = m.hg < m.ag || (m.hg == m.ag && m.ph >= 0 && m.ph < m.pa);
+    if (win) S.fans += S.fans / 250 + 3;
+    if (loss) S.fans -= S.fans / 500;
+    S.fans = std::max(50, S.fans);
+}
+
+// ------------------------------------------------------------------ travaux
+static const char* PJ_NAMES[NUM_PJ] = { "Agrandissement", "Couverture de tribune", "Loges VIP", "Buvette", "Boutique", "Parking", "Éclairage",
+                                         "Pelouse", "Écran géant", "Vestiaires", "Musée du club", "Sièges (tribune debout)" };
+
+int64_t Career::projectCost(const Team& t, int kind, int stand, int amount) {
+    const StadiumInfo& S = t.sta;
+    switch (kind) {
+    case PJ_SEATS: { int k = S.s[stand].kind; double per = k == STK_COVERED ? 0.6 : k == STK_SEATS ? 0.25 : 0.08; return (int64_t)(amount * per) + 5; }
+    case PJ_COVER: return (int64_t)(S.s[stand].seats * 0.2) + 20;
+    case PJ_UPGRADE_SEATS: return (int64_t)(S.s[stand].seats * 0.15) + 10;
+    case PJ_VIP: return (int64_t)amount * 3 + 20;
+    case PJ_BUVETTE: { int L = S.buvette + 1; return 10LL * L * L; }
+    case PJ_BOUTIQUE: { int L = S.boutique + 1; return 20LL * L * L; }
+    case PJ_PARKING: { int L = S.parking + 1; return 40LL * L * L; }
+    case PJ_LIGHTS: { int L = S.lights + 1; return 25LL * L * L; }
+    case PJ_PITCH: return S.pitch == 0 ? 250 : 450;
+    case PJ_SCREEN: return 150;
+    case PJ_VESTIAIRES: { int L = S.vestiaires + 1; return 30LL * L * L; }
+    case PJ_MUSEUM: return 200;
+    }
+    return 0;
+}
+
+int Career::projectMonths(int kind, int amount) {
+    switch (kind) {
+    case PJ_SEATS: return std::min(12, 1 + amount / 1500);
+    case PJ_COVER: return 3;
+    case PJ_UPGRADE_SEATS: return 2;
+    case PJ_VIP: return std::min(6, 2 + amount / 200);
+    case PJ_PITCH: return 2;
+    case PJ_MUSEUM: return 4;
+    default: return 1;
+    }
+}
+
+bool Career::startProject(const Project& pj, std::string& err) {
+    Team& T = g_world.teams[userTeam];
+    StadiumInfo& S = T.sta;
+    for (auto& p : mgr.projects) if (p.kind == pj.kind && (p.stand == pj.stand || (pj.kind >= PJ_BUVETTE && pj.kind != PJ_UPGRADE_SEATS))) { err = "Des travaux de ce type sont déjà en cours."; return false; }
+    int maxLv[NUM_PJ] = { 0, 0, 0, 5, 5, 4, 4, 2, 1, 5, 1, 0 };
+    int cur = pj.kind == PJ_BUVETTE ? S.buvette : pj.kind == PJ_BOUTIQUE ? S.boutique : pj.kind == PJ_PARKING ? S.parking : pj.kind == PJ_LIGHTS ? S.lights :
+              pj.kind == PJ_PITCH ? S.pitch : pj.kind == PJ_SCREEN ? S.screen : pj.kind == PJ_VESTIAIRES ? S.vestiaires : pj.kind == PJ_MUSEUM ? S.museum : -1;
+    if (cur >= 0 && cur >= maxLv[pj.kind]) { err = "Niveau maximum déjà atteint."; return false; }
+    if (pj.kind == PJ_COVER && S.s[pj.stand].kind == STK_COVERED) { err = "Cette tribune est déjà couverte."; return false; }
+    if (pj.kind == PJ_COVER && S.s[pj.stand].kind == STK_STANDING) { err = "Installez d'abord des sièges dans cette tribune."; return false; }
+    if (pj.kind == PJ_UPGRADE_SEATS && S.s[pj.stand].kind != STK_STANDING) { err = "Cette tribune a déjà des sièges."; return false; }
+    if (pj.kind == PJ_SEATS && S.s[pj.stand].seats + pj.amount > 40000) { err = "Tribune trop grande (40 000 places maximum)."; return false; }
+    Project p = pj;
+    p.cost = (int32_t)projectCost(T, pj.kind, pj.stand, pj.amount);
+    p.monthsLeft = projectMonths(pj.kind, pj.amount);
+    if (p.cost > mgr.budget) { err = "Budget insuffisant (" + money(p.cost) + ")."; return false; }
+    mgr.budget -= p.cost; mgr.seasonStadiumCost += p.cost;
+    mgr.projects.push_back(p);
+    season.news.push_back(fmt("Travaux lancés : %s (%s, %d mois).", PJ_NAMES[p.kind], money(p.cost).c_str(), p.monthsLeft));
+    return true;
+}
+
+const char* projectName(int k) { return k >= 0 && k < NUM_PJ ? PJ_NAMES[k] : "?"; }
+
+// un mois : travaux, entretien, boutique, sponsor du stade
+void stadiumMonth(Career& K) {
+    Team& T = g_world.teams[K.userTeam];
+    StadiumInfo& S = T.sta;
+    if (!S.init) initStadium(T, K.tierOfTeam(K.userTeam), -1);
+    for (size_t i = 0; i < K.mgr.projects.size();) {
+        Project& p = K.mgr.projects[i];
+        if (--p.monthsLeft > 0) { i++; continue; }
+        Stand& st = S.s[p.stand];
+        switch (p.kind) {
+        case PJ_SEATS: st.seats += p.amount; break;
+        case PJ_COVER: st.kind = STK_COVERED; break;
+        case PJ_UPGRADE_SEATS: st.kind = STK_SEATS; break;
+        case PJ_VIP: st.vip += p.amount; break;
+        case PJ_BUVETTE: S.buvette++; break;
+        case PJ_BOUTIQUE: S.boutique++; break;
+        case PJ_PARKING: S.parking++; break;
+        case PJ_LIGHTS: S.lights++; break;
+        case PJ_PITCH: S.pitch++; break;
+        case PJ_SCREEN: S.screen++; break;
+        case PJ_VESTIAIRES: S.vestiaires++; break;
+        case PJ_MUSEUM: S.museum++; S.fans += S.fans / 20; break;
+        }
+        K.season.news.push_back(std::string("Travaux terminés : ") + PJ_NAMES[p.kind] + fmt(" (capacité : %d places).", S.capacity()));
+        K.mgr.projects.erase(K.mgr.projects.begin() + i);
+    }
+    int cap = S.capacity();
+    int64_t upkeep = (int64_t)(cap * 0.35 + S.s[0].vip * 2.0 + (S.buvette + S.boutique + S.parking + S.lights + S.vestiaires) * 150.0 + S.screen * 800 + S.pitch * 500);   // €
+    float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
+    int64_t shop = (int64_t)(S.fans * 0.004 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0)) * S.shirtPrice);
+    int64_t museum = (int64_t)(S.museum * S.fans * 0.02 * 8);
+    int64_t naming = (int64_t)S.namingIncome * 1000 / 11;
+    addEuros(K, shop + museum, &K.mgr.seasonShop);
+    addEuros(K, naming, nullptr);
+    addEuros(K, -upkeep, nullptr);
+    // cahier des charges de la division
+    int t = K.tierOfTeam(K.userTeam);
+    int p0, q0, g0; K.tierOfTeam(K.userTeam, &p0, &q0, &g0);
+    if (t >= 0 && K.pyramids[p0].country == "FRA" && K.pyramids[p0].dom < 0) {
+        static const int REQ[5] = { 15000, 8000, 4000, 2000, 1000 };
+        if (t <= 4 && cap < REQ[t]) {
+            int64_t fine = t <= 1 ? 50 : t == 2 ? 15 : 3;
+            K.mgr.budget -= fine; K.mgr.seasonStadiumCost += fine;
+        }
+    }
+}
+
+int64_t Career::namingOffer() const {
+    const Team& T = g_world.teams[userTeam];
+    int cap = T.sta.capacity();
+    double base = cap * (T.status == CS_PRO ? 0.12 : T.status == CS_SEMIPRO ? 0.05 : 0.02);
+    return std::max<int64_t>(2, (int64_t)(base * (1.0 + T.sta.fans / std::max(1.0, (double)cap) * 0.3)));
+}

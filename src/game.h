@@ -1,0 +1,633 @@
+// Structures principales du jeu
+#pragma once
+#include <string>
+#include <vector>
+#include <map>
+#include <cstdint>
+#include <cmath>
+#include <algorithm>
+#include <cstdio>
+#include "data.h"
+
+// ------------------------------------------------------------------ RNG
+struct Rng {
+    uint64_t s;
+    explicit Rng(uint64_t seed = 0x12345678ULL) : s(seed ? seed : 0x9E3779B97F4A7C15ULL) {}
+    uint64_t next() {
+        uint64_t z = (s += 0x9E3779B97F4A7C15ULL);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+        return z ^ (z >> 31);
+    }
+    float f() { return (next() >> 40) / 16777216.0f; }
+    int range(int a, int b) { return a + (int)(next() % (uint64_t)(b - a + 1)); }
+    float frange(float a, float b) { return a + (b - a) * f(); }
+    bool chance(float p) { return f() < p; }
+    template <class T> void shuffle(std::vector<T>& v) {
+        for (int i = (int)v.size() - 1; i > 0; i--) { int j = (int)(next() % (uint64_t)(i + 1)); std::swap(v[i], v[j]); }
+    }
+};
+extern Rng g_rng;
+
+uint32_t hashStr(const std::string& s);
+std::string sanitize(const char* utf8);
+std::string fmt(const char* f, ...);
+
+// ------------------------------------------------------------------ Joueurs / équipes
+enum PlayerPos { POS_GK = 0, POS_DF, POS_MF, POS_FW };
+
+// historique d'un joueur : une ligne par saison et par club (version 11)
+struct PlayerSeason { int16_t year = 0; int16_t apps = 0; int32_t team = -1; int16_t goals = 0, assists = 0; uint8_t yel = 0, red = 0; uint8_t moved = 0, pad = 0; };
+
+struct Player {
+    std::string name;
+    uint8_t pos = POS_MF;
+    uint8_t num = 1;
+    uint8_t speed = 50, shoot = 50, pass = 50, tackle = 50, keep = 20, stamina = 60;
+    uint8_t skin = 0, hair = 0;
+    int8_t suspended = 0;
+    int8_t yellows = 0;
+    int8_t injured = 0;
+    int16_t goals = 0, apps = 0;
+    int16_t nation = -1;
+    int32_t id = 0;            // identifiant unique (buteurs, transferts)
+    uint8_t contract = 0;      // 0 contrat pro, 1 semi-pro, 2 licence amateur (pas de salaire)
+    uint8_t age = 25, pot = 50;
+    int16_t assists = 0;
+    uint8_t cond = 100;        // condition physique (fatigue) 0-100
+    uint8_t morale = 60;       // moral 0-100
+    uint8_t dribble = 0, heading = 0;   // 0 = dérivé des autres caractéristiques
+    // version 11 : infos personnelles, nouvelles caractéristiques, historique
+    uint8_t bday = 0, bmonth = 0;       // 0 = dérivé de l'identifiant
+    std::string birthPlace;             // vide = dérivé
+    uint8_t positioning = 0, composure = 0;   // placement (défense / appels), sang-froid (0 = dérivé)
+    uint8_t sYel = 0, sRed = 0;         // cartons de la saison
+    std::vector<PlayerSeason> hist;
+    int drib() const;          // dribble
+    int head() const;          // jeu de tête
+    int posi() const;          // placement
+    int comp() const;          // sang-froid
+    int overall() const;
+    int value() const;         // valeur marchande (k€)
+    int wage() const;          // salaire annuel (k€)
+};
+const char* posName(int pos);
+struct Team;
+void playerBirth(const Player& p, int year, int& d, int& m, int& y, std::string& place, int culture = -1, int dept = -1);
+std::string presidentName(int team);
+int presidentAge(int team);
+std::string presidentPlace(int team);
+std::string randomFullName(int culture, uint32_t seed);
+void recordPlayerSeason(Player& p, int team, int year, bool moved);
+void applyPlayerEdits(Team& t);        // éditeur de joueurs (fichier) appliqué à la génération de l'effectif
+void savePlayerEdit(const Team& t, int idx);
+void applyPresidents();
+struct CustomStaff { std::string name = "Nouveau membre"; int role = 0, level = 2, age = 45; std::string place, club; };
+std::vector<CustomStaff>& customStaff();     // staff créé avec l'éditeur (staff_perso.txt)
+void saveCustomStaff();
+void savePresident(const Team& t);
+
+// ------------------------------------------------------------------ Stade
+enum StandKind { STK_STANDING = 0, STK_SEATS = 1, STK_COVERED = 2 };
+struct Stand { int32_t seats = 0; int32_t vip = 0; uint8_t kind = STK_SEATS; uint8_t pad[3] = { 0, 0, 0 }; int16_t price = 10, vipPrice = 40; int32_t lastAtt = 0; };
+struct StadiumInfo {
+    uint8_t init = 0;
+    uint8_t buvette = 1, boutique = 0, parking = 0, lights = 1, pitch = 0, screen = 0, vestiaires = 1, museum = 0, pad = 0;
+    Stand s[4];                 // 0 tribune principale, 1 tribune face, 2 et 3 virages
+    int32_t fans = 500;         // supporters
+    int16_t shirtPrice = 50;    // prix du maillot (€)
+    int32_t namingIncome = 0;   // k€ / an (nom du stade vendu à un sponsor)
+    char sponsor[32] = { 0 };
+    int32_t lastAtt = 0, lastGate = 0, bestAtt = 0;
+    int32_t seasonAttTotal = 0, seasonHomeMatches = 0;
+    int capacity() const { int c = 0; for (auto& x : s) c += x.seats + x.vip; return c; }
+};
+enum ClubStatus { CS_PRO = 0, CS_SEMIPRO = 1, CS_AMATEUR = 2 };
+const char* statusName(int s);
+
+struct Kit { unsigned shirt = 0xFFFFFF, shirt2 = 0, shorts = 0xFFFFFF, socks = 0xFFFFFF; int pattern = 0; };
+
+enum TeamKind { TK_NATION = 0, TK_CLUB = 1 };
+
+struct Team {
+    std::string name, shortName;
+    std::string stadium, town;
+    int kind = TK_CLUB;
+    int nation = -1;          // sélection : index NATIONS ; club : pays
+    float rating = 50;
+    Kit home, away;
+    int culture = CU_FR;
+    int region = -1, dept = -1;
+    int district = -1;        // district de football (districts.cpp) ; peut couvrir plusieurs départements ou une partie
+    uint32_t seed = 0;
+    int formation = 0;
+    int dbClub = -1;          // club de la base de joueurs réels
+    int parent = -1;          // équipe première (réserve) ou -1
+    int resLevel = 0;         // 0 = équipe 1, 1 = réserve (B / 2), 2 = C / 3...
+    bool custom = false;      // créé avec l'éditeur
+    bool edited = false;
+    bool squadGen = false;
+    std::vector<Player> squad;
+    std::vector<std::string> honours;
+    int lastTier = -1;
+    int founded = 0;
+    std::vector<int> xi;      // titulaires choisis par l'entraîneur (identifiants joueurs), vide = automatique
+    int status = CS_AMATEUR;  // statut du club
+    std::string sponsor;      // sponsor maillot
+    StadiumInfo sta;
+    float coefs[5] = { 0, 0, 0, 0, 0 };   // points UEFA du club (5 dernières saisons)
+    float condT = -1;                     // date de la dernière mise à jour de la condition physique
+    int mentality = 2;                    // 0 ultra défensif, 1 défensif, 2 neutre, 3 offensif, 4 ultra offensif (version 9)
+    int captainPid = 0, vicePid = 0;      // capitaine et vice-capitaine (0 = automatique)
+    int youth = 0;                        // 1 : équipe U19 du club parent
+    // version 11 : président, consignes tactiques (0 faible, 1 normal, 2 fort)
+    std::string president; int presAge = 0; std::string presPlace;
+    uint8_t pressing = 1, defLine = 1, width = 1, tempo = 1, passStyle = 1;   // passStyle : 0 court, 1 mixte, 2 long
+    float coefTotal() const { float c = 0; for (float v : coefs) c += v; return c; }
+};
+float clubSeed(int team);
+int playerCond(int team, const Player& p);          // condition physique actuelle (récupération incluse)
+void applyMatchLoad(int team, int result);          // fatigue et moral après un match (result : 1 victoire, 0 nul, -1 défaite)
+float formFactor(int team);
+const char* trainFocusName(int f);
+const char* trainIntName(int i);                         // effet condition + moral sur la force (simulation)                 // coefficient de tirage européen (club ou 20 % du pays)
+
+struct Formation { const char* name; float x[10]; float y[10]; uint8_t role[10]; };
+extern const Formation FORMATIONS[];
+extern const int NUM_FORMATIONS;
+
+// ------------------------------------------------------------------ Base de données
+struct World {
+    std::vector<Team> teams;
+    int firstClub = 0;
+    int baseCount = 0;                  // nombre d'équipes générées automatiquement (hors éditeur)
+    std::vector<int> leagueClubs[64];
+    std::vector<int> euroPool;          // clubs UEFA hors championnats simulés
+    std::vector<int> worldPool;         // autres clubs du monde
+    std::map<std::string, std::vector<int>> countryClubs; // clubs par pays (hors championnats simulés)
+    int omReps[3] = { -1, -1, -1 };
+    void rebuildCountryClubs(const std::vector<struct Pyramid>& pyr);
+    int nationIndex(const char* code) const;
+    void build();
+    void ensureSquad(int team);
+    void generateSquad(Team& t);
+    std::vector<int> pickLineup(int team, int formation) const;
+    int addCustomClub(const Team& t);
+    int nextPid = 1;
+    Player makeYouth(int team, int pos, float level);   // jeune joueur généré (centre de formation / remplaçant)
+    int findPlayer(int pid, int* idx = nullptr) const;  // équipe du joueur (recherche linéaire)
+    std::string clubBaseName(int team) const;
+};
+extern World g_world;
+
+// ------------------------------------------------------------------ Compétitions
+struct MatchRes {
+    int home = -1, away = -1;
+    int16_t hg = -1, ag = -1;
+    int16_t ph = -1, pa = -1;
+    bool aet = false;
+    bool played = false;
+    bool neutral = false;
+    int8_t decisive = 0;
+    int16_t tie = -1;
+    int8_t leg = 0;
+    int16_t group = -1;
+    int8_t noET = 0;             // tirs au but directs sans prolongation (supercoupes)
+};
+
+// événement de match (buteurs, passeurs, cartons) : type 0 but, 1 csc, 2 jaune, 3 rouge, 4 blessure
+struct MEv { int32_t match = -1, pid = 0, aid = 0, team = -1; uint8_t type = 0, minute = 0, side = 0, pen = 0; };
+
+struct Round {
+    double time = 0;
+    std::string name;
+    std::vector<int> m;
+    bool done = false;
+};
+
+enum StageType { ST_LEAGUE = 0, ST_KO, ST_SWISS };
+
+struct Tie { int a = -1, b = -1; int winner = -1; int m1 = -1, m2 = -1; };
+
+struct Stage {
+    int type = ST_LEAGUE;
+    std::string name;
+    int legs = 1;
+    std::vector<std::vector<int>> groups;
+    std::vector<Tie> ties;
+    std::vector<Round> rounds;
+    bool finished = false;
+    int nextR = 0;
+};
+
+enum CompFormat {
+    FMT_LEAGUE = 0, FMT_CUP, FMT_EUROPE, FMT_TOURNAMENT, FMT_QUAL_GROUPS, FMT_KO_ONLY,
+    FMT_UCL2000,        // Ligue des champions 2000-01 : 3 tours de qualif, 2 phases de groupes, KO
+    FMT_UEFA2000,       // Coupe UEFA 2000-01 : tours à élimination directe aller-retour, finale sèche
+    FMT_SINGLE,         // match unique (supercoupe)
+    FMT_INTERTOTO,      // Coupe Intertoto (tours à élimination directe, 3 vainqueurs)
+};
+
+// règles de départage
+enum TieBreak { TB_GD = 0, TB_LFP, TB_FFF, TB_H2H, TB_ENG, TB_FIFA };
+const char* tieBreakText(int tb);
+
+struct Standing {
+    int team = -1, p = 0, w = 0, d = 0, l = 0, gf = 0, ga = 0, pts = 0, aw = 0;
+    int gd() const { return gf - ga; }
+};
+
+struct Competition {
+    std::string name;
+    std::string shortName;
+    int format = FMT_LEAGUE;
+    int legs = 2;
+    int tb = TB_GD;
+    int ptsWin = 3;
+    std::vector<MatchRes> matches;
+    std::vector<Stage> stages;
+    int cur = 0;
+    bool done = false;
+    bool started = false;
+    double t0 = 1, t1 = 40;
+    std::vector<double> koTimes;
+    std::vector<std::string> koNames;
+    std::vector<int> koLegs;
+    std::vector<std::vector<int>> entrants;
+    std::vector<int> koTargets;
+    std::vector<int> result;
+    std::vector<int> extra;             // UCL : éliminés du 3e tour ; UCL : 3es de 1re phase
+    std::vector<int> extra2;
+    std::vector<int> carry;             // qualifiés en attente d'un tour (entrées extérieures)
+    int awaiting = -1;                  // tour en attente d'entrées extérieures
+    int winner = -1;
+    int groupsAdvance = 2;
+    int bestThirds = 0;
+    bool thirdPlace = false;
+    bool regionalDraw = false;
+    int regionalRounds = 0;
+    int swissRounds = 8;
+    int qualSpots = 0;
+    int qualPlayoff = 0;
+    int kind = 0;
+    int host = -1;
+    int tag = -1;
+    int season = 0;
+    bool noReserves = false;
+    bool neutralFinal = true;
+    int extReadyMask = 0;
+    bool awayGoals = false;             // règle des buts à l'extérieur (coupes d'Europe)
+    int yellowLimit = 3;                // cartons jaunes avant suspension (règlement)
+    int homeRule = 0;                   // 0 tirage libre, 1 règle FFF (2 divisions d'écart : le plus petit reçoit)
+    std::vector<MEv> events;
+
+    void setupLeague(const std::vector<int>& teams, int legs, double t0, double t1, int numGroups = 1);
+    void setupSwiss(const std::vector<int>& teams, int rounds, const std::vector<double>& times);
+    void addGroupStage(const std::vector<std::vector<int>>& groups, int legs, const std::vector<double>& times, const std::string& name);
+    // coupes régionales / de district (seniors et jeunes) et Gambardella : pas de prolongation, tirs au but directs (sauf finale)
+    bool penaltiesOnly() const { return kind == 4 || kind == 5 || kind == 15 || kind == 16 || kind == 17 || kind == 18 || kind == 23 || kind == 24 || kind == 25; }
+    bool rollingSubs() const { return kind == 4 || kind == 5 || kind == 17 || kind == 18 || kind == 24 || kind == 25; }
+    Stage& addKOStage(const std::vector<std::pair<int, int>>& pairs, int legs, double time, const std::string& name, bool neutralFinal = false);
+    std::vector<Standing> table(int stage, int group) const;
+    std::vector<Standing> swissTable(int stage) const;
+    bool stageComplete(int st) const;
+    void onStageFinished();
+    void cupRound(int k, const std::vector<int>& pool);
+    void koRound(const std::vector<int>& teams, int legs, double time, const std::string& name, bool final);
+    void resume();
+    int stageOfMatch(int mi) const;
+    int tieWinner(const Tie& t) const;
+    const char* roundName(int st, int r) const;
+};
+
+void sortStandings(std::vector<Standing>& v);
+void simulateMatch(MatchRes& m, const Competition* c);
+void genMatchEvents(Competition& C, int mi);      // buteurs / passeurs / cartons d'un match simulé
+float teamStrength(int team);
+int teamLevel(int team);           // niveau dans la pyramide (0 = élite) ou 99
+std::string koName(int nteams);
+
+// ------------------------------------------------------------------ Saison
+struct PendingMatch { int comp = -1; int match = -1; };
+
+struct Season {
+    std::vector<Competition> comps;
+    std::vector<int> controlled;
+    double now = 0;
+    int year = 2026;
+    bool finished = false;
+    std::vector<std::string> news;
+    bool isControlled(int t) const { return std::find(controlled.begin(), controlled.end(), t) != controlled.end(); }
+    PendingMatch advance(bool simulateUserMatches = false);
+    PendingMatch peekNext() const;
+    void recordResult(int comp, int match);
+    void finishRoundOthers(int comp, int match);
+    void checkRound(int comp);
+    int mode = 0;
+};
+
+// ------------------------------------------------------------------ Pyramides
+enum TierScope { SC_NATIONAL = 0, SC_ZONE, SC_REGION, SC_DEPT };
+
+struct TierConf {
+    std::string name;
+    int scope = SC_NATIONAL;
+    int groupsPerPool = 1;    // -1 : dépend de la ligue / du district (table)
+    int groupSize = 18;
+    int up = 0;
+    int down = 0;
+    bool flexible = false;
+    bool noReserves = false;  // les réserves ne peuvent pas y évoluer
+    int tb = TB_FFF;
+    int barrageUp = 0;        // nombre de barragistes qui jouent la montée
+};
+
+struct Pool {
+    int tier = 0;
+    int key = 0;
+    int nGroups = 1;          // nombre de groupes cible (pools régionaux / départementaux)
+    int size = 12;            // taille des groupes
+    int upCap = -1;           // nombre maximum de promus pour tout le pool (-1 = 1 par groupe)
+    bool terminal = false;    // dernier niveau du district : taille libre, pas de relégation
+    std::vector<int> clubs;
+    std::vector<std::vector<int>> groups;
+    std::vector<int> comps;
+};
+
+int makeU19Team(World& w, int parent);
+int makeU17Team(World& w, int parent);
+int makeYouthTeam(World& w, int parent, int kind);     // kind 1 : U19, 2 : U17
+// districts de football (districts.cpp)
+int numDistricts();
+std::string districtName(int d);
+std::string districtFullName(int d);
+int districtRegion(int d);
+const std::vector<int>& districtDepts(int d);
+int districtPopulation(int d);
+int districtIndex(const std::string& name);
+int districtFor(int dept, const std::string& town, const std::string& club);
+void assignDistricts(World& w);   // pyramid.cpp : équipe U19 d'un club
+
+struct Pyramid {
+    std::string country;
+    std::string name;
+    std::vector<TierConf> tiers;
+    std::vector<Pool> pools;
+    int barrageUp = 0;
+    int dom = -1;
+    int poolIndex(int tier, int key) const;
+    int keyFor(int tier, int club) const;
+};
+
+int zoneOfRegion(int region);
+int numZones();
+const char* zoneName(int z);
+
+// ------------------------------------------------------------------ Coefficients UEFA
+struct UefaCountry {
+    std::string code;
+    float pts[5] = { 0, 0, 0, 0, 0 };  // 5 dernières saisons (0 = la plus ancienne)
+    float cur = 0;                     // saison en cours
+    int clubs = 0;                     // clubs engagés cette saison
+    float total() const { float s = 0; for (float p : pts) s += p; return s; }
+};
+
+struct Writer; struct Reader;
+// palmarès enregistré : code de compétition (HC_*), saison (année de fin), vainqueur, finaliste
+enum HonourComp { HC_L1 = 0, HC_L2, HC_CDF, HC_CDL, HC_TDC, HC_UCL, HC_UEFA, HC_SUPERUEFA, HC_INTERTOTO, NUM_HC };
+struct HonourRec { int32_t comp = 0, year = 0, winner = -1, runner = -1; };
+int histCount(int comp);                                                     // palmarès historique (data_honours.cpp)
+void histEntry(int comp, int i, int& year, const char*& winner, const char*& runner);
+const char* honourCompName(int comp);
+const char* histVenue(int comp, int year);                  // lieu de la finale (palmarès historique)
+std::vector<std::string> historicHonours(int team);           // titres réels d'un club (avant la carrière)
+int resolveHistWinner(const char* name);
+// ------------------------------------------------------------------ Carrière
+struct EuroSpots { std::vector<int> uclQ1, uclQ2, uclQ3, uclGS, uefaQR, uefaR1, itR1, itR2, itR3; };
+
+// ------------------------------------------------------------------ Manager
+struct TransferOffer { int32_t pid = 0, club = -1, fee = 0, expires = 0; };
+struct TransferRec { int32_t pid = 0; int from = -1, to = -1, fee = 0, year = 0; char name[40] = { 0 }; };
+// travaux au stade
+enum ProjectKind { PJ_SEATS = 0, PJ_COVER, PJ_VIP, PJ_BUVETTE, PJ_BOUTIQUE, PJ_PARKING, PJ_LIGHTS, PJ_PITCH, PJ_SCREEN, PJ_VESTIAIRES, PJ_MUSEUM, PJ_UPGRADE_SEATS, NUM_PJ };
+struct Project { int32_t kind = 0, stand = 0, amount = 0, monthsLeft = 0, cost = 0; };
+// staff
+enum StaffRole { SR_ADJOINT = 0, SR_PHYSIO_PREP, SR_GK, SR_SCOUT, SR_MEDIC, SR_YOUTH, SR_RESERVE, NUM_SR };
+const char* staffRoleName(int r);
+const char* staffRoleDesc(int r);
+struct StaffMember { char name[32] = { 0 }; int32_t role = 0, level = 1, wage = 0, age = 40; };
+
+// arbitres
+struct Referee { const char* name; int severity; int homeBias; int advantage; int consistency; int level; };
+extern const Referee REFEREES[];
+extern const int NUM_REFEREES;
+int refereeFor(int comp, int match);
+
+struct ManagerState {
+    int boardRequests = 0;          // demandes au président cette saison
+    uint8_t trainFocus = 0;         // entraînement : 0 général, 1 physique, 2 technique, 3 défense, 4 attaque, 5 gardiens
+    uint8_t trainInt = 1;           // intensité : 0 légère, 1 normale, 2 intense
+    bool managerMode = true;        // mode manager (finances, mercato, stade, staff) ou matchs seulement
+    int64_t sponsorIncome = 0;      // sponsor maillot (k€ / an)
+    std::vector<StaffMember> staff;
+    std::vector<int> ctrlReserves;  // réserves dirigées par le joueur
+    bool noSack = false;            // option : pas de licenciement
+    int statusChoice = -1;          // statut choisi (divisions régionales)
+    bool needStatus = false;        // choix du statut à faire en début de saison
+    std::vector<Project> projects;
+    int64_t seasonGate = 0, seasonShop = 0, seasonStadiumCost = 0;
+    int64_t budget = 0;             // k€
+    int64_t seasonIncome = 0, seasonWages = 0, seasonTransfers = 0;
+    int64_t incomeBase = 0;         // revenus annuels (droits TV, sponsors, subventions)
+    int objective = 3;              // 0 titre, 1 montée, 2 haut de tableau, 3 milieu de tableau, 4 maintien
+    int objTarget = 10;             // place à atteindre
+    int confidence = 60;            // confiance du président (0-100)
+    int lastMonth = -1;
+    int sacked = 0;
+    std::vector<TransferRec> transfers;
+    std::vector<TransferOffer> offers;   // offres reçues pour les joueurs du club (version 10)
+    // version 11 : délégation à l'adjoint, mode Full Manager
+    bool delegTrain = false, delegSubs = false, fullManager = false;
+};
+
+enum CareerKind { CK_CLUB = 0, CK_INTL = 1, CK_CUSTOM = 2 };
+
+struct CustomCompDef {
+    std::string name;
+    int format = 0;           // 0 championnat, 1 coupe, 2 groupes + phase finale
+    int legs = 2;
+    std::vector<int> teams;
+    int groups = 4;
+};
+
+struct Career {
+    Season season;
+    std::vector<Pyramid> pyramids;
+    int userTeam = -1;
+    int year = 2026;
+    int kind = 0;
+    int cdf = -1;
+    int cdfNational = -1;
+    int cdfHolderDirect = -1;        // tenant de la Coupe de France hors L1 : entrée directe en 32es
+    std::vector<int> cdfRegional;
+    std::vector<int> nationalCups;
+    std::vector<int> regionalCups;
+    std::vector<int> deptCups;
+    std::vector<int> superCups;
+    int ucl = -1, uel = -1, uecl = -1, uefaSuper = -1;
+    EuroSpots nextEuro;
+    std::vector<UefaCountry> uefa;
+    std::vector<std::string> history;
+    std::vector<int> pendingNewClubs;  // clubs créés en cours de saison (entrent la saison suivante)
+    int prevUclWinner = -1, prevUefaWinner = -1;
+    std::map<std::string, int> prevChampion, prevCupWinner, prevRunnerUp;
+    // International
+    int intlType = -1;
+    int intlFormat = 0;                     // 0 format classique, 1 grand format (Coupe du monde 48, Euro 24)
+    // version 7
+    std::vector<HonourRec> honourLog;       // vainqueurs des grandes compétitions en carrière
+    std::vector<std::string> honourVenue;   // lieu de la finale de chaque entrée de honourLog (version 8)
+    std::string uclFinalVenue, uefaFinalVenue, tdcVenue;
+    std::map<int, std::string> cupVenue;    // finales des coupes régionales / de district : terrain neutre désigné en début de saison (version 12)
+    int intertoto = -1;                     // Coupe Intertoto
+    // jeunes (version 9) : phase finale du National U19, Coupe Gambardella (tours régionaux + phase nationale), coupes U19
+    int u19Final = -1, gambNational = -1;
+    std::vector<int> gambRegional, u19Cups;
+    int u19Pyramid() const;
+    int u17Pyramid() const;
+    int youthPyramid(int team) const;
+    int createYouth(int club, int ykind, std::string& err);
+    int u17Final = -1;                   // phase finale du National U17 (version 12)
+    int lastU17Champ = -1;
+    int createU19(int club, std::string& err);
+    void onU19CompDone(int comp);
+    // Ligue des champions U19 (version 11) : tour préliminaire (match sec) puis phase de groupes (8 x 4) et phase finale
+    int youthPrelim = -1, youthUcl = -1, lastU19Champ = -1;
+    std::vector<int> youthDirect;        // qualifiés directs pour la phase de groupes (en attente du tour préliminaire)
+    void setupYouthUcl();
+    void startYouthGroups(const std::vector<int>& teams);
+    std::string managerName; int managerNation = -1; uint8_t managerSkin = 0, managerHair = 0; int managerAge = 45;
+    std::string managerPlace; uint8_t managerBday = 0, managerBmonth = 0;   // version 11
+    std::vector<std::string> reconversions;                                 // anciens joueurs reconvertis (version 11)
+    void saveV11(Writer& w) const;
+    void saveV12(Writer& w) const;
+    void loadV12(Reader& r);
+    int cdfAskYear = -1;                 // inscription (facultative en district) à la Coupe de France : saison déjà demandée
+    int userCdfComp() const;
+    void sheetRules(int comp, int& sheet, int& subs, bool& rolling) const;   // joueurs sur la feuille, remplacements             // tours régionaux de Coupe de France du club (s'il joue en district), sinon -1
+    bool withdrawFromCup(int comp, int team);
+    void loadV11(Reader& r);
+    void recordSeasonHistory();          // fin de saison : lignes d'historique des joueurs
+    std::vector<std::string> newsRead;      // messages déjà lus (texte)
+    std::vector<int> retiring;              // joueurs (id) qui ont annoncé leur retraite en fin de saison
+    void saveV7(Writer& w) const;
+    void loadV7(Reader& r);
+    void resetV7();
+    void logHonour(int comp);
+    EuroSpots previewEuro();                // qualifiés européens de la saison prochaine (aperçu fin de saison)
+    bool intlWithQual = true;
+    std::vector<int> intlHosts;
+    std::vector<int> qualComps;
+    int finalComp = -1;
+    int intlStage = 0;
+    CustomCompDef custom;
+    ManagerState mgr;
+
+    void newClubCareer(int team, int year);
+    // mode Coupes d'Europe : seules la Ligue des champions et la Coupe UEFA sont jouées (qualifications simulées)
+    bool euroOnly = false;
+    void newEuroCareer(const std::vector<int>& ctrl, int year);
+    static std::vector<int> euroCandidates();
+    void addEuroCups();
+    // version 9
+    void saveV9(Writer& w) const;
+    void loadV9(Reader& r);
+    void saveU19(Writer& w) const;
+    void loadU19(Reader& r);
+    void startSeason();
+    void endSeason();
+    void newInternational(int type, bool withQual, const std::vector<int>& controlled, int year, const std::vector<int>& hosts, int format = 0);
+    void newCustom(const CustomCompDef& def, const std::vector<int>& controlled);
+    void onCompetitionDone(int comp);
+    void onStageDone(int comp, int stage);
+    void update();
+    bool save(const char* path) const;
+    bool load(const char* path);
+    int tierOfTeam(int team, int* pyramidOut = nullptr, int* poolOut = nullptr, int* groupOut = nullptr) const;
+    std::string teamLevelName(int team) const;
+    int uefaRank(const std::string& code) const;
+    void initUefa();
+    void addClubToPyramid(int team);
+    std::string divisionRules(int comp) const;
+    // manager
+    bool transferWindow() const;       // mercato ouvert ?
+    std::string windowText() const;
+    void mgrInit();                    // budget / objectifs en début de saison
+    void mgrTick();                    // mois écoulés : salaires, droits TV
+    void mgrAfterMatch(int comp, int mi);
+    void mgrEndSeason(std::vector<std::string>& msgs);
+    void aiTransfers(int n);
+    int64_t tvIncome(int team) const;
+    bool buyPlayer(int pid, int fee, std::string& err);
+    bool sellPlayer(int pid, int toTeam, int fee, std::string& err);
+    void releasePlayer(int pid);
+    std::string objectiveText() const;
+    void trainingMonth();
+    void changeClub(int team);
+    int findBuyer(int pid, int& fee) const;
+    int64_t wageBill(int team) const;
+    // stade / statut
+    void updateStatuses();
+    void setUserStatus(int st);
+    int forcedStatus(int team) const;      // -1 si libre (ligue régionale)
+    void homeMatchDay(int comp, int mi);   // affluence et recettes
+    bool startProject(const Project& p, std::string& err);
+    static int64_t projectCost(const Team& t, int kind, int stand, int amount);
+    static int projectMonths(int kind, int amount);
+    int64_t namingOffer() const;
+    int expectedAttendance(int stand, bool vip) const;
+    int cdl = -1;                           // Coupe de la Ligue
+    int superRegions = -1;                  // Supercoupe des Régions (vainqueurs des coupes régionales)
+    std::map<int, int> prevRegCupWinner;    // région -> vainqueur de la coupe régionale précédente
+    // staff, réserves, amicaux
+    int staffLevel(int role) const;
+    void initStaff();
+    int createReserve(std::string& err);
+    void genOffers(int n);                   // offres des autres clubs pour nos joueurs
+    bool answerOffer(int k, int action, std::string& msg);   // 0 accepter, 1 refuser, 2 négocier
+    void boardReview();                      // point du président à mi-saison
+    int64_t uclMarketPool(std::vector<std::string>& msgs);   // droits TV de la C1
+    void addFriendly(const std::vector<int>& invited, bool tournament);
+    void syncControlled();
+};
+float teamBonus(int team);     // bonus du staff (équipe du joueur)
+int injuryReduction(int team);
+int staffWage(int level, int status);
+StaffMember makeStaff(int role, int level, int status, Rng& r);
+void initStadium(Team& t, int tierHint, float tierAvg);
+void ensureStadium(int team);
+void stadiumSetCapacity(StadiumInfo& S, int cap);
+void applyContracts(Team& t, bool keepUser);
+const char* projectName(int k);
+struct Career;
+void stadiumMonth(Career& K);
+std::string cdfEntryText(int region);
+int playerWage(const Player& p);
+std::string money(int64_t k);        // montant en k€ -> texte
+extern Career g_career;
+extern std::vector<Pyramid> g_basePyramids;
+void formGroups(Pyramid& P);
+int poolGroupCount(const Pyramid& P, const Pool& pool);
+int poolTarget(const Pyramid& P, const Pool& pool);
+int regionDeptCount(int region);
+std::string poolLabel(const Pyramid& P, const Pool& pl, int g);
+
+enum IntlType { IT_WORLDCUP = 0, IT_EURO, IT_CAN, IT_COPA, IT_ASIA, IT_GOLD, IT_OFC, NUM_INTL };
+extern const char* INTL_NAMES[NUM_INTL];
+bool nationEligible(int n);
+std::vector<int> defaultHosts(int type);
+int intlYear(int type);
+
+// Éditeur : clubs personnalisés persistants
+void loadCustomClubs();
+void saveCustomClubs();
