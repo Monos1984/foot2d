@@ -60,6 +60,7 @@ static void buildMarket() {
             if (!T.freeAgents && (ov < ref - 10 || ov > ref + 12 + 2 * g_career.staffLevel(SR_SCOUT))) continue;
             if (T.freeAgents && ov < ref - 14) continue;
             if (g_mkPos >= 0 && pl.pos != g_mkPos) continue;
+            if ((pl.gender == 1) != (g_world.teams[u].youth == 6)) continue;     // séparation stricte hommes / femmes
             g_mkList.push_back({ t, pl.id, i });
         }
     }

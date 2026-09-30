@@ -505,7 +505,7 @@ void Career::newClubCareer(int team, int yr) {
         if (g_world.teams[i].custom && g_world.teams[i].dept >= 0 && fr >= 0 && tierOfTeam(i) < 0) placeInBottomPool(pyramids[fr], i);
     // équipes U19 des clubs créés : District U19 de leur département
     { int yp = u19Pyramid(); for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++)
-        if (g_world.teams[i].youth && tierOfTeam(i) < 0) { int py = youthPyramid(i); if (py >= 0) placeInBottomPool(pyramids[py], i); } }
+        if (g_world.teams[i].youth && g_world.teams[i].youth != 6 && tierOfTeam(i) < 0) { int py = youthPyramid(i); if (py >= 0) placeInBottomPool(pyramids[py], i); } }
     // tenants réels 2025-26 : Ligue des champions PSG, Ligue Europa Aston Villa
     auto byName = [](const char* nm) { for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == nm && g_world.teams[i].parent < 0) return i; return -1; };
     prevUclWinner = byName("Paris Saint-Germain");
@@ -706,9 +706,11 @@ void Career::startSeason() {
                 int n = (int)pl.groups[g].size();
                 double t0 = 1.0, t1 = 40.0;
                 bool yth = P.country == "U19" || P.country == "U17" || P.country == "U15";
-                bool pro = (P.country != "FRA" && !yth) || (P.country == "FRA" && pl.tier <= 2);
+                bool fem = isWomenPyramid(P);
+                bool pro = (P.country != "FRA" && !yth && !fem) || (P.country == "FRA" && pl.tier <= 2) || (fem && pl.tier <= 1);
                 if (!pro) { t0 = 2; t1 = n <= 10 ? 36 : 38; }
                 if (yth) { t0 = 3; t1 = pl.tier == 0 ? 35 : 36; c.yellowLimit = 3; }
+                if (fem) { t0 = 2; t1 = P.country == "F:FRA" && pl.tier == 0 ? 36 : 38; c.yellowLimit = P.country == "F:FRA" ? 3 : 5; }
                 c.setupLeague(pl.groups[g], 2, t0, t1, 1);
                 if (pl.groups[g].size() < 2) { c.done = true; c.result = pl.groups[g]; for (auto& st : c.stages) st.finished = true; }   // poule vide : rien à jouer
                 pl.comps.push_back(addComp(S, std::move(c)));
@@ -859,7 +861,7 @@ void Career::startSeason() {
     // ---------------- coupes nationales étrangères : chaque pays doté d'un championnat a sa coupe (nom réel ou « Coupe de <pays> »)
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) {
         Pyramid& P = pyramids[p];
-        if (P.dom >= 0 || P.country == "FRA" || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
+        if (P.dom >= 0 || P.country == "FRA" || P.country == "U19" || P.country == "U17" || P.country == "U15" || isWomenPyramid(P)) continue;
         std::vector<int> t;
         for (auto& pl : P.pools) for (int x : pl.clubs) if (g_world.teams[x].parent < 0 && !g_world.teams[x].youth) t.push_back(x);
         if (t.size() < 4) continue;
@@ -870,6 +872,8 @@ void Career::startSeason() {
         S.comps[idx].cupRound(0, S.comps[idx].entrants[0]);
         nationalCups.push_back(idx);
     }
+    // ---------------- football féminin : coupes nationales, Coupe LFFP, Ligue des champions féminine
+    womenStartSeason(*this);
     // ---------------- supercoupes (champion contre vainqueur de la coupe)
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) {
         Pyramid& P = pyramids[p];
@@ -1258,6 +1262,7 @@ void Career::onCompetitionDone(int comp) {
         }
     }
     onU19CompDone(comp);
+    womenOnCompDone(*this, comp);
     std::string y = seasonLabel(year);
     if (C.format != FMT_LEAGUE && C.winner >= 0 && C.kind != 10 && C.kind != 12 && C.kind != 20 && C.name.find("tours régionaux") == std::string::npos)
         addHonour(C.winner, "Vainqueur : " + C.name + " (" + y + ")");
@@ -1762,7 +1767,7 @@ void Career::endSeason() {
     int fr = pyramidOf(pyramids, "FRA");
     int ypy = u19Pyramid();
     for (int t : pendingNewClubs) {
-        if (g_world.teams[t].youth) { int py = youthPyramid(t); if (py >= 0) placeInBottomPool(pyramids[py], t); }
+        if (g_world.teams[t].youth && g_world.teams[t].youth != 6) { int py = youthPyramid(t); if (py >= 0) placeInBottomPool(pyramids[py], t); }
         else if (fr >= 0) placeInBottomPool(pyramids[fr], t);
     }
     if (fr >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[fr]);
@@ -2149,6 +2154,19 @@ std::string Career::divisionRules(int comp) const {
         if (T.noReserves) B("Division interdite aux équipes réserves.");
         else if (PY.country == "FRA") { B("Autorisées, mais jamais au même niveau ou au-dessus de l'équipe supérieure du club."); B("Une réserve ne peut pas accéder à la Ligue 3."); }
         else B("Selon le règlement du pays.");
+        if (isWomenPyramid(PY)) {
+            H("Football féminin");
+            B("Séparation stricte : seules des joueuses peuvent évoluer dans ce championnat.");
+            if (PY.country == "F:FRA" && pl.tier == 0) {
+                B("Saison régulière en 22 journées. Les 4 premières disputent les play-offs pour le titre : demi-finales (1re - 4e, 2e - 3e) et finale sur match unique.");
+                B("Les 2 dernières descendent en Seconde Ligue.");
+            }
+            if (PY.country == "F:FRA" && pl.tier == 1) B("22 journées : les 2 premières montent en Arkema Première Ligue, les 2 dernières descendent en D3.");
+            if (PY.country == "F:FRA" && pl.tier <= 1) {
+                B("Feuille de match : 20 joueuses, 5 remplacements.");
+                B("Règle JFL : au moins 10 joueuses formées localement (JFL) sur la feuille de match.");
+            }
+        }
         if (PY.country == "U15" || PY.country == "U17" || PY.country == "U19") {
             H("Catégorie de jeunes");
             if (PY.country == "U15") { B("Joueurs de moins de 15 ans (U15). Championnats de ligue et de district uniquement : pas de championnat national."); B("En fin de saison, les joueurs trop âgés rejoignent l'équipe U17 (ou U19) du club."); }
@@ -3257,12 +3275,14 @@ void Career::sheetRules(int comp, int& sheet, int& subs, bool& rolling) const {
     const Competition& C = season.comps[comp];
     if (C.rollingSubs()) { sheet = 14; subs = 99; rolling = true; return; }
     if (C.kind == 12) { sheet = 18; subs = 5; return; }
+    if (C.kind >= 40 && C.kind <= 44) { sheet = 20; subs = 5; return; }                 // football féminin : 20 joueuses, 5 remplacements
     if (C.kind == 15 || C.kind == 16 || C.kind == 19 || C.kind == 22 || C.kind == 20 || C.kind == 21) { sheet = 16; subs = 3; return; }
     if (C.kind == 1 && C.tag >= 0) {
         int p = C.tag / 100000, q = (C.tag / 100) % 1000;
         if (p < (int)pyramids.size() && q < (int)pyramids[p].pools.size()) {
             const Pyramid& P = pyramids[p]; int tier = pyramids[p].pools[q].tier;
-            if (P.country == "U15") { sheet = 14; subs = 99; rolling = true; return; }                                   // U15 : remplacements libres
+            if (P.country == "U15") { sheet = 14; subs = 99; rolling = true; return; }
+            if (isWomenPyramid(P)) { if (tier <= 1 || P.country != "F:FRA") { sheet = 20; subs = 5; } else { sheet = 16; subs = 3; } return; }                                   // U15 : remplacements libres
             if (P.country == "U19" || P.country == "U17") { sheet = tier == 0 ? 16 : 14; subs = 3; return; }
             if (P.country == "FRA" && P.dom < 0 && (tier == 3 || tier == 4)) { sheet = 16; subs = 3; return; }             // National 2 et National 3
             if (P.country == "FRA" && P.dom < 0 && tier >= 5 && tier <= 7) { sheet = 14; subs = 3; return; }             // Régional 1 à 3

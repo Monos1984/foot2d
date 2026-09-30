@@ -82,6 +82,16 @@ struct ExtLeagueDef { const char* id; const char* name; const char* country; int
 extern const ExtLeagueDef EXT_LEAGUES[];
 extern const int NUM_EXT_LEAGUES;
 const char* extCupName(const char* country);
+// football féminin (data_women.cpp)
+struct WomenLeagueDef { const char* country; int tier; const char* name; int down; const char* clubs; };
+struct WomenSquadDef { const char* key; const char* players; };   // key : nom du club ou code pays (sélection)
+extern const WomenLeagueDef WOMEN_LEAGUES[];
+extern const int NUM_WOMEN_LEAGUES;
+extern const WomenSquadDef WOMEN_SQUADS[];
+extern const int NUM_WOMEN_SQUADS;
+extern const WomenSquadDef WOMEN_NATIONS[];
+extern const int NUM_WOMEN_NATIONS;
+const char* womenCupName(const char* country);
 extern const ClubDef EURO_POOL[];
 extern const int NUM_EURO_POOL;
 extern const ClubDef WORLD_POOL[];

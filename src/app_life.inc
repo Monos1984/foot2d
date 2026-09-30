@@ -1,5 +1,5 @@
 // ------------------------------------------------------------------ carrière de joueur / joueuse, vie privée, paris, « valise à l'arbitre »
-static Player g_lifeNew;
+// g_lifeNew : déclaré dans app.cpp
 static int g_lifeRow = 0; static bool g_lifeTyping = false; static ListW g_lifeLW;
 static int g_lifeNat = -1;
 static int g_betSel = 0, g_betPick = 0, g_betStake = 50;
@@ -110,7 +110,7 @@ static void screenLifeNew() {
     Kit k; k.shirt = 0x1B2A63; k.shirt2 = 0xFFFFFF;
     drawPortrait(VW - 140, 50, 120, P.skin, P.hair, P.gender, k, hashStr(P.name));
     drawTextCentered(P.age <= 14 ? "Débute en U15, puis gravit les catégories (U17, U19, réserve) jusqu'à l'équipe première." : P.age <= 16 ? "Débute en U17, puis U19 et réserve avant l'équipe première." : P.age <= 19 ? "Débute en réserve ou en U19, puis monte en équipe première quand son niveau le permet." : "Débute directement dans l'équipe première.", VW / 2, 250, 10, C_DIM);
-    if (P.gender) drawTextCentered("(les championnats et clubs féminins arrivent avec la section 11 de la mission)", VW / 2, 264, 10, C_DIM);
+    if (P.gender) drawTextCentered("Joueuse : choisissez un club dans « Football féminin » (ou un club disposant d'une section féminine).", VW / 2, 264, 10, C_DIM);
     if (g_lifeTyping) {
         textEdit(P.name, 30);
         menuRun(g_lifeLW, rows, 50, 300);

@@ -174,6 +174,7 @@ std::vector<PoolPlayer> coachPool(int nation, int maxAge, int cat) {
         for (int k = 0; k < (int)t.squad.size(); k++) {
             const Player& p = t.squad[k];
             if (p.nation != nation || p.age < (cat == 3 ? 14 : cat ? 15 : 17)) continue;
+            if ((p.gender == 1) != (cat == 5)) continue;            // séparation stricte : sélections féminines = joueuses
             if (maxAge > 0 && p.age > maxAge) continue;
             if (names.count(p.name + fmt("%d", p.age))) continue;
             names.insert(p.name + fmt("%d", p.age));

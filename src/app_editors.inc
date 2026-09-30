@@ -406,8 +406,9 @@ static void screenLeagueMode() {
         if (P.dom >= 0) continue;
         int q = P.poolIndex(0, 0);
         if (q < 0 || P.pools[q].clubs.size() < 4) continue;
+        if (P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
         int ni = g_world.nationIndex(P.country.c_str());
-        v.push_back({ P.tiers[0].name + "  (" + (ni >= 0 ? g_world.teams[ni].name : P.country) + ")", p });
+        v.push_back({ P.tiers[0].name + "  (" + (ni >= 0 ? g_world.teams[ni].name : P.name) + ")", p });
     }
     drawTextCentered("Choisissez une première division : saison complète, sans gestion (1 ou plusieurs clubs).", VW / 2, 34, 10, C_DIM);
     int s = listRun(g_lmLW, (int)v.size(), 80, 50, VW - 160, 20, 13, [&](int i, int x, int y, bool sel) {

@@ -631,6 +631,7 @@ bool Career::buyPlayer(int pid, int fee, std::string& err) {
     if (fee > mgr.budget) { err = "Budget insuffisant."; return false; }
     if (mgr.dncg > 0 && fee > 0) { err = "DNCG : recrutements payants interdits."; return false; }
     const Player& P = g_world.teams[src].squad[idx];
+    if ((P.gender == 1) != (U.youth == 6)) { err = "Séparation stricte : une joueuse évolue uniquement dans un club féminin (et inversement)."; return false; }
     bool ownReserve = g_world.teams[src].parent == userTeam;
     if (!ownReserve && P.overall() > U.rating + 14 && g_world.teams[src].rating > U.rating + 6) { err = P.name + " refuse de rejoindre un club de ce niveau."; return false; }
     if (U.status == CS_AMATEUR && P.contract == 0 && P.overall() > 55 && !ownReserve) { err = P.name + " (contrat pro) refuse de signer une licence amateur."; return false; }
@@ -669,6 +670,7 @@ int Career::signPlayer(int pid, int fee, int wage, int years, std::string& msg) 
     Team& U = g_world.teams[userTeam];
     if (U.squad.size() >= 99) { msg = "Effectif complet (99 numéros de maillot)."; return -2; }
     const Player& P = g_world.teams[src].squad[idx];
+    if ((P.gender == 1) != (U.youth == 6)) { msg = "Séparation stricte : une joueuse évolue uniquement dans un club féminin (et inversement)."; return -2; }
     bool freeP = g_world.teams[src].freeAgents;
     bool ownReserve = g_world.teams[src].parent == userTeam;
     int bonus = U.status == CS_AMATEUR ? 0 : std::max(0, wage * years / 10);          // prime à la signature : 10 % du contrat
@@ -789,9 +791,10 @@ int Career::findBuyer(int pid, int& fee) const {
     for (int t = 0; t < (int)g_world.teams.size(); t++) {
         const Team& T = g_world.teams[t];
         if (t == src || T.kind != TK_CLUB || T.parent >= 0 || T.custom) continue;
+        if ((T.youth == 6) != (P.gender == 1)) continue;          // séparation stricte hommes / femmes
         if (T.rating < ov - 10 || T.rating > ov + 12) continue;
-        if (T.dbClub < 0 && T.rating > 55) continue;
-        if (T.nation < 0 || NATIONS[T.nation].conf != UEFA) continue;
+        if (P.gender == 0 && T.dbClub < 0 && T.rating > 55) continue;
+        if (T.nation < 0 || (P.gender == 0 && NATIONS[T.nation].conf != UEFA)) continue;
         cand.push_back(t);
     }
     if (cand.empty()) return -1;
@@ -934,6 +937,7 @@ bool Career::loanIn(int pid, std::string& err) {
     if (loansIn(userTeam) >= loanLimitIn(userTeam)) { err = fmt("Quota de prêts atteint pour votre division (%d joueurs prêtés au maximum).", loanLimitIn(userTeam)); return false; }
     for (auto& l : loans) if (l.pid == pid) { err = "Ce joueur est déjà prêté."; return false; }
     const Player& P = S.squad[idx];
+    if ((P.gender == 1) != (U.youth == 6)) { err = "Séparation stricte : une joueuse évolue uniquement dans un club féminin (et inversement)."; return false; }
     // le club prêteur garde ses titulaires
     std::vector<int> ov; for (auto& q : S.squad) ov.push_back(q.overall());
     std::sort(ov.rbegin(), ov.rend());
@@ -965,6 +969,7 @@ bool Career::loanOut(int pid, std::string& err) {
     for (int t = 0; t < (int)g_world.teams.size(); t++) {
         const Team& T = g_world.teams[t];
         if (t == userTeam || T.kind != TK_CLUB || T.parent >= 0 || T.freeAgents || T.custom) continue;
+        if ((T.youth == 6) != (U.youth == 6)) continue;
         int l2 = teamLevel(t);
         if (l2 >= 99 || l2 < lv || l2 > lv + 2 || T.nation != U.nation) continue;
         if (loansIn(t) >= loanLimitIn(t)) continue;

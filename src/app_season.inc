@@ -5,6 +5,8 @@ static std::vector<int> clubFamily(int club) {
     if (club < 0) return v;
     v.push_back(club);
     for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == club) v.push_back(i);
+    auto w = g_world.womenOf.find(club);          // section féminine (club lié)
+    if (w != g_world.womenOf.end()) v.push_back(w->second);
     return v;
 }
 static std::string sectionName(int t, int club) {

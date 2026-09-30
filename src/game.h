@@ -198,6 +198,7 @@ struct World {
     int baseCount = 0;                  // nombre d'équipes générées automatiquement (hors éditeur)
     std::vector<int> leagueClubs[64];
     std::vector<std::vector<int>> extLeagueClubs;   // clubs des championnats complémentaires (EXT_LEAGUES)
+    std::map<int, int> menOf, womenOf;              // section féminine <-> club masculin (reconstruit à chaque génération du monde)
     std::vector<int> euroPool;          // clubs UEFA hors championnats simulés
     std::vector<int> worldPool;         // autres clubs du monde
     std::map<std::string, std::vector<int>> countryClubs; // clubs par pays (hors championnats simulés)
@@ -853,6 +854,18 @@ std::string money(int64_t k);        // montant en k€ -> texte
 extern Career g_career;
 extern std::vector<Pyramid> g_basePyramids;
 void formGroups(Pyramid& P);
+// football féminin (women.cpp)
+void buildWomen(World& w);
+void injectWomenStars(Team& t, Rng& r);
+bool isWomenPyramid(const Pyramid& P);
+bool isWomenTeam(int t);
+struct Career;
+int womenPyramid(const Career& K, const char* country);
+void womenStartSeason(Career& K);
+void womenOnCompDone(Career& K, int comp);
+bool uwclStageFinished(Competition& C, const std::vector<int>& winners);
+int jflMin(int team);
+bool isJfl(const Player& p, int team);
 int poolGroupCount(const Pyramid& P, const Pool& pool);
 int poolTarget(const Pyramid& P, const Pool& pool);
 int regionDeptCount(int region);

@@ -335,6 +335,7 @@ static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair,
     }
 }
 
+static bool g_sprLongHair = false;      // joueuse / arbitre : cheveux longs (queue de cheval)
 // dir : 0 bas, 1 haut, 2 droite, 3 gauche
 void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir, int frame, int state, bool gk, unsigned gkShirt, int scale) {
     // (x,y) = pieds
@@ -377,6 +378,12 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     if (style == 1 && dir != 1) { for (int c = 0; c < 7; c++) if (buf[0][c] == 'h') buf[0][c] = (c == 2 || c == 4) ? 's' : 'h'; }
     else if (style == 2) { if (buf[2][1] == '.') buf[2][1] = 'h'; if (buf[2][5] == '.') buf[2][5] = 'h'; }
     else if (style == 3 && dir == 1) { buf[3][2] = 'h'; buf[3][3] = 'h'; buf[3][4] = 'h'; }
+    if (g_sprLongHair && state != PS_CELEB) {
+        auto H = [&](int r, int c) { if (buf[r][c] == '.' || buf[r][c] == ' ' || buf[r][c] == 0) buf[r][c] = 'h'; };
+        if (dir == 1) { buf[3][2] = buf[3][3] = buf[3][4] = 'h'; buf[4][3] = 'h'; }
+        else if (dir == 0) { H(2, 1); H(2, 5); H(3, 1); H(3, 5); }
+        else { H(1, 1); H(2, 1); H(3, 1); H(3, 2); }
+    }
     // gardien : gants (mains)
     if (gk) for (int r = 6; r < 9; r++) for (int c = 0; c < 7; c++) if (buf[r][c] == 's') buf[r][c] = 'g';
     if (state == PS_CELEB && gk) for (int r = 0; r < 3; r++) for (int c = 0; c < 7; c++) if ((c == 0 || c == 6) && buf[r][c] == 's') buf[r][c] = 'g';
@@ -948,8 +955,10 @@ void renderMatch(const Match& m, bool radar) {
             // coiffure : cheveux courts pour les arbitres hommes, longs (queue de cheval) pour les arbitres femmes
             bool fem = m.S.referee >= 0 && m.S.referee < NUM_REFEREES && REFEREES[m.S.referee].female;
             static const int MS[6][2] = { { 0, 0 }, { 0, 4 }, { 1, 3 }, { 2, 2 }, { 2, 6 }, { 3, 1 } };      // (peau, cheveux) donnant une coupe courte
-            int rs = fem ? 1 : MS[(m.S.referee + 6) % 6][0], rh = fem ? 1 : MS[(m.S.referee + 6) % 6][1];
+            int rs = fem ? 1 : MS[(m.S.referee + 6) % 6][0], rh = fem ? 3 : MS[(m.S.referee + 6) % 6][1];
+            g_sprLongHair = fem;
             drawPlayerSprite(rx, ry, rk, rs, rh, showCard ? 0 : dirOf(m.refFace), rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
+            g_sprLongHair = false;
             if (showCard) {
                 Color cc = m.refCardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
                 DrawRectangle(rx + 3, ry - 18, 3, 4, cc);
@@ -1006,7 +1015,9 @@ void renderMatch(const Match& m, bool radar) {
                 DrawRectangle(SX(pos.x + back.x * d) + (k ? 1 : -1), SY(pos.y + back.y * d) - k, 1, 1, dc);
             }
         }
+        g_sprLongHair = p.squad >= 0 && p.squad < (int)T.squad.size() && T.squad[p.squad].gender;
         drawPlayerSprite(sx, sy, m.kit[p.team], skin, hair, dir, frame, state == PS_HAND ? PS_NORMAL : state, p.gk, m.gkShirt[p.team], 1);
+        g_sprLongHair = false;
         if (state == PS_HAND) {   // poignée de main : bras tendu vers l'adversaire
             unsigned sk = 0xE0B090; if (p.squad >= 0 && p.squad < (int)T.squad.size()) { static const unsigned SK[4] = { 0xF2C9A0, 0xD9A066, 0xA86B3C, 0x6B4226 }; sk = SK[T.squad[p.squad].skin % 4]; }
             DrawRectangle(sx, sy - 6 + (p.team ? -3 : 1), 1, 3, hexc(sk));

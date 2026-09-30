@@ -681,6 +681,7 @@ void buildBasePyramids(World& w) {
     buildYouthPyr(w, 2);
     buildYouthPyr(w, 3);          // U15 : ligues et districts uniquement
     buildForeign(w);
+    buildWomen(w);
 }
 
 std::string poolLabel(const Pyramid& P, const Pool& pl, int g) {

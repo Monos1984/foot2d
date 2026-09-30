@@ -517,6 +517,16 @@ void World::generateSquad(Team& t) {
             p.gender = 1;
             p.age = (uint8_t)r.range(18, 34);
             if (t.kind == TK_NATION) p.nation = (int16_t)t.nation;
+            else if (t.nation >= 0 && r.chance(0.8f)) p.nation = (int16_t)t.nation;
+            {   // niveau des joueuses générées : autour du niveau de l'équipe (les joueuses réelles restent les meilleures)
+                int cap = (int)t.rating - 3 + r.range(-4, 3);
+                int ov = p.overall();
+                if (ov > cap && ov > 0) {
+                    float f = (float)cap / ov;
+                    auto sc = [&](uint8_t& v) { v = (uint8_t)std::max(10, (int)(v * f)); };
+                    sc(p.speed); sc(p.shoot); sc(p.pass); sc(p.tackle); sc(p.stamina); if (p.pos == POS_GK) sc(p.keep);
+                }
+            }
             size_t sp = p.name.find(' ');
             std::string last = sp == std::string::npos ? p.name : p.name.substr(sp + 1);
             if (!fn.empty()) p.name = fn[r.range(0, (int)fn.size() - 1)] + " " + last;
@@ -533,6 +543,7 @@ void World::generateSquad(Team& t) {
             p.contract = 2;
         }
     }
+    injectWomenStars(t, r);
     realNumbersFix(t.squad);
     for (auto& p : t.squad) p.id = g_world.nextPid++;
     applyPlayerEdits(t);
@@ -552,7 +563,14 @@ Player World::makeYouth(int team, int pos, float level) {
     for (auto& q : t.squad) if (q.num < 100) used[q.num] = true;
     p.num = 1; while (p.num < 99 && used[p.num]) p.num++;
     p.id = nextPid++;
-    if (t.kind == TK_CLUB && t.nation >= 0 && !t.youth) p.nation = (int16_t)t.nation;   // formé au club : nationalité du pays
+    if (t.kind == TK_CLUB && t.nation >= 0 && (!t.youth || t.youth == 6)) p.nation = (int16_t)t.nation;   // formé au club : nationalité du pays
+    if (t.youth == 6) {   // section féminine : une jeune joueuse (prénom féminin)
+        p.gender = 1;
+        int cu = t.culture >= 0 && t.culture < NUM_CULTURES ? t.culture : CU_FR;
+        std::vector<std::string> fn; { std::string s = FEMALE_FIRST[cu], w; for (char c : s) { if (c == ' ') { if (!w.empty()) fn.push_back(w); w.clear(); } else w += c; } if (!w.empty()) fn.push_back(w); }
+        size_t sp = p.name.find(' ');
+        if (!fn.empty()) p.name = fn[r.range(0, (int)fn.size() - 1)] + " " + (sp == std::string::npos ? p.name : p.name.substr(sp + 1));
+    }
     {   // centre de formation du club : meilleurs jeunes
         int club = t.parent >= 0 ? t.parent : team;
         int ac = club >= 0 && club < (int)teams.size() ? teams[club].academy + teams[club].sta.annexYouth : 0;   // centre de formation + stade des jeunes
@@ -639,6 +657,19 @@ std::vector<int> World::pickLineup(int team, int formation) const {
     for (int i = 0; i < (int)t.squad.size(); i++) if (avail(i)) rest.push_back(i);
     std::sort(rest.begin(), rest.end(), [&](int a, int b) { return t.squad[a].overall() > t.squad[b].overall(); });
     for (int i = 0, n = 0; i < (int)rest.size() && n < 8; i++) if (avail(rest[i])) { out.push_back(rest[i]); take(rest[i]); n++; }
+    // règle JFL (football féminin français) : nombre minimal de joueuses formées localement sur la feuille de match
+    int jmin = jflMin(team);
+    if (jmin > 0) {
+        auto jfl = [&](int i) { return i >= 0 && isJfl(t.squad[i], team); };
+        int have = 0; for (int i : out) if (jfl(i)) have++;
+        for (int k = (int)out.size() - 1; k >= 1 && have < jmin; k--) {
+            if (jfl(out[k]) || t.squad[out[k]].pos == POS_GK) continue;
+            int bi = -1;
+            for (int i = 0; i < (int)t.squad.size(); i++) if (!used[i] && availRaw(i) && jfl(i) && t.squad[i].pos != POS_GK && (bi < 0 || sv(i) > sv(bi))) bi = i;
+            if (bi < 0) break;
+            used[out[k]] = false; used[bi] = true; out[k] = bi; have++;
+        }
+    }
     return out;
 }
 

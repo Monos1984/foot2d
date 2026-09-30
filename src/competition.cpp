@@ -267,6 +267,7 @@ std::vector<Standing> Competition::table(int s, int g) const {
         H.p++; A.p++; H.gf += m.hg; H.ga += m.ag; A.gf += m.ag; A.ga += m.hg;
         if (m.hg > m.ag) { H.w++; A.l++; H.pts += ptsWin; }
         else if (m.hg < m.ag) { A.w++; H.l++; A.pts += ptsWin; A.aw++; }
+        else if (kind == 42 && m.ph >= 0 && m.pa >= 0) { H.d++; A.d++; if (m.ph > m.pa) { H.pts += 2; A.pts++; } else { A.pts += 2; H.pts++; } }   // Coupe LFFP : tirs au but directs
         else { H.d++; A.d++; H.pts++; A.pts++; }
     }
     // mini-classement entre équipes à égalité
@@ -611,6 +612,7 @@ void Competition::onStageFinished() {
         return;
     }
     case FMT_EUROPE: {
+        if (uwclStageFinished(*this, winners)) return;
         if (st.type == ST_SWISS) {
             auto tb2 = swissTable(cur);
             result.clear(); for (auto& s : tb2) result.push_back(s.team);
