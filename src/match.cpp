@@ -189,7 +189,7 @@ void Match::init(const MatchSetup& setup) {
             p = MPlayer();
             p.team = t; p.slot = s; p.gk = (s == 0);
             p.squad = onField[t][s];
-            loadAttrs(p, T.squad[p.squad], mult * S.bribeMult[t] * (p.squad == S.bribeSquad[t] ? 0.6f : 1.f), ids[t]);
+            loadAttrs(p, T.squad[p.squad], mult * (t == 0 ? 1.f + S.homeBoost : 1.f) * S.bribeMult[t] * (p.squad == S.bribeSquad[t] ? 0.6f : 1.f), ids[t]);
         }
         mentality[t] = std::max(0, std::min(4, T.mentality));
         S.tac[t][0] = T.pressing; S.tac[t][1] = T.defLine; S.tac[t][2] = T.width; S.tac[t][3] = T.tempo; S.tac[t][4] = T.passStyle;
@@ -224,6 +224,8 @@ void Match::init(const MatchSetup& setup) {
     case 4: pitchFriction = 0.45f; pitchBounce = 0.7f; break;   // gelé
     default: pitchFriction = 1.0f; pitchBounce = 0.5f; break;
     }
+    if (S.meteo == 5 && S.pitch == 4) { pitchFriction = 1.35f; pitchBounce = 0.3f; }   // terrain enneigé : le ballon freine
+    if (S.meteo == 4) { float a = R.frange(0.f, 6.2831f); wind = V2(std::cos(a), std::sin(a)) * R.frange(1.2f, 2.6f); }
     turfBad = clampf((75.f - S.turf) / 75.f, 0.f, 1.f);
     pitchFriction *= 1.f + turfBad * 0.55f;
     rp.assign(REPLAY_N * 22, Snap());
@@ -339,8 +341,9 @@ void Match::updateCeremony(float dt) {
     {   // caméra : suit la sortie du tunnel puis se recentre
         V2 f(PITCH_W / 2, PITCH_L / 2);
         if (cerPhase < 0) { float sx = 0; int n = 0; for (auto& p : pl) if (p.pos.x > -1.f) { sx += p.pos.x; n++; } f.x = std::max(4.f, n ? sx / n : 0.f); }
-        bool anth = cerPhase == 10 || cerPhase == 11;
-        if (anth) {   // hymnes : travelling le long de la ligne des joueurs, caméra rapprochée
+        bool anth = cerPhase == 10 || cerPhase == 11 || cerPhase == 12;
+        if (cerPhase == 12) { f = V2(vipOn ? vipPos.x : PITCH_W / 2, anthemSpot(0, 0).y + 1.f); }
+        else if (anth) {   // hymnes : travelling le long de la ligne des joueurs, caméra rapprochée
             int tt = cerPhase - 10;
             float u = std::min(1.f, std::max(0.f, (cerT - 0.8f) / 8.5f));
             float xa = anthemSpot(tt, 0).x, xb = anthemSpot(tt, 10).x;
@@ -363,6 +366,7 @@ void Match::updateCeremony(float dt) {
     for (int i = 0; i < NUM_INPUTS; i++) { if (ctl[i].f1p || ctl[i].f2p) skip = true; if (ctl[i].pause) pauseSkip = true; }
     auto toToss = [&]() {
         if (cerPhase == 10 || cerPhase == 11) anthemReq = -2;
+        vipOn = false;
         for (int k = 0; k < 22; k++) { int tt = k / 11, s2 = k % 11; pl[k].pos = lineSpot(tt, s2); pl[k].state = PS_NORMAL; pl[k].face = V2(0, tt ? -1.f : 1.f); }
         cerPhase = 3; cerT = 0;
     };
@@ -382,7 +386,7 @@ void Match::updateCeremony(float dt) {
         for (int k = 0; k < 22; k++) {
             int tt = k / 11, s2 = k % 11;
             if (t < 2.6f + s2 * 0.45f) { allIn = false; continue; }
-            V2 tg = S.cupPhoto ? photoSpot(k) : S.anthems ? anthemSpot(tt, s2) : lineSpot(tt, s2) + V2(tt ? 30.f : 0.f, 0);
+            V2 tg = S.anthems ? anthemSpot(tt, s2) : S.cupPhoto ? photoSpot(k) : lineSpot(tt, s2) + V2(tt ? 30.f : 0.f, 0);
             V2 mid(1.5f + s2 * 0.2f, PITCH_L / 2 + (tt ? 1.f : -1.f));
             MPlayer& p = pl[k];
             bool out = p.pos.x > 0.8f;
@@ -404,9 +408,38 @@ void Match::updateCeremony(float dt) {
         int tt = cerPhase - 10;
         for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], anthemSpot(t2, k % 11), 3.f); pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
         refPos = refPos + (V2(PITCH_W / 2, PITCH_L / 2 - 1.5f) - refPos) * std::min(1.f, dt * 2.f); refFace = V2(0, 1);
-        if (t < dt * 1.5f) { anthemReq = tt; msg = "HYMNE NATIONAL"; msg2 = team(tt).name; msgT = 3.f; say("Les joueurs de " + team(tt).name + " entonnent leur hymne national.", 4.f, true); }
-        if (t > 10.5f) { cerT = 0; if (tt == 0) cerPhase = 11; else { anthemReq = -2; cerPhase = S.cupPhoto ? 0 : 1; } }
+        if (t < dt * 1.5f) {
+            anthemReq = tt; anthemDur = 10.5f; msg = "HYMNE NATIONAL"; msgT = 3.f;
+            if (!S.anthemOnly.empty()) { msg2 = "La Marseillaise"; say("Le stade se lève : les deux équipes et le public entonnent La Marseillaise.", 4.5f, true); }
+            else { msg2 = team(tt).name; say("Les joueurs de " + team(tt).name + " entonnent leur hymne national.", 4.f, true); }
+        }
+        if (t > 1.f && t < 1.f + dt * 1.5f && !anthemName.empty()) { msg2 = (S.anthemOnly.empty() ? team(tt).name + " - " : std::string()) + anthemName; msgT = 3.f; }
+        if (t > anthemDur) {
+            cerT = 0;
+            if (tt == 0 && S.anthemOnly.empty()) cerPhase = 11;
+            else { anthemReq = -2; cerPhase = S.president ? 12 : S.cupPhoto ? 0 : 1; }
+        }
         if (skip && t > 0.3f) toToss();
+        break;
+    }
+    case 12: {  // le président de la République sort du tunnel et serre la main de chaque joueur
+        for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], anthemSpot(t2, k % 11), 3.f); pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
+        refPos = refPos + (V2(PITCH_W / 2, PITCH_L / 2 - 1.5f) - refPos) * std::min(1.f, dt * 2.f); refFace = V2(0, 1);
+        if (t < dt * 1.5f) {
+            vipOn = true; vipPos = V2(-2.5f, PITCH_L / 2);
+            msg = "LE PRÉSIDENT DE LA RÉPUBLIQUE"; msg2 = "salue les joueurs"; msgT = 3.f;
+            say("Le président de la République descend sur la pelouse pour saluer les deux équipes, comme le veut la tradition de la finale.", 5.f, true);
+        }
+        float xa = anthemSpot(0, 0).x - 1.2f, xb = anthemSpot(1, 10).x + 1.2f, yl = anthemSpot(0, 0).y + 1.1f;
+        float walkIn = 3.2f, per = 0.75f;
+        V2 tg;
+        if (t < walkIn) tg = V2(xa, yl);
+        else if (t < walkIn + 22 * per) tg = V2(xa + (xb - xa) * (t - walkIn) / (22 * per), yl);
+        else tg = V2(-2.5f, PITCH_L / 2);
+        V2 d = tg - vipPos; float l = d.len();
+        if (l > 0.05f) vipPos += d * (std::min(l, (t < walkIn ? 4.5f : t < walkIn + 22 * per ? 6.f : 4.f) * dt) / l);
+        for (int k = 0; k < 22; k++) if (std::fabs(pl[k].pos.x - vipPos.x) < 0.7f && t >= walkIn && t < walkIn + 22 * per) pl[k].state = PS_HAND;
+        if (t > walkIn + 22 * per + 2.5f || (skip && t > 0.3f)) { vipOn = false; cerPhase = S.cupPhoto ? 0 : 1; cerT = 0; }
         break;
     }
     case 0: {   // photo officielle : deux rangées par équipe, flashs des photographes
@@ -806,7 +839,7 @@ void Match::checkOffsideTouch(int i, bool deliberate) {
     offsideArmed = false;
     if (off && state == MS_PLAY) {
         playSfx(SFX_WHISTLE);
-        msg = "HORS-JEU"; msg2 = playerName(i); msgT = 2.0f;
+        msg = "HORS-JEU"; msg2 = playerName(i); msgT = 2.0f; offsides[pl[i].team]++;
         state = MS_STOP; stateT = 0;
         nextSp = SP_INDIRECT; nextSpTeam = 1 - pl[i].team; nextSpPos = pl[i].pos;
         ball.owner = -1; ball.vel = V2();
@@ -818,6 +851,12 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     dir = dir.norm();
     if (dir.len2() < 0.01f) dir = p.face;
     ball.owner = -1;
+    // pluie, orage, neige : ballon glissant, frappes et passes moins précises
+    if (S.meteo >= 3 && S.meteo <= 5 && !S.training) {
+        static const float JIT[6] = { 0, 0, 0, 0.035f, 0.06f, 0.045f };
+        float j = JIT[S.meteo] * (1.4f - p.compo / 100.f) * R.frange(-1.f, 1.f);
+        dir = V2(dir.x * std::cos(j) - dir.y * std::sin(j), dir.x * std::sin(j) + dir.y * std::cos(j));
+    }
     ball.vel = dir * speed;
     ball.vz = vz;
     ball.z = std::max(ball.z, 0.05f);
@@ -833,7 +872,7 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     playSfx(SFX_KICK);
     // tir cadré ?
     V2 g = goalCenter(p.team);
-    if ((g - ball.pos).len() < 35 && dir.dot((g - ball.pos).norm()) > 0.85f && speed > 16) shots[p.team]++;
+    if ((g - ball.pos).len() < 35 && dir.dot((g - ball.pos).norm()) > 0.85f && speed > 16) { shots[p.team]++; lastShooter = i; lastShotAge = 0; }
 }
 
 // frappe en force près du but : comme un penalty manqué, le ballon peut s'envoler au-dessus de la barre
@@ -988,6 +1027,8 @@ void Match::updateBall(float dt) {
         }
         return;
     }
+    // vent d'orage : dévie les ballons aériens
+    if (S.meteo == 4 && b.z > 0.4f) b.vel += wind * (dt * 0.9f);
     // effet (aftertouch)
     if (b.aftertouch > 0) {
         b.aftertouch -= dt;
@@ -1288,6 +1329,8 @@ void Match::goalScored(int t) {
     MatchEvent e; e.type = 0; e.team = t; e.minute = std::min(clock, periodEnd + added);
     int sc = ball.lastTouch;
     auto pidOf = [&](int i) { const Team& T = team(pl[i].team); return pl[i].squad >= 0 && pl[i].squad < (int)T.squad.size() ? T.squad[pl[i].squad].id : 0; };
+    // tir cadré dévié ou touché par le gardien (penalty compris) : le but revient au tireur
+    if (sc >= 0 && pl[sc].team != t && lastShooter >= 0 && pl[lastShooter].team == t && (lastShotAge < 3.f || (sp == SP_PENALTY && lastShotAge < 6.f))) sc = lastShooter;
     if (sc >= 0 && pl[sc].team != t) { e.type = 3; e.player = playerName(sc); e.pid = pidOf(sc); }
     else if (sc >= 0) {
         e.player = playerName(sc); e.pid = pidOf(sc);
@@ -1377,6 +1420,7 @@ void Match::sendOff(int i) {
 
 void Match::foul(int off, int vic, bool fromBehind) {
     MPlayer& o = pl[off]; MPlayer& v = pl[vic];
+    fouls[o.team]++;
     v.state = PS_DOWN; v.st = 0; v.vel = o.slideDir * 3;
     if (ball.owner == vic) ball.owner = -1;
     float sev = refSeverity() / 60.f;
@@ -1515,6 +1559,7 @@ void Match::autoSubs(int t) {
     for (int s = 1; s < 11 && subsLeft[t] > 0; s++) {
         MPlayer& p = pl[t * 11 + s];
         if (!p.onPitch) continue;
+        if (medicFor == t * 11 + s && medicPhase < 2) continue;        // pendant les soins
         bool need = p.injured || (ai && p.stamina < 0.62f && clock > 58 && R.chance(0.5f));
         if (!need) continue;
         // remplaçant du même poste de préférence
@@ -1526,6 +1571,7 @@ void Match::autoSubs(int t) {
     for (int s = 1; s < 11; s++) {
         MPlayer& p = pl[t * 11 + s];
         if (!p.onPitch || !p.injured || S.training) continue;
+        if (medicFor == t * 11 + s && medicPhase < 2) continue;
         bool pending = false; for (auto& q : pendSubs) if (q.team == t && q.slot == s) pending = true;
         if (pending || (subsLeft[t] > 0 && !bench[t].empty())) continue;
         Walker w; w.pos = p.pos; w.target = V2(-3.2f, PITCH_L / 2 + (t ? 1.f : -1.f)); w.team = t; w.gk = false; w.gkShirt = gkShirt[t]; w.anim = 0;
@@ -1558,8 +1604,9 @@ void Match::autoSubs(int t) {
 // ------------------------------------------------------------------ coups de pied arrêtés
 void Match::beginSetPiece(int type, int t, V2 spot) {
     penGk = -1;
+    if (type == SP_CORNER && !S.training && t >= 0 && t < 2) corners[t]++;
     state = MS_SETPIECE; stateT = 0; autoSubDone = false;
-    sp = type; spTeam = t; spPos = spot; spT = 0; spReady = false;
+    sp = type; spTeam = t; spPos = spot; spT = 0; spReady = false; spCurl = 0;
     ball = Ball();
     ball.pos = spot;
     ball.lastTeam = t;
@@ -1871,6 +1918,7 @@ void Match::updateSetPiece(float dt) {
             vz = (h + 0.5f * GRAV * tt * tt) / tt;
         }
         kickBall(k, aim, sp2, vz, human >= 0);
+        if (!penalty && sp == SP_FREEKICK && std::fabs(spCurl) > 0.02f) ball.spin = spCurl * 6.5f;   // effet choisi : le ballon contourne le mur
         if (penalty) {
             // plongeon du gardien
             MPlayer& G = pl[gkDef];
@@ -1895,7 +1943,13 @@ void Match::updateSetPiece(float dt) {
         for (int j = 0; j < 22; j++) if (pl[j].human == human && j != k) { pl[j].human = -1; pl[j].charging = false; }
         ctrlPlayer[human] = k;
         p.human = human;
-        if (c.dir.len2() > 0.01f) {
+        // coup franc : effet (flèche courbe) - stick latéral pendant la prise d'élan, ou boutons L / R
+        if (sp == SP_FREEKICK) {
+            if (p.charging && c.dir.len2() > 0.01f) { float side = c.dir.norm().dot(spAim.perp()); spCurl = clampf(spCurl + (side - spCurl) * std::min(1.f, dt * 5.f), -1.f, 1.f); }
+            if (c.f3p) spCurl = clampf(spCurl - 0.25f, -1.f, 1.f);
+            if (c.f4p) spCurl = clampf(spCurl + 0.25f, -1.f, 1.f);
+        }
+        if (c.dir.len2() > 0.01f && !(sp == SP_FREEKICK && p.charging)) {
             if (penalty) {
                 V2 g = goalCenter(p.team);
                 float tx = PITCH_W / 2 + c.dir.x * (attackDir[p.team] < 0 ? 1 : -1) * 3.2f * (attackDir[p.team] < 0 ? 1 : -1);
@@ -1914,10 +1968,11 @@ void Match::updateSetPiece(float dt) {
         bool shootHeld = snes ? c.f2 : c.f1, shootRel = snes ? c.f2r : c.f1r;
         bool passP = snes && c.f1p, longP = snes ? (c.f3p || c.f4p) : c.f2p;
         if (penalty || sp == SP_FREEKICK) {
-            if (shootHeld) { p.charging = true; p.charge += dt; if (p.charge > 0.6f) { doShot(spAim, 1); return; } }
+            float cmax = penalty ? 0.6f : 0.9f;       // coup franc : élan plus long pour doser l'effet
+            if (shootHeld) { p.charging = true; p.charge += dt; if (p.charge > cmax) { doShot(spAim, 1); return; } }
             if (shootRel && p.charging) {
                 if (!penalty && !snes && p.charge < 0.15f) doKick(0);
-                else doShot(spAim, std::max(0.15f, std::min(1.f, p.charge / 0.6f)));
+                else doShot(spAim, std::max(0.15f, std::min(1.f, p.charge / cmax)));
                 return;
             }
             if (!penalty && passP) { doKick(0); return; }
@@ -1965,7 +2020,17 @@ void Match::updateSetPiece(float dt) {
         break;
     }
     case SP_CORNER: spAim = (V2(PITCH_W / 2, g.y + (g.y == 0 ? 8.f : -8.f)) - spPos).norm(); doKick(1); break;
-    case SP_GOALKICK: spAim = (fromTeamFrame(p.team, 0.55f, R.frange(0.3f, 0.7f)) - spPos).norm(); doKick(R.chance(0.7f) ? 1 : 0); break;
+    case SP_GOALKICK: {     // six mètres : long, sauf si un partenaire est totalement libre
+        bool shortOk = false;
+        for (int j = p.team * 11 + 1; j < p.team * 11 + 11 && !shortOk; j++) {
+            if (!pl[j].onPitch || (pl[j].pos - spPos).len() > 25.f) continue;
+            float open = 1e9; for (int o = ot * 11; o < ot * 11 + 11; o++) if (pl[o].onPitch) open = std::min(open, (pl[o].pos - pl[j].pos).len());
+            if (open > 13.f) shortOk = true;
+        }
+        spAim = (fromTeamFrame(p.team, R.frange(0.6f, 0.72f), R.frange(0.25f, 0.75f)) - spPos).norm();
+        doKick(shortOk && R.chance(0.3f) ? 0 : 1);
+        break;
+    }
     case SP_THROWIN: {
         // l'ordinateur cherche un partenaire démarqué, à distance raisonnable et vers l'intérieur
         float in = spPos.x < PITCH_W / 2 ? 1.f : -1.f;
@@ -2514,22 +2579,38 @@ void Match::gkControl(int i, float dt) {
                 float open = 1e9;
                 for (int k = (1 - t) * 11; k < (1 - t) * 11 + 11; k++) if (pl[k].onPitch) open = std::min(open, (pl[k].pos - pl[j].pos).len());
                 float dd = (pl[j].pos - p.pos).len();
-                if (dd > 35) continue;
-                if (clearance(p.pos, pl[j].pos) < 3.0f) continue;
+                if (dd > 30) continue;
+                if (clearance(p.pos, pl[j].pos) < 6.0f) continue;          // relance courte seulement si la ligne de passe est vraiment libre
                 float s = open - dd * 0.1f;
                 if (s > bs) { bs = s; tgt = j; }
             }
-            if (tgt >= 0 && bs > 6 && R.chance(0.6f)) { ball.pos = p.pos + (pl[tgt].pos - p.pos).norm() * 0.8f; passTo(i, tgt, false); }
-            else {
+            // pressing adverse près de la surface : pas de relance courte
+            int press = 0; for (int k = (1 - t) * 11; k < (1 - t) * 11 + 11; k++) if (pl[k].onPitch && (pl[k].pos - p.pos).len() < 24.f) press++;
+            // relance longue vers un attaquant démarqué dans le camp adverse
+            int fwd = -1; float fs = -1e9;
+            for (int j = t * 11 + 1; j < t * 11 + 11; j++) {
+                if (!pl[j].onPitch || progress(t, pl[j].pos) < 0.42f) continue;
+                float open = 1e9;
+                for (int k = (1 - t) * 11; k < (1 - t) * 11 + 11; k++) if (pl[k].onPitch) open = std::min(open, (pl[k].pos - pl[j].pos).len());
+                float sc = open + progress(t, pl[j].pos) * 6.f - std::fabs(pl[j].pos.x - PITCH_W / 2) * 0.05f;
+                if (sc > fs) { fs = sc; fwd = j; }
+            }
+            if (tgt >= 0 && bs > 11 && press <= 1 && R.chance(0.35f)) { ball.pos = p.pos + (pl[tgt].pos - p.pos).norm() * 0.8f; passTo(i, tgt, false); }
+            else if (fwd >= 0 && fs > 4.f && R.chance(0.65f)) {
+                V2 aim = pl[fwd].pos + V2(0, (float)attackDir[t] * 3.f);
+                ball.pos = p.pos + (aim - p.pos).norm() * 0.8f;
+                float L = (aim - p.pos).len();
+                kickBall(i, aim - p.pos, clampf(L * 0.52f + 6.f, 22.f, 33.f), clampf(L * 0.2f, 9.f, 15.f), false);
+            } else {
                 // dégagement : on choisit le côté le plus dégagé
                 V2 bestD; float bc = -1;
                 for (int c = 0; c < 7; c++) {
-                    V2 aim = fromTeamFrame(t, R.frange(0.5f, 0.7f), 0.15f + c * 0.117f);
+                    V2 aim = fromTeamFrame(t, R.frange(0.6f, 0.78f), 0.15f + c * 0.117f);
                     float cl = clearance(p.pos, p.pos + (aim - p.pos).norm() * 14.f) + R.frange(0, 1.5f);
                     if (cl > bc) { bc = cl; bestD = aim - p.pos; }
                 }
                 ball.pos = p.pos + bestD.norm() * 0.8f;
-                kickBall(i, bestD, 24, 11, false);
+                kickBall(i, bestD, R.frange(28.f, 32.f), R.frange(12.f, 15.f), false);     // long dégagement
             }
             ball.backpass = false; offsideArmed = false;
             p.cool = 0.6f;
@@ -2656,7 +2737,8 @@ void Match::updatePlayers(float dt) {
         }
         // endurance
         float v = p.vel.len();
-        p.stamina = std::max(0.25f, p.stamina - dt * (v > p.speed * 0.85f ? 0.0022f : 0.0006f) * (1.3f - p.endur * 0.6f) * (S.tac[p.team][0] == 2 ? 1.15f : S.tac[p.team][0] == 0 ? 0.92f : 1.f) * (180.f / std::max(60.f, S.halfSeconds)));
+        static const float HEAT[6] = { 1.45f, 1.2f, 1.f, 1.f, 1.06f, 1.1f };
+        p.stamina = std::max(0.25f, p.stamina - dt * HEAT[std::max(0, std::min(5, S.meteo))] * (v > p.speed * 0.85f ? 0.0022f : 0.0006f) * (1.3f - p.endur * 0.6f) * (S.tac[p.team][0] == 2 ? 1.15f : S.tac[p.team][0] == 0 ? 0.92f : 1.f) * (180.f / std::max(60.f, S.halfSeconds)));
         p.pos += p.vel * dt;
         p.pos.x = clampf(p.pos.x, -2.5f, PITCH_W + 2.5f);
         p.pos.y = clampf(p.pos.y, -2.0f, PITCH_L + 2.0f);
@@ -2916,6 +2998,23 @@ void Match::update(float dt) {
         return;
     }
     stateT += dt;
+    lastShotAge += dt;
+    updateMedics(dt);
+    // orage : éclairs et tonnerre
+    if (flashT > 0) flashT -= dt;
+    if (S.meteo == 4 && !S.training && (thunderT -= dt) <= 0) {
+        thunderT = R.frange(14.f, 34.f); flashT = 0.35f; playSfx(SFX_THUNDER);
+        if (R.chance(0.3f)) say("Un violent coup de tonnerre résonne au-dessus du stade !", 2.8f);
+    }
+    // canicule : pause fraîcheur (vers la 30e et la 75e minute, au premier arrêt de jeu)
+    if (S.meteo == 0 && !S.training && period < 2 && !coolBreak[period] && clock >= (period == 0 ? 30.f : 75.f) && state == MS_SETPIECE && stateT < 0.05f) {
+        coolBreak[period] = true;
+        playSfx(SFX_WHISTLE);
+        msg = "PAUSE FRAÎCHEUR"; msg2 = "Les joueurs se désaltèrent"; msgT = 3.5f;
+        say("Avec cette chaleur écrasante, l'arbitre accorde une pause fraîcheur : les joueurs se ruent sur les bouteilles d'eau.", 4.5f, true);
+        for (auto& p : pl) if (p.onPitch) p.stamina = std::min(p.stam0, p.stamina + 0.1f);
+        stateT = -2.5f;
+    }
     trackTouch();
     updateReferee(dt);
     lastFoulT += dt;
@@ -3005,7 +3104,11 @@ void Match::update(float dt) {
             }
         }
         // l'arbitre ne siffle pas la fin pendant une action offensive (tolérance d'une minute et demie)
-        if (clock >= periodEnd + added && state == MS_PLAY && (!attackOngoing() || clock > periodEnd + added + 1.5f)) endPeriod();
+        // ni tant que le ballon est dans une surface de réparation
+        if (clock >= periodEnd + added && state == MS_PLAY) {
+            bool inBox = std::fabs(ball.pos.x - PITCH_W / 2) < BOX_W / 2 + 0.5f && (ball.pos.y < BOX_L + 0.5f || ball.pos.y > PITCH_L - BOX_L - 0.5f);
+            if (!(inBox && clock < periodEnd + added + 4.f) && (!attackOngoing() || clock > periodEnd + added + 1.5f)) endPeriod();
+        }
         break;
     }
     case MS_GOAL:
@@ -3144,7 +3247,11 @@ void Match::update(float dt) {
     if (state == MS_BREAK && period == 0 && stateT > 1.f) focus = V2(12.f, PITCH_L / 2);
     if (state == MS_GOAL && celebScorer >= 0 && stateT > 0.6f) focus = pl[celebScorer].pos;          // la caméra suit la célébration
     if (state == MS_STOP && subBoardT > 0) focus = V2(4.f, PITCH_L / 2);                                // et le remplacement
-    cam = cam + (focus - cam) * std::min(1.f, dt * 4.f);
+    bool cardZoom = refCardT > 0.f && refCardT < 2.1f && refCardFor >= 0 && state != MS_PLAY && !S.highlights;   // gros plan sur l'arbitre qui sort le carton
+    if (!cardZoom && pendCardOff >= 0 && pendCardT > 0.6f && state != MS_PLAY && !S.highlights) { cardZoom = true; focus = (refPos + pl[pendCardOff].pos) * 0.5f; }
+    else if (cardZoom) focus = (refPos + pl[refCardFor].pos) * 0.5f;
+    if (!ceremony) camZoom = camZoom + ((cardZoom ? 2.0f : 1.f) - camZoom) * std::min(1.f, dt * 3.f);
+    cam = cam + (focus - cam) * std::min(1.f, dt * (cardZoom ? 6.f : 4.f));
 }
 
 // ------------------------------------------------------------------ cérémonie de remise du trophée
@@ -3363,4 +3470,36 @@ bool Match::hotPhase() const {
     if (ball.pos.y < 36.f || ball.pos.y > PITCH_L - 36.f) return true;
     if (ball.z > 0.3f && (ball.pos.y < 40.f || ball.pos.y > PITCH_L - 40.f)) return true;
     return false;
+}
+
+// ------------------------------------------------------------------ soigneurs : entrent sur le terrain pour soigner un joueur blessé
+void Match::updateMedics(float dt) {
+    if (S.training || ceremony) return;
+    if (medicFor < 0) {
+        if (state != MS_STOP) return;
+        for (int i = 0; i < 22; i++) if (pl[i].onPitch && pl[i].injured && !medicDone[i]) {
+            medicFor = i; medicPhase = 0; medicT = 0; medicDone[i] = true;
+            V2 bench(-2.4f, PITCH_L / 2 + (pl[i].team ? 6.f : -6.f));
+            medicPos[0] = bench; medicPos[1] = bench + V2(-0.8f, 0.6f);
+            say("Les soigneurs entrent sur la pelouse pour s'occuper de " + playerName(i) + ".", 3.f, true);
+            break;
+        }
+        return;
+    }
+    MPlayer& p = pl[medicFor];
+    medicT += dt;
+    V2 bench(-2.4f, PITCH_L / 2 + (p.team ? 6.f : -6.f));
+    auto moveTo = [&](V2& m, V2 tg, float sp) { V2 d = tg - m; float l = d.len(); if (l > 0.05f) m += d * (std::min(l, sp * dt) / l); return l < 0.3f; };
+    if (medicPhase == 0) {          // course vers le joueur
+        bool a = moveTo(medicPos[0], p.pos + V2(-0.7f, 0.2f), 5.5f), b = moveTo(medicPos[1], p.pos + V2(0.7f, 0.3f), 5.2f);
+        p.state = PS_DOWN; p.st = 0; p.vel = V2();
+        if ((a && b) || medicT > 12.f) { medicPhase = 1; medicT = 0; }
+    } else if (medicPhase == 1) {   // soins
+        p.state = PS_DOWN; p.st = 0; p.vel = V2();
+        if (medicT > 3.2f) { medicPhase = 2; medicT = 0; p.state = PS_NORMAL; }
+    } else {                        // retour au banc (le joueur sort avec eux s'il doit être remplacé)
+        bool a = moveTo(medicPos[0], bench, 4.f), b = moveTo(medicPos[1], bench + V2(-0.8f, 0.6f), 4.f);
+        if ((a && b) || medicT > 12.f) { medicFor = -1; medicPhase = 0; }
+    }
+    if (medicPhase < 2 && state == MS_STOP) stateT = std::min(stateT, 0.3f);     // le jeu reprend quand les soins sont terminés
 }

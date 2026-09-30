@@ -49,8 +49,11 @@ std::vector<int> legendTeams(int ed) {
         if (ok) return it->second;
     }
     const LegendEdition& E = LEGENDS[ed];
-    if (E.year == 2026) {       // 48 sélections : pays hôtes puis meilleures nations
+    if (E.year == 2026) {       // 48 sélections actuelles, dans l'ordre des vrais groupes du tirage (5 décembre 2025)
         std::vector<int> v;
+        for (auto& grp : legendGroups(ed)) for (auto& lt : grp) { int n = g_world.nationIndex(lt.code.c_str()); if (n >= 0) v.push_back(n); }
+        if (v.size() == 48) { g_legendCache[ed] = v; return v; }
+        v.clear();
         for (const char* h : { "USA", "MEX", "CAN" }) { int n = g_world.nationIndex(h); if (n >= 0) v.push_back(n); }
         std::vector<int> r; for (int i = 0; i < NUM_NATIONS; i++) if (nationEligible(i) && std::find(v.begin(), v.end(), i) == v.end()) r.push_back(i);
         std::stable_sort(r.begin(), r.end(), [](int a, int b) { return g_world.teams[a].rating > g_world.teams[b].rating; });
@@ -100,7 +103,7 @@ std::vector<int> legendTeams(int ed) {
                 int slot = -1;
                 for (int i = 0; i < (int)sq.size() && slot < 0; i++) if (!done[i] && sq[i].pos == pos) slot = i;
                 if (slot < 0) for (int i = 0; i < (int)sq.size() && slot < 0; i++) if (!done[i] && sq[i].pos != POS_GK) slot = i;
-                if (slot < 0) continue;
+                if (slot < 0) { Player np = sq.empty() ? Player() : sq.back(); sq.push_back(np); done.push_back(false); slot = (int)sq.size() - 1; }
                 done[slot] = true;
                 Player& p = sq[slot];
                 int o = std::max(40, std::min(99, atoi(f[2].c_str())));
@@ -115,6 +118,9 @@ std::vector<int> legendTeams(int ed) {
                 p.stamina = c(o - 4);
                 p.dribble = p.heading = p.positioning = p.composure = 0;
             }
+            // liste complète de l'époque : aucun joueur inventé
+            int nReal = 0; for (bool d : done) nReal += d;
+            if (nReal >= 18) { std::vector<Player> keep; for (int i = 0; i < (int)sq.size(); i++) if (done[i]) keep.push_back(sq[i]); sq = keep; }
             // les joueurs réels d'abord (titulaires)
             std::stable_sort(sq.begin(), sq.end(), [&](const Player& a, const Player& b) { return a.overall() > b.overall(); });
         }
@@ -156,9 +162,11 @@ void legendStart(Career& K, int ed, const std::vector<int>& ctrl) {
     c.kind = 50; c.tag = ed; c.ptsWin = E.ptsWin; c.tb = TB_GD; c.legs = 1; c.neutralFinal = true;
     int hostNat = g_world.nationIndex(E.hostCode);
     for (int t : teams) if (g_world.teams[t].nation == hostNat && (E.year != 1974 || g_world.teams[t].shortName == "RFA")) c.host = t;
-    // groupes : ceux de l'époque (2026 : tirage par chapeaux)
+    // groupes : ceux de l'époque
     std::vector<std::vector<int>> groups;
-    if (E.year == 2026) {
+    if (E.year == 2026 && legendGroups(ed).size() == 12 && teams.size() == 48) {      // vrais groupes
+        for (int g = 0; g < 12; g++) groups.push_back(std::vector<int>(teams.begin() + g * 4, teams.begin() + g * 4 + 4));
+    } else if (E.year == 2026) {
         std::vector<int> v = teams;
         std::stable_sort(v.begin() + 3, v.end(), [](int a, int b) { return g_world.teams[a].rating > g_world.teams[b].rating; });
         groups.assign(12, {});

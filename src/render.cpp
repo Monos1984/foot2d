@@ -932,7 +932,8 @@ void renderMatch(const Match& m, bool radar) {
         for (int i = 0; i < 22; i++) if (m.pl[i].onPitch) ys.push_back(replay ? m.rp[m.rpPos * 22 + i].y : m.pl[i].pos.y);
         std::sort(ys.begin(), ys.end());
         float lo = ys.size() > 2 ? ys[1] : PITCH_L * 0.25f, hi = ys.size() > 2 ? ys[ys.size() - 2] : PITCH_L * 0.75f;
-        float t0 = std::max(PITCH_L / 2, std::max(hi, bpos.y > PITCH_L / 2 ? bpos.y : 0.f)), t1 = std::min(PITCH_L / 2, std::min(lo, bpos.y < PITCH_L / 2 ? bpos.y : PITCH_L));
+        // les deux assistants restent à hauteur du ballon ; dans leur moitié, ils se calent sur l'avant-dernier défenseur s'il est plus près du but
+        float t0 = bpos.y > PITCH_L / 2 ? std::max(bpos.y, hi) : bpos.y, t1 = bpos.y < PITCH_L / 2 ? std::min(bpos.y, lo) : bpos.y;
         t0 = std::min(t0, PITCH_L - 0.5f); t1 = std::max(t1, 0.5f);
         float k = std::min(1.f, GetFrameTime() * 4.f);
         asY[0] += (t0 - asY[0]) * k; asY[1] += (t1 - asY[1]) * k;
@@ -940,6 +941,10 @@ void renderMatch(const Match& m, bool radar) {
         if (m.S.goalAssist) { assist.push_back(V2(PITCH_W / 2 + 6.5f, -0.9f)); assist.push_back(V2(PITCH_W / 2 - 6.5f, PITCH_L + 0.9f)); }
         for (int a = 0; a < (int)assist.size(); a++) { items.push_back({ assist[a].y, 4, a }); DrawEllipse(SX(assist[a].x) + 1, SY(assist[a].y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
     }
+    // président de la République (finale de la Coupe de France)
+    if (!replay && m.vipOn) { items.push_back({ m.vipPos.y, 6, 0 }); DrawEllipse(SX(m.vipPos.x) + 1, SY(m.vipPos.y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
+    // soigneurs
+    if (!replay && m.medicFor >= 0) for (int k = 0; k < 2; k++) { items.push_back({ m.medicPos[k].y, 5, k }); DrawEllipse(SX(m.medicPos[k].x) + 1, SY(m.medicPos[k].y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
     DrawEllipse(SX(bpos.x) + (int)(bz * 1.5f), SY(bpos.y) + 1, 2.2f, 1.2f, Color{ 0, 0, 0, 90 });
     std::sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.y < b.y; });
     for (auto& it : items) {
@@ -961,7 +966,7 @@ void renderMatch(const Match& m, bool radar) {
                 float ph = (float)GetTime() * 30.f;
                 for (int k = -3; k <= 3; k++) DrawPixel(x + k * 2, y - 3 + (int)(std::sin(ph + k) * 1.5f), Color{ 240, 240, 240, 200 });
             }
-            DrawRectangle(x - 1, y - 2, 3, 3, WHITE);
+            DrawRectangle(x - 1, y - 2, 3, 3, m.S.meteo == 5 ? Color{ 255, 140, 30, 255 } : WHITE);   // ballon orange sous la neige
             DrawRectangle(x - 1, y - 3, 3, 1, Color{ 20, 20, 20, 120 });
             DrawRectangle(x - 2, y - 2, 1, 3, Color{ 20, 20, 20, 120 });
             DrawRectangle(x + 2, y - 2, 1, 3, Color{ 20, 20, 20, 120 });
@@ -969,6 +974,27 @@ void renderMatch(const Match& m, bool radar) {
             static const int PX[4][2] = { { -1, -2 }, { 1, -2 }, { 1, 0 }, { -1, 0 } };
             DrawRectangle(x + PX[bf][0], y + PX[bf][1], 1, 1, Color{ 40, 40, 40, 255 });
             DrawRectangle(x + PX[(bf + 2) & 3][0], y + PX[(bf + 2) & 3][1], 1, 1, Color{ 90, 90, 90, 255 });
+            continue;
+        }
+        if (it.kind == 6) {     // costume sombre, écharpe tricolore
+            Kit vk; vk.shirt = 0x23262E; vk.shirt2 = 0x23262E; vk.shorts = 0x1C1E24; vk.socks = 0x111111;
+            int ax = SX(m.vipPos.x), ay = SY(m.vipPos.y);
+            bool shaking = false; for (int k = 0; k < 22; k++) if (m.pl[k].state == PS_HAND) shaking = true;
+            drawPlayerSprite(ax, ay, vk, 0, 4, shaking ? 0 : 3, shaking ? 0 : (int)(GetTime() * 7), shaking ? PS_HAND : PS_NORMAL, false, 0, 1);
+            DrawRectangle(ax - 1, ay - 9, 1, 3, Color{ 0, 85, 164, 255 }); DrawRectangle(ax, ay - 9, 1, 3, WHITE); DrawRectangle(ax + 1, ay - 9, 1, 3, Color{ 239, 65, 53, 255 });
+            continue;
+        }
+        if (it.kind == 5) {     // soigneur : survêtement du club, sacoche avec une croix
+            const MPlayer& ip = m.pl[m.medicFor];
+            Kit mk; mk.shirt = m.kit[ip.team].shorts == 0xFFFFFF ? 0x1A2A55 : m.kit[ip.team].shorts; mk.shirt2 = mk.shirt; mk.shorts = mk.shirt; mk.socks = 0x151515;
+            V2 a = m.medicPos[it.idx];
+            int ax = SX(a.x), ay = SY(a.y);
+            V2 d = m.medicPhase == 1 ? ip.pos - a : m.medicPhase == 0 ? ip.pos - a : V2(-1, 0);
+            int dir = std::fabs(d.x) > std::fabs(d.y) ? (d.x > 0 ? 3 : 2) : (d.y > 0 ? 1 : 0);
+            int fr = m.medicPhase == 1 ? 0 : (int)(GetTime() * 9) + it.idx;
+            drawPlayerSprite(ax, ay, mk, (it.idx * 2 + 1) % 4, (it.idx * 3 + 1) % 7, dir, fr, PS_NORMAL, false, 0, 1);
+            int bx = ax + (it.idx ? -5 : 3), by = ay - 4;
+            DrawRectangle(bx, by, 4, 3, WHITE); DrawRectangle(bx + 1, by, 2, 3, Color{ 220, 30, 30, 255 }); DrawRectangle(bx, by + 1, 4, 1, Color{ 220, 30, 30, 255 });
             continue;
         }
         if (it.kind == 4) {
@@ -1134,12 +1160,30 @@ void renderMatch(const Match& m, bool radar) {
 
     // visée sur coup de pied arrêté
     if (!replay && m.state == MS_SETPIECE && m.spReady && m.spKicker >= 0 && m.pl[m.spKicker].human >= 0 && m.sp != SP_KICKOFF) {
-        V2 a = m.ball.pos, b = a + m.spAim * 6.0f;
-        for (int k = 1; k <= 6; k++) {
-            V2 q = a + m.spAim * (float)k;
-            DrawRectangle(SX(q.x), SY(q.y), 1, 1, CTRL_COL[m.pl[m.spKicker].human]);
+        Color cc = CTRL_COL[m.pl[m.spKicker].human];
+        if (m.sp == SP_FREEKICK) {
+            // flèche courbe : trajectoire prévue avec l'effet choisi
+            V2 q = m.ball.pos, v = m.spAim * 26.f, prev = q; float spin = m.spCurl * 6.5f;
+            float len = 0; const float dtp = 0.02f;
+            for (int k = 0; k < 60; k++) {
+                v += v.norm().perp() * (spin * dtp); spin *= (1 - 0.9f * dtp);
+                q += v * dtp; len += (v * dtp).len();
+                if (k % 2 == 0) DrawRectangle(SX(q.x), SY(q.y), k > 40 ? 2 : 1, k > 40 ? 2 : 1, cc);
+                if (k == 59) {    // pointe de la flèche
+                    V2 d = (q - prev).norm(), pp = d.perp();
+                    V2 l = q - d * 1.4f + pp * 0.9f, r = q - d * 1.4f - pp * 0.9f;
+                    DrawLine(SX(q.x), SY(q.y), SX(l.x), SY(l.y), cc); DrawLine(SX(q.x), SY(q.y), SX(r.x), SY(r.y), cc);
+                }
+                prev = q;
+            }
+            (void)len;
+            if (std::fabs(m.spCurl) > 0.02f) drawTextPx(fmt("EFFET %s%d", m.spCurl > 0 ? "+" : "-", (int)std::lround(std::fabs(m.spCurl) * 100)), SX(m.ball.pos.x) + 6, SY(m.ball.pos.y) + 4, 10, cc);
+        } else {
+            for (int k = 1; k <= 6; k++) {
+                V2 q = m.ball.pos + m.spAim * (float)k;
+                DrawRectangle(SX(q.x), SY(q.y), 1, 1, cc);
+            }
         }
-        (void)b;
     }
 
     // fête : confettis et fontaines pyrotechniques après le trophée soulevé
@@ -1165,18 +1209,34 @@ void renderMatch(const Match& m, bool radar) {
             }
         }
     }
-    // météo
-    if (type == 2 || type == 4) {
+    // météo : pluie, orage (pluie battante, éclairs), neige ; chaleur (air qui ondule)
+    {
+        int mt = m.S.meteo;
         static float wt = 0; wt += GetFrameTime();
         Rng wr(77);
-        for (int k = 0; k < (type == 2 ? 140 : 90); k++) {
-            float bx = wr.f() * MW, by = wr.f() * MH, sp = 60 + wr.f() * 60;
-            if (type == 2) {
-                float y = std::fmod(by + wt * sp * 3, (float)MH), x = std::fmod(bx - wt * sp * 0.8f + MW * 4, (float)MW);
-                DrawLine((int)x, (int)y, (int)x - 2, (int)y + 5, Color{ 190, 210, 255, 120 });
-            } else {
+        if (mt == 3 || mt == 4) {
+            int n = mt == 4 ? 260 : 140;
+            float slant = mt == 4 ? 1.8f + m.wind.x * 0.4f : 0.8f;
+            for (int k = 0; k < n; k++) {
+                float bx = wr.f() * MW, by = wr.f() * MH, sp = 60 + wr.f() * 60;
+                float y = std::fmod(by + wt * sp * (mt == 4 ? 4.f : 3.f), (float)MH), x = std::fmod(bx - wt * sp * slant + MW * 8, (float)MW);
+                DrawLine((int)x, (int)y, (int)x - (mt == 4 ? 3 : 2), (int)y + (mt == 4 ? 7 : 5), Color{ 200, 220, 255, (unsigned char)(mt == 4 ? 200 : 160) });
+            }
+            if (mt == 4) DrawRectangle(0, 0, MW, MH, Color{ 10, 15, 30, 70 });
+            if (m.flashT > 0) DrawRectangle(0, 0, MW, MH, Color{ 240, 245, 255, (unsigned char)(std::min(1.f, m.flashT * 4.f) * ((int)(m.flashT * 20) % 2 ? 150 : 90)) });
+        } else if (mt == 5 || (mt < 0 && type == 4)) {
+            for (int k = 0; k < 150; k++) {
+                float bx = wr.f() * MW, by = wr.f() * MH, sp = 60 + wr.f() * 60;
                 float y = std::fmod(by + wt * sp * 0.4f, (float)MH), x = std::fmod(bx + std::sin(wt * 2 + k) * 6 + MW, (float)MW);
-                DrawRectangle((int)x, (int)y, 1, 1, Color{ 255, 255, 255, 220 });
+                DrawRectangle((int)x, (int)y, k % 5 == 0 ? 2 : 1, k % 5 == 0 ? 2 : 1, Color{ 255, 255, 255, 220 });
+            }
+            DrawRectangle(0, 0, MW, MH, Color{ 220, 230, 255, 25 });
+        } else if (mt == 0 || mt == 1) {
+            DrawRectangle(0, 0, MW, MH, Color{ 255, 190, 60, (unsigned char)(mt == 0 ? 34 : 16) });
+            if (mt == 0) for (int k = 0; k < 40; k++) {       // air brûlant qui ondule
+                float bx = wr.f() * MW, by = wr.f() * MH;
+                int y = (int)std::fmod(by - wt * 8.f + MH * 4, (float)MH), x = (int)(bx + std::sin(wt * 3 + k) * 3);
+                DrawLine(x, y, x + 6, y, Color{ 255, 240, 200, 26 });
             }
         }
     }
@@ -1197,6 +1257,7 @@ void renderMatch(const Match& m, bool radar) {
     float pe = m.periodEnd;
     if (m.clock > pe) clk = fmt("%d+%d'", (int)pe, std::max(1, (int)(m.clock - pe) + 1));
     else clk = fmt("%d'", std::min(mins + 1, (int)pe));
+    if (m.period == 0 && m.clock <= 0.f) clk = "0'";          // avant le coup d'envoi (entrée des équipes, hymnes)
     if (m.shootout) clk = "TAB";
     if (m.S.training) {
         static const char* TN[] = { "", "PENALTIES", "COUPS FRANCS", "CORNERS", "ATTAQUE - DÉFENSE", "GARDIEN : PENALTIES" };

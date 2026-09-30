@@ -49,6 +49,8 @@ std::string sanitize(const char* s) {
         p += n;
         if (cp == '_') { o += ' '; continue; }
         if (cp <= 0xFF) { putUtf8(o, cp); continue; }
+        if (cp == 0x153) { o += "oe"; continue; }
+        if (cp == 0x152) { o += "OE"; continue; }
         char rep = '?';
         for (auto& m : MAP) if (m.cp == cp) { rep = m.c; break; }
         o += rep;

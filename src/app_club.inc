@@ -435,7 +435,8 @@ static void screenStadium() {
                 static const char* SPN[] = { "Boulangerie Martin", "Garage du Centre", "Pixel Cola", "Crédit Régional", "Transports Leroy", "Amigoal", "Assurances du Sud", "Supermarché Plus", "BTP Moreau", "Brasserie des Sports",
                                              "Broke Studio", "Alekmaul Studio", "SGDK", "PVSNESLIB", "OFFGAME", "Double Side Game", "Champagne Beurton et Fils", "Electric Dreams",
                                              "Rétro Arcade", "Cartouche 16 bits", "Mutuelle du Sport", "Optique Vision+", "Pizzeria Da Luigi", "Radio Stade FM",
-                                             "Gamopat", "Oniromancie", "Atari", "Sega", "Nintendo", "Sony", "Sigames", "EA", "Amstrad", "Commodore", "Oric", "Capcom" };
+                                             "Gamopat", "Oniromancie", "Atari", "Sega", "Nintendo", "Sony", "Sigames", "EA", "Amstrad", "Commodore", "Oric", "Capcom",
+                                             "RGC", "AC", "PGR", "GEMTOS", "ADN" };
                 const int NSPN = (int)(sizeof SPN / sizeof SPN[0]);
                 int cap = S.capacity();
                 int64_t base = std::max<int64_t>(2, (int64_t)(MM.incomeBase / 12 + cap / 200));

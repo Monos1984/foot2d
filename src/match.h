@@ -119,7 +119,10 @@ struct MatchSetup {
     int referee = 0;
     bool night = false, tv = false;
     int weather = 0;              // 0 beau, 1 couvert, 2 pluie, 3 neige
+    int meteo = 2;                // 0 canicule, 1 chaud, 2 normal, 3 pluie, 4 orage, 5 neige (effets sur le match)
     float crowdFill = 0.7f;
+    int attendance = 0;           // spectateurs attendus
+    float homeBoost = 0;          // influence du stade : bonus de l'équipe qui reçoit (public, ambiance)
     bool commentary = true;
     std::string channel;
     std::string kickoffTime, kickoffDate;      // buts à l'extérieur (aggHome = buts marqués à l'extérieur par l'équipe qui reçoit)
@@ -136,6 +139,8 @@ struct MatchSetup {
     bool rolling = false;          // coupes régionales / de district : 3 remplaçants, changements illimités, retour possible
     uint8_t tac[2][5] = { { 1, 1, 1, 1, 1 }, { 1, 1, 1, 1, 1 } };   // consignes : pressing, ligne, largeur, tempo, passes
     bool anthems = false;          // sélections nationales : hymnes avant le match
+    std::string anthemOnly;        // un seul hymne joué pour les deux équipes (finale de la Coupe de France : La Marseillaise)
+    bool president = false;        // le président de la République salue les joueurs (finale de la Coupe de France)
     int kitSel[2] = { -1, -1 };    // tenue choisie : -1 automatique, 0 domicile, 1 extérieur, 2 troisième
     bool goldenGoal = false;       // prolongation avec but en or
     bool etNoPens = false;         // prolongation sans tirs au but (le match peut finir nul)
@@ -198,6 +203,7 @@ struct Match {
     int spKicker = -1;
     float spT = 0;
     V2 spAim;
+    float spCurl = 0;             // coup franc : effet choisi (-1 ... 1), flèche courbe
     bool spReady = false;
     int subsLeft[2] = { 5, 5 };
     std::vector<int> bench[2];      // index effectif
@@ -236,6 +242,11 @@ struct Match {
     int possTeam = -1;
     float possTime[2] = { 0, 0 };
     int shots[2] = { 0, 0 };
+    int corners[2] = { 0, 0 }, fouls[2] = { 0, 0 }, offsides[2] = { 0, 0 };
+    float flashT = 0, thunderT = 20; V2 wind; bool coolBreak[2] = { false, false };   // météo : éclairs, vent d'orage, pauses fraîcheur
+    int medicFor = -1; int medicPhase = 0; float medicT = 0; V2 medicPos[2]; bool medicDone[22] = {};   // soigneurs (blessure)
+    void updateMedics(float dt);
+    int lastShooter = -1; float lastShotAge = 99;   // dernier tir cadré (déviation / gardien : pas de csc)
     float stopReason = 0;
     int nextSp = -1, nextSpTeam = 0; V2 nextSpPos; // après un arrêt (faute...)
     float goalFreeze = 0;
@@ -379,7 +390,8 @@ struct Match {
     void updateLap(float dt);
     V2 lapPoint(float s) const;
     // hymnes nationaux (travelling sur les joueurs)
-    int anthemReq = -1; float camZoom = 1.f;
+    int anthemReq = -1; float camZoom = 1.f; float anthemDur = 10.5f; std::string anthemName;
+    V2 vipPos; bool vipOn = false;     // président de la République (finale de la Coupe de France)
     // tirage au sort avant la prolongation et avant les tirs au but
     int tossKind = 0; int etKickoff = -1; int etFlip = -1; int shootGoal = 0; bool tossDoneET = false, tossDoneTAB = false;
     bool updateMiniToss(float dt);
@@ -394,4 +406,7 @@ struct Match {
     int shootBtn(int human, bool pressedOnly) const;
 };
 
-enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO };
+enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER };
+extern const char* METEO_NAMES[6];
+int meteoForMonth(int month, int climate, uint64_t seed);   // month 0 août ... 10 juin ; climate 0 tempéré, 1 chaud, 2 hémisphère sud, 3 nordique
+void meteoApply(MatchSetup& s, bool heated, int turf);       // terrain et affichage selon la météo

@@ -256,6 +256,8 @@ void audioInit() {
         g_sfx[SFX_PUNCH] = makeSound(v);
     }
     // sifflets du public
+    // tonnerre (orage)
+    g_sfx[SFX_THUNDER] = makeSound(noise(3.0f, 0.03f, 3.2f, [](float t) { return (t < 0.04f ? t * 25 : 1.f) * std::exp(-t * 2.2f) * (0.7f + 0.3f * std::sin(t * 40)); }));
     g_sfx[SFX_BOO] = makeSound(noise(1.6f, 0.10f, 1.2f, [](float t) { return std::sin(t * 3.14159f) * 0.8f; }));
     // but : clameur
     g_sfx[SFX_GOAL] = makeSound(noise(3.5f, 0.25f, 2.2f, [](float t) { return std::min(1.f, t * 8) * (1 - t) * (1 - t) + 0.2f * (1 - t); }));
@@ -305,8 +307,10 @@ void audioCrowd(bool on, float vol) {
     if (!IsSoundPlaying(g_crowd)) PlaySound(g_crowd);
 }
 
+bool audioAnthemPlaying();
 void audioMusic(bool on) {
     if (!g_ok || !g_musicOk) return;
+    if (audioAnthemPlaying()) { if (IsSoundPlaying(g_music)) StopSound(g_music); return; }
     if (!on || !g_musicOn) { if (IsSoundPlaying(g_music)) StopSound(g_music); return; }
     SetSoundVolume(g_music, 0.55f);
     if (!IsSoundPlaying(g_music)) {
@@ -329,41 +333,136 @@ void audioSetTrackMode(int m) {
 int audioTrackCount() { return NUM_TRACKS; }
 const char* audioTrackName(int i) { return i >= 0 && i < NUM_TRACKS ? TRACKS[i].name : ""; }
 int audioCurrentTrack() { return g_curTrack; }
-// hymne national (mélodie solennelle originale, générée à partir de l'identifiant de l'équipe)
+// ------------------------------------------------------------------ hymnes nationaux
+// Mélodies réelles (domaine public) pour les grandes nations, hymne générique pour les autres,
+// ou fichier musical choisi par le joueur (éditeur d'hymnes). Joués même si la musique est coupée.
 #include <map>
-static std::map<unsigned, Sound> g_anthems;
-static Sound g_anthemCur; static bool g_anthemOn = false;
-void audioAnthem(unsigned seed) {
-    if (!g_ok || !g_musicOn) return;
-    auto it = g_anthems.find(seed);
-    if (it == g_anthems.end()) {
-        static int mel[32]; static int bass[4];
-        unsigned r = seed * 2654435761u + 12345u;
-        auto rnd = [&](int n) { r = r * 1103515245u + 12345u; return (int)((r >> 16) % (unsigned)n); };
-        static const int SCALE[8] = { 0, 2, 4, 5, 7, 9, 11, 12 };
-        int deg = rnd(3) == 0 ? 4 : 0;
-        for (int k = 0; k < 32; k++) {
-            if (k % 16 == 15 || k % 16 == 14) { mel[k] = k % 16 == 14 ? -98 : -99; continue; }
-            if (k % 2 == 1 && rnd(3) > 0) { mel[k] = -98; continue; }       // notes longues
-            int step = rnd(5) - 2; if (step == 0 && rnd(2)) step = 1;
-            deg = std::max(0, std::min(7, deg + step));
-            if (k >= 24) deg = std::max(0, deg - 1);                          // cadence vers la tonique
-            mel[k] = SCALE[deg];
+#include <string>
+struct ANote { int n, d; };     // demi-tons depuis la tonique (-99 silence), durée en doubles croches
+static const ANote AN_FRA[] = {    // La Marseillaise (Rouget de Lisle, 1792) : « Allons enfants... » (x2)
+    { -5, 3 }, { -5, 1 }, { 0, 4 }, { 0, 4 }, { 2, 4 }, { 2, 4 }, { 7, 6 }, { 4, 2 }, { 0, 3 }, { 0, 1 }, { 4, 3 }, { 0, 1 },
+    { -3, 4 }, { 5, 8 }, { 2, 3 }, { -1, 1 }, { 0, 8 }, { -99, 4 },
+    { -5, 3 }, { -5, 1 }, { 0, 4 }, { 0, 4 }, { 2, 4 }, { 2, 4 }, { 7, 6 }, { 4, 2 }, { 0, 3 }, { 0, 1 }, { 4, 3 }, { 0, 1 },
+    { -3, 4 }, { 5, 8 }, { 2, 3 }, { -1, 1 }, { 0, 12 }, { -99, 4 },
+    // « Aux armes, citoyens ! Formez vos bataillons ! Marchons, marchons ! »
+    { 4, 8 }, { 4, 3 }, { 4, 1 }, { 6, 4 }, { 7, 8 }, { -99, 4 }, { 7, 8 }, { 7, 3 }, { 7, 1 }, { 9, 4 }, { 11, 8 }, { -99, 4 },
+    { 14, 8 }, { 12, 3 }, { 11, 1 }, { 9, 3 }, { 7, 1 }, { 9, 4 }, { 11, 4 }, { 7, 6 }, { 4, 2 }, { 2, 4 }, { 0, 12 } };
+static const ANote AN_ENG[] = {    // God Save the King
+    { 0, 4 }, { 0, 4 }, { 2, 4 }, { -1, 6 }, { 0, 2 }, { 2, 4 }, { 4, 4 }, { 4, 4 }, { 5, 4 }, { 4, 6 }, { 2, 2 }, { 0, 4 },
+    { 2, 4 }, { 0, 4 }, { -1, 4 }, { 0, 12 },
+    { 7, 4 }, { 7, 4 }, { 7, 4 }, { 7, 6 }, { 5, 2 }, { 4, 4 }, { 5, 4 }, { 5, 4 }, { 5, 4 }, { 5, 6 }, { 4, 2 }, { 2, 4 },
+    { 4, 2 }, { 5, 2 }, { 4, 2 }, { 2, 2 }, { 0, 4 }, { 4, 6 }, { 5, 2 }, { 7, 4 }, { 9, 2 }, { 5, 2 }, { 4, 4 }, { 2, 4 }, { 0, 12 } };
+static const ANote AN_GER[] = {    // Deutschlandlied (Haydn, 1797)
+    { 0, 6 }, { 2, 2 }, { 4, 4 }, { 2, 4 }, { 5, 4 }, { 4, 4 }, { 2, 2 }, { -1, 2 }, { 0, 4 }, { 9, 4 }, { 7, 4 }, { 5, 4 }, { 4, 4 },
+    { 2, 6 }, { 4, 2 }, { 0, 8 },
+    { 0, 6 }, { 2, 2 }, { 4, 4 }, { 2, 4 }, { 5, 4 }, { 4, 4 }, { 2, 2 }, { -1, 2 }, { 0, 4 }, { 9, 4 }, { 7, 4 }, { 5, 4 }, { 4, 4 },
+    { 2, 6 }, { 4, 2 }, { 0, 8 },
+    { 2, 4 }, { 2, 4 }, { 4, 4 }, { 0, 4 }, { 2, 4 }, { 4, 2 }, { 5, 2 }, { 4, 4 }, { 0, 4 }, { 2, 4 }, { 4, 2 }, { 5, 2 }, { 4, 4 }, { 2, 4 },
+    { 0, 4 }, { 2, 4 }, { -5, 8 },
+    { 12, 6 }, { 11, 2 }, { 11, 4 }, { 9, 4 }, { 7, 8 }, { 9, 4 }, { 11, 4 }, { 12, 6 }, { 9, 2 }, { 7, 4 }, { 5, 4 }, { 4, 6 }, { 2, 2 }, { 0, 8 } };
+static const ANote AN_USA[] = {    // The Star-Spangled Banner
+    { 7, 3 }, { 4, 1 }, { 0, 4 }, { 4, 4 }, { 7, 4 }, { 12, 8 }, { 16, 3 }, { 14, 1 }, { 12, 4 }, { 4, 4 }, { 6, 4 }, { 7, 8 },
+    { 7, 2 }, { 7, 2 }, { 16, 6 }, { 14, 2 }, { 12, 4 }, { 11, 8 }, { 9, 3 }, { 11, 1 }, { 12, 4 }, { 12, 4 }, { 7, 4 }, { 4, 4 }, { 0, 4 }, { -99, 4 },
+    { 7, 3 }, { 4, 1 }, { 0, 4 }, { 4, 4 }, { 7, 4 }, { 12, 8 }, { 16, 3 }, { 14, 1 }, { 12, 4 }, { 4, 4 }, { 6, 4 }, { 7, 8 },
+    { 7, 2 }, { 7, 2 }, { 16, 6 }, { 14, 2 }, { 12, 4 }, { 11, 8 }, { 9, 3 }, { 11, 1 }, { 12, 4 }, { 12, 4 }, { 7, 4 }, { 4, 4 }, { 0, 12 } };
+static const ANote AN_GEN[] = {    // hymne générique (composition originale)
+    { 0, 4 }, { 4, 4 }, { 7, 6 }, { 5, 2 }, { 4, 4 }, { 2, 4 }, { 0, 8 }, { 5, 4 }, { 4, 4 }, { 2, 6 }, { 4, 2 }, { 7, 12 }, { -99, 4 },
+    { 9, 4 }, { 7, 4 }, { 5, 6 }, { 4, 2 }, { 2, 4 }, { 4, 4 }, { 5, 8 }, { 7, 4 }, { 9, 4 }, { 11, 4 }, { 12, 4 }, { 12, 12 }, { -99, 4 },
+    { 12, 4 }, { 11, 4 }, { 9, 6 }, { 7, 2 }, { 5, 4 }, { 4, 4 }, { 2, 8 }, { 4, 4 }, { 7, 4 }, { 5, 6 }, { 2, 2 }, { 0, 12 } };
+struct AnthemDef { const char* codes; const ANote* n; int cnt; float bpm; float base; const char* name; };
+#define ANL(a) a, (int)(sizeof(a) / sizeof(a[0]))
+static const AnthemDef ANTHEMS[] = {
+    { "FRA", ANL(AN_FRA), 88.f, 392.00f, "La Marseillaise" },
+    { "ENG NIR", ANL(AN_ENG), 66.f, 392.00f, "God Save the King" },
+    { "GER", ANL(AN_GER), 70.f, 349.23f, "Das Lied der Deutschen" },
+    { "USA", ANL(AN_USA), 80.f, 293.66f, "The Star-Spangled Banner" },
+};
+static std::vector<float> renderAnthem(const ANote* N, int cnt, float bpm, float base) {
+    const float PI2 = 6.2831853f;
+    float s16 = 60.f / bpm / 4.f;
+    int total = 0; for (int i = 0; i < cnt; i++) total += N[i].d;
+    int n = (int)(total * s16 * SR) + SR;
+    std::vector<float> v(n, 0.f);
+    int pos = 0;
+    for (int i = 0; i < cnt; i++) {
+        int i0 = (int)(pos * s16 * SR), len = (int)(N[i].d * s16 * SR);
+        pos += N[i].d;
+        if (N[i].n <= -99) continue;
+        float f = base * std::pow(2.f, N[i].n / 12.f);
+        float dur = (float)len / SR;
+        for (int k = 0; k < len && i0 + k < n; k++) {
+            float t = (float)k / SR;
+            float vib = t > 0.2f ? 1.f + 0.005f * std::sin(PI2 * 5.f * t) : 1.f;
+            float ph = std::fmod(t * f * vib, 1.f), ph2 = std::fmod(t * f * 0.5f, 1.f);
+            float brass = (ph < 0.3f ? 1.f : -0.6f) * 0.6f + (2.f * ph - 1.f) * 0.4f;          // cuivres
+            float low = 4 * std::fabs(ph2 - 0.5f) - 1;                                       // doublure à l'octave inférieure
+            float env = std::min(1.f, t * 60) * (0.75f + 0.25f * std::exp(-t * 5)) * std::min(1.f, (dur - t) * 30);
+            v[i0 + k] += (brass * 0.11f + low * 0.10f) * env;
         }
-        mel[28] = 0; mel[29] = -98; mel[30] = -98; mel[31] = -99;
-        static const int PROG[4][8] = { { 0, 5, 7, 0, 5, 0, 7, 0 }, { 0, 9, 5, 7, 0, 5, 7, 0 }, { 0, 7, 9, 5, 0, 7, 5, 0 }, { 0, 4, 5, 7, 9, 5, 7, 0 } };
-        int pr = rnd(4); for (int b = 0; b < 4; b++) bass[b] = PROG[pr][b * 2];
-        Track T = { "Hymne", 70.f + rnd(12), mel, 32, bass, 4, 392.f * std::pow(2.f, (rnd(5) - 2) / 12.f), 0.5f, 3, 2, 1.0f };
-        g_anthems[seed] = makeSound(renderTrack(T));
-        it = g_anthems.find(seed);
+        // timbale sur chaque temps fort
+        if ((pos - N[i].d) % 16 == 0) for (int k = 0; k < SR / 3 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += std::sin(PI2 * (70 + 30 * std::exp(-t * 20)) * t) * std::exp(-t * 7) * 0.22f; }
     }
+    // roulement de caisse claire en introduction
+    std::vector<float> out(SR * 1 + n, 0.f);
+    for (int k = 0; k < SR; k++) { float t = (float)k / SR; out[k] = frand() * (0.5f + 0.5f * std::sin(PI2 * 30 * t)) * 0.07f * std::min(1.f, t * 3); }
+    for (int k = 0; k < n; k++) out[SR + k] += v[k];
+    return out;
+}
+static std::map<std::string, std::string> g_anthemFiles;     // code de la sélection -> fichier musical (éditeur d'hymnes)
+static std::map<int, Sound> g_anthemSnd;                     // index de ANTHEMS (-1 générique)
+static Sound g_anthemCur; static bool g_anthemOn = false;
+static Music g_anthemMus; static bool g_anthemMusOn = false;
+static float g_anthemLen = 10.f;
+
+void audioSetAnthemFile(const std::string& code, const std::string& path) { if (path.empty()) g_anthemFiles.erase(code); else g_anthemFiles[code] = path; }
+std::string audioAnthemFile(const std::string& code) { auto it = g_anthemFiles.find(code); return it == g_anthemFiles.end() ? std::string() : it->second; }
+const std::map<std::string, std::string>& audioAnthemFiles() { return g_anthemFiles; }
+static int anthemIndex(const std::string& code) {
+    for (int i = 0; i < (int)(sizeof(ANTHEMS) / sizeof(ANTHEMS[0])); i++) {
+        std::string cs = ANTHEMS[i].codes; size_t p = 0;
+        while (p < cs.size()) { size_t e = cs.find(' ', p); if (e == std::string::npos) e = cs.size(); if (cs.substr(p, e - p) == code) return i; p = e + 1; }
+    }
+    return -1;
+}
+const char* audioAnthemName(const std::string& code) { int i = anthemIndex(code); return i >= 0 ? ANTHEMS[i].name : "Hymne générique"; }
+float audioAnthemSeconds() { return g_anthemLen; }
+void audioStopAnthem() {
+    if (!g_ok) return;
+    if (g_anthemOn) { StopSound(g_anthemCur); g_anthemOn = false; }
+    if (g_anthemMusOn) { StopMusicStream(g_anthemMus); UnloadMusicStream(g_anthemMus); g_anthemMusOn = false; }
+}
+void audioAnthemCode(const std::string& code) {
+    if (!g_ok) return;
+    audioStopAnthem();
     if (g_musicOk && IsSoundPlaying(g_music)) StopSound(g_music);
-    if (g_anthemOn) StopSound(g_anthemCur);
+    std::string file = audioAnthemFile(code);
+    if (!file.empty() && FileExists(file.c_str())) {
+        g_anthemMus = LoadMusicStream(file.c_str());
+        if (IsMusicValid(g_anthemMus)) {
+            g_anthemMus.looping = false;
+            SetMusicVolume(g_anthemMus, 0.8f);
+            PlayMusicStream(g_anthemMus);
+            g_anthemMusOn = true;
+            g_anthemLen = std::min(90.f, GetMusicTimeLength(g_anthemMus));
+            return;
+        }
+    }
+    int idx = anthemIndex(code);
+    auto it = g_anthemSnd.find(idx);
+    if (it == g_anthemSnd.end()) {
+        std::vector<float> w = idx >= 0 ? renderAnthem(ANTHEMS[idx].n, ANTHEMS[idx].cnt, ANTHEMS[idx].bpm, ANTHEMS[idx].base) : renderAnthem(AN_GEN, (int)(sizeof(AN_GEN) / sizeof(AN_GEN[0])), 72.f, 349.23f);
+        g_anthemSnd[idx] = makeSound(w);
+        it = g_anthemSnd.find(idx);
+        g_anthemLen = (float)w.size() / SR;
+    } else g_anthemLen = (float)it->second.frameCount / SR;
     g_anthemCur = it->second; g_anthemOn = true;
-    SetSoundVolume(g_anthemCur, 0.6f);
+    SetSoundVolume(g_anthemCur, 0.7f);
     PlaySound(g_anthemCur);
 }
-void audioStopAnthem() { if (g_ok && g_anthemOn) { StopSound(g_anthemCur); g_anthemOn = false; } }
+bool audioAnthemPlaying() { return (g_anthemOn && IsSoundPlaying(g_anthemCur)) || (g_anthemMusOn && IsMusicStreamPlaying(g_anthemMus)); }
+void audioUpdate() {
+    if (g_ok && g_anthemMusOn) { UpdateMusicStream(g_anthemMus); if (!IsMusicStreamPlaying(g_anthemMus)) { UnloadMusicStream(g_anthemMus); g_anthemMusOn = false; } }
+}
 
 void audioJingle(int j) {
     if (!g_ok || !g_musicOn || j < 0 || j > 4) return;
