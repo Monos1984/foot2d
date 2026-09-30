@@ -130,6 +130,7 @@ static void screenClubMenu() {
         tiles.push_back({ "Finances", "Budget " + money(g_career.mgr.budget), 13, 6 });
         tiles.push_back({ "Offres reçues", g_career.mgr.offers.empty() ? std::string("aucune") : fmt("%d en attente", (int)g_career.mgr.offers.size()), 21, 9 });
     }
+    if (!mm && g_career.opts.lite) tiles.push_back({ "Transferts", "Simplifiés : prix affiché", 12, 4 });
     tiles.push_back({ "Formation", "Centre des jeunes", 22, 10 });
     tiles.push_back({ "Archives", "Records, buteurs", 23, 7 });
     tiles.push_back({ "Maillots", kitChangeAllowed() ? "Intersaison : modifiables" : "Changement à l'intersaison", 24, 11 });

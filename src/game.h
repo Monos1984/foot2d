@@ -649,7 +649,8 @@ struct Career {
         uint8_t awayGoals = 1;                // buts à l'extérieur en coupes d'Europe
         uint8_t cdfET = 1;                    // prolongation en Coupe de France (la finale en a toujours une)
         uint8_t euroFormat = 0;               // 0 formule 2003, 1 nouvelle formule (phase de ligue à 36)
-        uint8_t pad[4] = {};
+        uint8_t lite = 0;                     // mode Championnat (mode foot) : sans gestion, transferts simplifiés
+        uint8_t pad[3] = {};
     } opts;
     NewEuroSpots newEuro;                     // qualifiés (nouvelle formule)
     int prevUeclWinner = -1;
@@ -865,6 +866,10 @@ void womenStartSeason(Career& K);
 void womenOnCompDone(Career& K, int comp);
 bool uwclStageFinished(Competition& C, const std::vector<int>& winners);
 int jflMin(int team);
+// coupes continentales hors Europe (continental.cpp)
+void continentalStartSeason(Career& K);
+bool isContinentalKind(int k);
+int continentalWinner(const Career& K, int conf);
 bool isJfl(const Player& p, int team);
 int poolGroupCount(const Pyramid& P, const Pool& pool);
 int poolTarget(const Pyramid& P, const Pool& pool);

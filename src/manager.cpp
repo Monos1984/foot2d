@@ -673,6 +673,15 @@ int Career::signPlayer(int pid, int fee, int wage, int years, std::string& msg) 
     if ((P.gender == 1) != (U.youth == 6)) { msg = "Séparation stricte : une joueuse évolue uniquement dans un club féminin (et inversement)."; return -2; }
     bool freeP = g_world.teams[src].freeAgents;
     bool ownReserve = g_world.teams[src].parent == userTeam;
+    if (opts.lite) {       // mode Championnat : transferts simplifiés (pas de budget ni de négociation)
+        if (!freeP && !ownReserve && P.overall() > U.rating + 16) { msg = P.name + " refuse de rejoindre un club de ce niveau."; return -1; }
+        Player copy = P; copy.years = 3; copy.morale = (uint8_t)std::min(100, copy.morale + 10);
+        removeFromSquad(src, idx); addToSquad(userTeam, copy, src);
+        logTransfer(*this, copy, src, userTeam, fee);
+        season.news.push_back("Mercato : " + copy.name + " rejoint " + U.name + " (" + g_world.teams[src].name + ").");
+        msg = copy.name + " signe au club !";
+        return 1;
+    }
     int bonus = U.status == CS_AMATEUR ? 0 : std::max(0, wage * years / 10);          // prime à la signature : 10 % du contrat
     if (mgr.dncg > 0 && fee > 0) { msg = "DNCG : le club est sous surveillance, seuls les joueurs libres peuvent être recrutés."; return -2; }
     if (fee + bonus > mgr.budget) { msg = "Budget insuffisant (indemnité + prime à la signature)."; return -2; }

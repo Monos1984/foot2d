@@ -874,6 +874,7 @@ void Career::startSeason() {
     }
     // ---------------- football féminin : coupes nationales, Coupe LFFP, Ligue des champions féminine
     womenStartSeason(*this);
+    continentalStartSeason(*this);
     // ---------------- supercoupes (champion contre vainqueur de la coupe)
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) {
         Pyramid& P = pyramids[p];
@@ -1263,6 +1264,7 @@ void Career::onCompetitionDone(int comp) {
     }
     onU19CompDone(comp);
     womenOnCompDone(*this, comp);
+    if (isContinentalKind(C.kind) && C.winner >= 0) season.news.push_back(C.name + " : " + g_world.teams[C.winner].name + " est champion continental !");
     std::string y = seasonLabel(year);
     if (C.format != FMT_LEAGUE && C.winner >= 0 && C.kind != 10 && C.kind != 12 && C.kind != 20 && C.name.find("tours régionaux") == std::string::npos)
         addHonour(C.winner, "Vainqueur : " + C.name + " (" + y + ")");

@@ -2314,6 +2314,7 @@ static void screenComps() {
             drawTextCentered(cfCountry == 0 ? fmt("%s : toutes les premières divisions (%d pays)", CF[cfSel], (int)pys.size()) : g_career.pyramids[pys[cfCountry - 1]].name,
                              VW / 2, y + 2, 10, C_HI, false);
             y += 18;
+            if (!cfCountry) for (int c = 0; c < (int)S.comps.size(); c++) if (isContinentalKind(S.comps[c].kind) && S.comps[c].tag == cfSel) v.push_back(c);
             for (int k = 0; k < (int)pys.size(); k++) {
                 if (cfCountry && k != cfCountry - 1) continue;
                 int p = pys[k];

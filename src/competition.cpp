@@ -157,7 +157,7 @@ void Competition::addGroupStage(const std::vector<std::vector<int>>& groups, int
             if (rd >= (int)sched[g].size()) continue;
             for (auto& p : sched[g][rd]) {
                 MatchRes m; m.home = p.first; m.away = p.second; m.group = (int16_t)g;
-                if (format == FMT_TOURNAMENT && kind != 21) {
+                if (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && !isContinentalKind(kind)) {
                     m.neutral = true;
                     if (host >= 0 && (m.away == host)) std::swap(m.home, m.away);
                     if (host >= 0 && m.home == host) m.neutral = false;
@@ -225,7 +225,7 @@ Stage& Competition::addKOStage(const std::vector<std::pair<int, int>>& pairs, in
         Tie t; t.a = p.first; t.b = p.second;
         if (t.b < 0) { t.winner = t.a; st.ties.push_back(t); continue; }
         MatchRes m; m.home = t.a; m.away = t.b; m.tie = (int16_t)st.ties.size();
-        m.neutral = neutralFinal || (format == FMT_TOURNAMENT && kind != 21);
+        m.neutral = neutralFinal || (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && !isContinentalKind(kind));
         if (format == FMT_SINGLE || (penaltiesOnly() && (!neutralFinal || kind == 26 || kind == 27))) { m.noET = 1; }
         if (kind == 2 && nm != "Finale" && g_career.kind == CK_CLUB && !g_career.opts.cdfET) m.noET = 1;   // option : Coupe de France sans prolongation (sauf la finale)   // supercoupes de région et Méga Coupe : TAB directs, finale comprise
         if (format == FMT_TOURNAMENT && host >= 0 && (t.a == host || t.b == host)) {

@@ -395,40 +395,43 @@ static void screenAbout() {
     if (IN.back || IN.ok) g_screen = SC_MAIN;
 }
 
-// ---------------- mode championnat : les premières divisions d'Europe, sans mode manager
+// ---------------- mode championnat (mode foot, allégé) : moteur de la carrière sans gestion, 1 à 4 clubs contrôlés,
+// toutes les divisions du pays (montées / descentes), coupes nationales et continentales, transferts simplifiés
 static ListW g_lmLW;
+static int g_lmPyr = -1;
 static void screenLeagueMode() {
-    drawBackground("Championnat");
-    struct LI { std::string name; int pyr; };
+    drawBackground("Championnat (mode foot)");
+    struct LI { std::string name, right; int pyr; int grp; };
     std::vector<LI> v;
+    static const char* CFN[NUM_CONFEDS] = { "UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC" };
     for (int p = 0; p < (int)g_basePyramids.size(); p++) {
         const Pyramid& P = g_basePyramids[p];
-        if (P.dom >= 0) continue;
+        if (P.dom >= 0 || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
         int q = P.poolIndex(0, 0);
         if (q < 0 || P.pools[q].clubs.size() < 4) continue;
-        if (P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
+        bool fem = isWomenPyramid(P);
         int ni = g_world.nationIndex(P.country.c_str());
-        v.push_back({ P.tiers[0].name + "  (" + (ni >= 0 ? g_world.teams[ni].name : P.name) + ")", p });
+        int grp = P.country == "FRA" ? 0 : fem ? 10 : ni >= 0 ? 1 + NATIONS[ni].conf : 9;
+        std::string right = fmt("%d division%s", (int)P.tiers.size(), P.tiers.size() > 1 ? "s" : "");
+        v.push_back({ std::string(fem ? "[F] " : grp >= 1 && grp <= 6 ? std::string("[") + CFN[grp - 1] + "] " : "") + P.name + "  -  " + P.tiers[0].name, right, p, grp });
     }
-    drawTextCentered("Choisissez une première division : saison complète, sans gestion (1 ou plusieurs clubs).", VW / 2, 34, 10, C_DIM);
-    int s = listRun(g_lmLW, (int)v.size(), 80, 50, VW - 160, 20, 13, [&](int i, int x, int y, bool sel) {
-        const Pyramid& P = g_basePyramids[v[i].pyr];
-        int q = P.poolIndex(0, 0);
-        drawTextPx(v[i].name, x + 6, y + 1, 10, sel ? BLACK : C_TXT);
-        drawTextPx(fmt("%d clubs", (int)P.pools[q].clubs.size()), x + VW - 160 - 70, y + 1, 10, sel ? BLACK : C_DIM);
+    std::stable_sort(v.begin(), v.end(), [](const LI& a, const LI& b) { if (a.grp != b.grp) return a.grp < b.grp; return sortKey(a.name) < sortKey(b.name); });
+    drawTextCentered("Hommes (France en tête, puis par fédération) puis femmes. Saison complète, sans gestion : 1 à 4 clubs contrôlés.", VW / 2, 34, 10, C_DIM);
+    int s = listRun(g_lmLW, (int)v.size(), 40, 50, VW - 80, 22, 13, [&](int i, int x, int y, bool sel) {
+        drawTextPx(fitText(v[i].name, VW - 200, 10), x + 6, y + 1, 10, sel ? BLACK : v[i].grp == 10 ? Color{ 240, 150, 200, 255 } : C_TXT);
+        drawTextPx(v[i].right, x + VW - 80 - 90, y + 1, 10, sel ? BLACK : C_DIM);
     });
     drawFooter("OK : choisir vos clubs   Retour");
     if (IN.back) { g_screen = SC_MAIN; return; }
     if (s < 0) return;
     const Pyramid& P = g_basePyramids[v[s].pyr];
-    int q = P.poolIndex(0, 0);
+    g_lmPyr = v[s].pyr;
+    g_intlCandidates.clear();
+    int maxTier = P.country == "FRA" ? 2 : 99;          // France : Ligue 1, Ligue 2, Ligue 3
+    for (auto& pl : P.pools) if (pl.tier <= maxTier) for (int t : pl.clubs) if (g_world.teams[t].parent < 0) g_intlCandidates.push_back(t);
     g_cdef = CustomCompDef();
-    g_cdef.name = P.tiers[0].name + fmt(" %d-%02d", 2026, 27);
-    g_cdef.format = 0; g_cdef.legs = 2;
-    g_cdef.teams = P.pools[q].clubs;
-    g_customSel = g_cdef.teams;
+    g_cdef.name = P.tiers[0].name;
     g_leagueModePick = true;
-    g_intlCandidates = g_cdef.teams;
     g_intlSel.clear();
     openPick(PM_INTL);
 }
@@ -437,10 +440,17 @@ static void startLeagueMode() {
     g_leagueModePick = false;
     std::vector<int> ctrl = g_intlSel;
     if (ctrl.size() > 4) ctrl.resize(4);
-    g_career.newCustom(g_cdef, ctrl);
+    if (ctrl.empty()) return;
+    g_career.opts = Career::Opts();
+    g_career.opts.lite = 1;
+    g_career.newClubCareer(ctrl[0], 2026);
+    g_career.mgr.managerMode = false; g_career.mgr.noSack = true; g_career.mgr.fullManager = false;
+    g_career.season.controlled = ctrl;
     g_careerActive = true; g_needAdvance = true;
-    g_hubNotice = g_cdef.name + " - saison complète";
+    g_hubNotice = "Championnat : saison 2026-27 (" + std::to_string(ctrl.size()) + " club" + (ctrl.size() > 1 ? "s" : "") + " contrôlé" + (ctrl.size() > 1 ? "s" : "") + ")";
+    levelCacheDirty();
     openHub();
+    autosave();
 }
 
 static void managerCycle(int d) {
