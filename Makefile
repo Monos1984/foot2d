@@ -1,6 +1,7 @@
 # France Foot 2D — make RAYLIB=chemin/vers/raylib
 RAYLIB ?= C:/raylib/raylib
 CXX    ?= g++
+WINDRES ?= windres
 CXXFLAGS = -std=c++17 -O2 -Wall -I$(RAYLIB)/src
 SRC  = $(wildcard src/*.cpp)
 OBJ  = $(SRC:src/%.cpp=build/%.o)
@@ -24,7 +25,7 @@ build/%.o: src/%.cpp $(wildcard src/*.h src/*.inc) | build
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 build/foot.res.o: res/foot.rc res/foot.ico | build
-	windres -I res $< -O coff -o $@
+	$(WINDRES) -I res $< -O coff -o $@
 
 build:
 	mkdir build
