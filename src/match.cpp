@@ -222,6 +222,8 @@ void Match::init(const MatchSetup& setup) {
     case 4: pitchFriction = 0.45f; pitchBounce = 0.7f; break;   // gelé
     default: pitchFriction = 1.0f; pitchBounce = 0.5f; break;
     }
+    turfBad = clampf((75.f - S.turf) / 75.f, 0.f, 1.f);
+    pitchFriction *= 1.f + turfBad * 0.55f;
     rp.assign(REPLAY_N * 22, Snap());
     rb.assign(REPLAY_N, BallSnap());
     rpHead = rpCount = 0;
@@ -1006,6 +1008,11 @@ void Match::updateBall(float dt) {
         float dec = (3.0f * pitchFriction + 0.35f * sp) * dt;
         if (sp <= dec) b.vel = V2(); else b.vel = b.vel * ((sp - dec) / sp);
         b.spin *= (1 - 3 * dt);
+        // pelouse abîmée : le ballon qui roule dévie et saute sur les mottes
+        if (turfBad > 0.05f && sp > 2.5f && b.owner < 0) {
+            b.vel = rot(b.vel, R.frange(-1.f, 1.f) * turfBad * 1.4f * dt * std::min(1.f, sp / 10.f));
+            if (R.chance(turfBad * turfBad * dt * 1.6f)) { b.vz = R.frange(1.2f, 3.2f) * turfBad; b.z = 0.02f; b.vel = rot(b.vel, R.frange(-0.35f, 0.35f) * turfBad); }
+        }
     }
     V2 prev = b.pos;
     b.pos += b.vel * dt;

@@ -509,7 +509,7 @@ Player World::makeYouth(int team, int pos, float level) {
     if (t.kind == TK_CLUB && t.nation >= 0 && !t.youth) p.nation = (int16_t)t.nation;   // formé au club : nationalité du pays
     {   // centre de formation du club : meilleurs jeunes
         int club = t.parent >= 0 ? t.parent : team;
-        int ac = club >= 0 && club < (int)teams.size() ? teams[club].academy : 0;
+        int ac = club >= 0 && club < (int)teams.size() ? teams[club].academy + teams[club].sta.annexYouth : 0;   // centre de formation + stade des jeunes
         if (ac > 0) {
             p.pot = (uint8_t)std::min(99, p.pot + ac * 2 + r.range(0, ac));
             auto up = [&](uint8_t& v) { v = (uint8_t)std::min(99, v + ac); };

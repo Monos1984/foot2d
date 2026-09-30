@@ -217,6 +217,7 @@ void Career::trainingMonth() {
     }
     float im = mgr.trainInt == 0 ? 0.6f : mgr.trainInt == 2 ? 1.5f : 1.f;
     float staff = 1.f + 0.08f * (staffLevel(SR_ADJOINT) + staffLevel(SR_PHYSIO_PREP));
+    staff *= 1.f + 0.07f * T.sta.annexTraining;          // complexe d'entraînement
     for (auto& p : T.squad) {
         int ov = p.overall();
         float ch = (p.pot > ov ? 0.14f : 0.035f) * im * staff * (p.age <= 23 ? 1.5f : p.age >= 31 ? 0.4f : 1.f);

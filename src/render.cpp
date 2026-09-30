@@ -7,7 +7,7 @@ static Texture2D g_pitchTex[5];
 static bool g_pitchBuilt[5] = { false };
 static uint64_t g_pitchKey[5] = { 0 };
 // description du stade du club qui reçoit (profondeur des tribunes, couverture, remplissage)
-struct StadiumLook { float depth[4] = { 9, 9, 9, 9 }; int kind[4] = { 2, 2, 2, 2 }; float fill = 0.8f; bool small = false; std::string sponsor, logo; };
+struct StadiumLook { float depth[4] = { 9, 9, 9, 9 }; int kind[4] = { 2, 2, 2, 2 }; float fill = 0.8f; bool small = false; int turf = 100; std::string sponsor, logo; };
 std::string (*g_sponsorImagePath)(const std::string&) = nullptr;   // fourni par l'interface (sponsors.txt)
 static StadiumLook g_look;
 static const float HZ = 0.75f; // facteur de projection de la hauteur
@@ -81,6 +81,23 @@ static void buildPitch(int type, uint64_t key) {
             if (w < 0.4f) y = PITCH_L / 2 + r.frange(-12, 12); else if (w < 0.7f) y = r.frange(0, 14); else y = PITCH_L - r.frange(0, 14);
             Vector2 p = P(x, y);
             ImageDrawCircle(&img, (int)p.x, (int)p.y, r.range(2, 6), hexc(0x6B5230, 180));
+        }
+    }
+    // pelouse usée : zones pelées devant les buts, au centre et dans les couloirs ; « champ de patates » : trous partout
+    if (g_look.turf < 70) {
+        Rng rt(777 + g_look.turf / 5);
+        float bad = (70 - g_look.turf) / 70.f;
+        int n = (int)(bad * bad * 2600) + 80;
+        for (int k = 0; k < n; k++) {
+            float x, y, w = rt.f();
+            if (w < 0.3f) { x = PITCH_W / 2 + rt.frange(-10, 10); y = rt.chance(0.5f) ? rt.frange(0, 13) : PITCH_L - rt.frange(0, 13); }
+            else if (w < 0.5f) { x = PITCH_W / 2 + rt.frange(-12, 12); y = PITCH_L / 2 + rt.frange(-12, 12); }
+            else if (w < 0.75f) { x = rt.chance(0.5f) ? rt.frange(2, 12) : PITCH_W - rt.frange(2, 12); y = rt.frange(10, PITCH_L - 10); }
+            else { if (bad < 0.6f) continue; x = rt.frange(0, PITCH_W); y = rt.frange(0, PITCH_L); }
+            Vector2 p = P(x, y);
+            unsigned col = rt.chance(0.5f) ? 0x8A7A4A : 0x6E5A34;
+            ImageDrawCircle(&img, (int)p.x, (int)p.y, rt.range(1, 2 + (int)(bad * 4)), hexc(col, (unsigned char)(90 + bad * 140)));
+            if (g_look.turf < 12 && rt.chance(0.15f)) ImageDrawCircle(&img, (int)p.x + 1, (int)p.y + 1, 1, hexc(0x3A2A18, 220));   // trous
         }
     }
     if (type == 4) {
@@ -730,7 +747,7 @@ void renderMatch(const Match& m, bool radar) {
     {
         // aspect du stade du club qui reçoit
         const Team& HT = g_world.teams[m.S.home];
-        uint64_t key = ((uint64_t)m.S.home << 8) ^ (uint64_t)(m.S.crowdFill * 100) ^ ((uint64_t)m.S.neutral << 40) ^ ((uint64_t)(m.S.training ? 1 : 0) << 41);
+        uint64_t key = ((uint64_t)m.S.home << 8) ^ (uint64_t)(m.S.crowdFill * 100) ^ ((uint64_t)m.S.neutral << 40) ^ ((uint64_t)(m.S.training ? 1 : 0) << 41) ^ ((uint64_t)(m.S.turf / 5) << 48);
         if (!g_pitchBuilt[type] || g_pitchKey[type] != key) {
             StadiumLook L;
             if (!m.S.neutral && HT.sta.init) {
@@ -743,6 +760,7 @@ void renderMatch(const Match& m, bool radar) {
                 L.small = HT.sta.capacity() < 5000;
             }
             L.fill = m.S.crowdFill;
+            L.turf = m.S.turf;
             if (m.S.training) {   // terrain d'entraînement : pas de tribunes ni de public
                 for (int k = 0; k < 4; k++) { L.depth[k] = 1.2f; L.kind[k] = STK_STANDING; }
                 L.small = true; L.fill = 0;

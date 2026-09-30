@@ -103,6 +103,13 @@ void initStadium(Team& t, int tier, float tierAvg) {
     S.screen = cap >= 20000 ? 1 : 0;
     S.vestiaires = cap >= 8000 ? 3 : cap >= 2000 ? 2 : 1;
     S.shirtPrice = (int16_t)(pro ? 85 : cap >= 2000 ? 45 : 30);
+    // pelouse : les grands stades ont une pelouse mieux entretenue ; loyer à la mairie selon la taille du stade
+    S.turf = (uint8_t)(cap >= 20000 ? 92 : cap >= 8000 ? 86 : cap >= 2000 ? 76 : 66);
+    S.owner = 0;
+    S.rentK = std::max(1, (int)(cap * (pro ? 0.012f : 0.004f)));
+    S.annexReserve = cap >= 8000 ? 1 : 0;
+    S.annexYouth = cap >= 20000 ? 1 : 0;
+    S.annexTraining = cap >= 20000 ? 2 : cap >= 8000 ? 1 : 0;
 }
 
 void stadiumSetCapacity(StadiumInfo& S, int cap) {
@@ -227,6 +234,15 @@ void Career::homeMatchDay(int comp, int mi) {
     S.lastAtt = total; S.lastGate = (int32_t)(gate / 1000);
     S.bestAtt = std::max(S.bestAtt, total);
     S.seasonAttTotal += total; S.seasonHomeMatches++;
+    {   // usure de la pelouse : hiver, pluie, affluence ; la réserve joue ici s'il n'y a pas de stade annexe
+        int mo = std::max(0, std::min(10, (int)(season.now / 4.2)));
+        bool winter = mo >= 3 && mo <= 7;
+        float wear = S.pitch == 2 ? 0.7f : S.pitch == 1 ? 3.f : 5.5f;
+        if (winter) wear *= 1.6f;
+        wear *= g_rng.frange(0.8f, 1.3f);
+        if (!S.annexReserve) wear += S.pitch == 2 ? 0.3f : 1.5f;
+        S.turf = (uint8_t)std::max(0, (int)S.turf - (int)(wear + 0.5f));
+    }
     // recette : TVA (5,5 % sur la billetterie), prélèvement de la fédération / de la ligue, arbitrage, organisation
     GateInfo gi; gi.brut = gate; gi.att = total; gi.opp = O.name;
     gi.tva = gate * 55 / 1055;
@@ -300,21 +316,25 @@ static int64_t merchSales(Team& T, double base) {
 static const char* PJ_NAMES[NUM_PJ] = { "Agrandissement", "Couverture de tribune", "Loges VIP", "Buvette", "Boutique", "Parking", "Éclairage",
                                          "Pelouse", "Écran géant", "Vestiaires", "Musée du club", "Sièges (tribune debout)" };
 
+// barème des travaux (k€) : les normes et les matériaux coûtent plus cher en professionnel qu'en amateur
+static double statusCostMul(const Team& t) { return t.status == CS_PRO ? 1.0 : t.status == CS_SEMIPRO ? 0.7 : 0.45; }
 int64_t Career::projectCost(const Team& t, int kind, int stand, int amount) {
     const StadiumInfo& S = t.sta;
+    double m = statusCostMul(t);
+    auto lv = [&](double base, int L) { return (int64_t)(base * m * (L * L + L) / 2.0 + 0.5); };   // niveaux : 1x, 3x, 6x, 10x...
     switch (kind) {
-    case PJ_SEATS: { int k = S.s[stand].kind; double per = k == STK_COVERED ? 0.6 : k == STK_SEATS ? 0.25 : 0.08; return (int64_t)(amount * per) + 5; }
-    case PJ_COVER: return (int64_t)(S.s[stand].seats * 0.2) + 20;
-    case PJ_UPGRADE_SEATS: return (int64_t)(S.s[stand].seats * 0.15) + 10;
-    case PJ_VIP: return (int64_t)amount * 3 + 20;
-    case PJ_BUVETTE: { int L = S.buvette + 1; return 10LL * L * L; }
-    case PJ_BOUTIQUE: { int L = S.boutique + 1; return 20LL * L * L; }
-    case PJ_PARKING: { int L = S.parking + 1; return 40LL * L * L; }
-    case PJ_LIGHTS: { int L = S.lights + 1; return 25LL * L * L; }
-    case PJ_PITCH: return S.pitch == 0 ? 250 : 450;
-    case PJ_SCREEN: return 150;
-    case PJ_VESTIAIRES: { int L = S.vestiaires + 1; return 30LL * L * L; }
-    case PJ_MUSEUM: return 200;
+    case PJ_SEATS: { int k = S.s[stand].kind; double per = k == STK_COVERED ? 0.7 : k == STK_SEATS ? 0.3 : 0.1; return (int64_t)(amount * per * m) + 5; }
+    case PJ_COVER: return (int64_t)(S.s[stand].seats * 0.25 * m) + 15;
+    case PJ_UPGRADE_SEATS: return (int64_t)(S.s[stand].seats * 0.12 * m) + 8;
+    case PJ_VIP: return (int64_t)(amount * 2.5 * m) + 15;
+    case PJ_BUVETTE: return std::max<int64_t>(3, lv(8, S.buvette + 1));
+    case PJ_BOUTIQUE: return std::max<int64_t>(5, lv(15, S.boutique + 1));
+    case PJ_PARKING: return std::max<int64_t>(8, lv(30, S.parking + 1));
+    case PJ_LIGHTS: return std::max<int64_t>(6, lv(20, S.lights + 1));
+    case PJ_PITCH: return (int64_t)((S.pitch == 0 ? 300 : 400) * m);
+    case PJ_SCREEN: return (int64_t)(120 * m);
+    case PJ_VESTIAIRES: return std::max<int64_t>(6, lv(25, S.vestiaires + 1));
+    case PJ_MUSEUM: return (int64_t)(180 * m);
     }
     return 0;
 }
@@ -343,10 +363,16 @@ bool Career::startProject(const Project& pj, std::string& err) {
     if (pj.kind == PJ_COVER && S.s[pj.stand].kind == STK_STANDING) { err = "Installez d'abord des sièges dans cette tribune."; return false; }
     if (pj.kind == PJ_UPGRADE_SEATS && S.s[pj.stand].kind != STK_STANDING) { err = "Cette tribune a déjà des sièges."; return false; }
     if (pj.kind == PJ_SEATS && S.s[pj.stand].seats + pj.amount > 40000) { err = "Tribune trop grande (40 000 places maximum)."; return false; }
+    if (pj.kind == PJ_SEATS && S.owner == 0 && pj.amount > S.extQuota) {
+        err = S.extQuota > 0 ? fmt("La mairie n'a autorisé que %d places supplémentaires.", S.extQuota) : "Stade municipal : demandez d'abord l'autorisation d'agrandir à la mairie (onglet Foncier).";
+        return false;
+    }
     Project p = pj;
     p.cost = (int32_t)projectCost(T, pj.kind, pj.stand, pj.amount);
+    if (S.owner == 0 && (pj.kind == PJ_SEATS || pj.kind == PJ_COVER || pj.kind == PJ_UPGRADE_SEATS)) p.cost = p.cost * 6 / 10;   // la mairie finance 40 % des tribunes
     p.monthsLeft = projectMonths(pj.kind, pj.amount);
     if (p.cost > mgr.budget) { err = "Budget insuffisant (" + money(p.cost) + ")."; return false; }
+    if (pj.kind == PJ_SEATS && S.owner == 0) S.extQuota -= pj.amount;
     mgr.budget -= p.cost; mgr.seasonStadiumCost += p.cost;
     mgr.projects.push_back(p);
     season.news.push_back(fmt("Travaux lancés : %s (%s, %d mois).", PJ_NAMES[p.kind], money(p.cost).c_str(), p.monthsLeft));
@@ -383,6 +409,27 @@ void stadiumMonth(Career& K) {
     }
     int cap = S.capacity();
     int64_t upkeep = (int64_t)(cap * 0.35 + S.s[0].vip * 2.0 + (S.buvette + S.boutique + S.parking + S.lights + S.vestiaires) * 150.0 + S.screen * 800 + S.pitch * 500);   // €
+    {   // pelouse : repousse selon la saison (août = 0 ... juin = 10) ; le synthétique vieillit lentement
+        int mo = std::max(0, std::min(10, K.mgr.lastMonth));
+        bool winter = mo >= 3 && mo <= 7;
+        int regrow = S.pitch == 2 ? -1 : S.pitch == 1 ? (winter ? 3 : 6) : (winter ? 1 : 5);
+        regrow += S.annexTraining > 0 ? 1 : 0;           // l'équipe s'entraîne ailleurs : la pelouse respire
+        S.turf = (uint8_t)std::max(0, std::min(100, (int)S.turf + regrow));
+        S.repaired = 0;
+        if (S.turf < 25) K.season.news.push_back(fmt("Pelouse : état %s (%d %%). Le ballon rebondit n'importe comment : un regarnissage ou une nouvelle pelouse s'impose.", turfStateName(S.turf), (int)S.turf));
+    }
+    if (S.owner == 0) upkeep += (int64_t)S.rentK * 1000 / 11;                                        // loyer à la mairie
+    else upkeep += (int64_t)(cap * 0.25);                                                            // propriétaire : gros entretien à sa charge
+    upkeep += (int64_t)(S.annexReserve * 1500 + S.annexYouth * 1200 + S.annexTraining * 2500) * (T.status == CS_PRO ? 3 : 1);
+    if (S.extPending > 0 && --S.extPending == 0) {
+        // réponse de la mairie : dépend du statut, du public et des résultats
+        float ch = 0.35f + (T.status == CS_PRO ? 0.25f : T.status == CS_SEMIPRO ? 0.12f : 0.f) + std::min(0.25f, S.fans / std::max(1.f, (float)cap) * 0.2f) + (K.mgr.confidence - 50) / 250.f;
+        if (g_rng.chance(std::max(0.15f, std::min(0.9f, ch)))) {
+            int q = std::max(500, (cap * 3 / 10) / 500 * 500);
+            S.extQuota += q;
+            K.season.news.push_back(fmt("La mairie accepte l'agrandissement du stade : %d places supplémentaires autorisées (elle financera 40 %% des tribunes).", q));
+        } else K.season.news.push_back("La mairie refuse pour l'instant l'agrandissement du stade. Nouvelle demande possible.");
+    }
     float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
     int64_t shop = (int64_t)(S.fans * 0.004 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0)) * S.shirtPrice);
     int64_t museum = (int64_t)(S.museum * S.fans * 0.02 * 8);
@@ -420,4 +467,95 @@ int64_t Career::namingOffer() const {
     int cap = T.sta.capacity();
     double base = cap * (T.status == CS_PRO ? 0.12 : T.status == CS_SEMIPRO ? 0.05 : 0.02);
     return std::max<int64_t>(2, (int64_t)(base * (1.0 + T.sta.fans / std::max(1.0, (double)cap) * 0.3)));
+}
+
+// ------------------------------------------------------------------ pelouse
+const char* turfStateName(int q) {
+    return q >= 85 ? "excellente" : q >= 65 ? "bonne" : q >= 45 ? "moyenne" : q >= 25 ? "usée" : q >= 10 ? "très abîmée" : "champ de patates";
+}
+// état de la pelouse d'un club : celle du joueur est suivie match après match, les autres sont estimées
+int turfQualityFor(int team, int month) {
+    if (team < 0 || team >= (int)g_world.teams.size()) return 80;
+    const Team& T = g_world.teams[team];
+    if (T.sta.init && g_career.kind == CK_CLUB && team == g_career.userTeam) return T.sta.turf;
+    int base = T.status == CS_PRO ? 88 : T.status == CS_SEMIPRO ? 72 : 58;
+    if (T.sta.init && T.sta.pitch == 2) base = 90;
+    bool winter = month >= 3 && month <= 7;
+    if (winter && !(T.sta.init && T.sta.pitch == 2)) base -= T.status == CS_PRO ? 8 : 18;
+    base += (int)(hashStr(T.name) % 21) - 10;
+    return std::max(5, std::min(100, base));
+}
+int64_t Career::turfRepairCost() const {
+    const Team& T = g_world.teams[userTeam];
+    return std::max<int64_t>(2, (int64_t)((8 + T.sta.capacity() / 2500) * statusCostMul(T)));
+}
+int64_t Career::turfReplaceCost() const {
+    const Team& T = g_world.teams[userTeam];
+    double base = T.sta.pitch == 2 ? 350 : T.sta.pitch == 1 ? 280 : 90;
+    return std::max<int64_t>(8, (int64_t)(base * statusCostMul(T)));
+}
+bool Career::repairTurf(std::string& err) {
+    Team& T = g_world.teams[userTeam]; StadiumInfo& S = T.sta;
+    if (S.pitch == 2) { err = "Pelouse synthétique : pas de regarnissage possible, il faut la remplacer."; return false; }
+    if (S.repaired) { err = "Un regarnissage a déjà été fait ce mois-ci."; return false; }
+    if (S.turf >= 95) { err = "La pelouse est déjà en parfait état."; return false; }
+    int64_t c = turfRepairCost();
+    if (c > mgr.budget) { err = "Budget insuffisant (" + money(c) + ")."; return false; }
+    mgr.budget -= c; mgr.seasonStadiumCost += c;
+    S.turf = (uint8_t)std::min(100, S.turf + 25); S.repaired = 1;
+    season.news.push_back(fmt("Pelouse regarnie (%s) : état %s.", money(c).c_str(), turfStateName(S.turf)));
+    return true;
+}
+bool Career::replaceTurf(std::string& err) {
+    Team& T = g_world.teams[userTeam]; StadiumInfo& S = T.sta;
+    int64_t c = turfReplaceCost();
+    if (c > mgr.budget) { err = "Budget insuffisant (" + money(c) + ")."; return false; }
+    mgr.budget -= c; mgr.seasonStadiumCost += c;
+    S.turf = 100; S.repaired = 1;
+    season.news.push_back(fmt("Nouvelle pelouse posée (%s) : terrain comme neuf.", money(c).c_str()));
+    return true;
+}
+// ------------------------------------------------------------------ foncier : achat du stade, mairie, stades annexes
+int64_t Career::stadiumBuyPrice() const {
+    const Team& T = g_world.teams[userTeam];
+    int cap = T.sta.capacity();
+    double perSeat = T.status == CS_PRO ? 0.5 : T.status == CS_SEMIPRO ? 0.25 : 0.1;   // k€ par place
+    return std::max<int64_t>(50, (int64_t)(cap * perSeat + T.sta.rentK * 8));
+}
+bool Career::buyStadium(std::string& err) {
+    Team& T = g_world.teams[userTeam]; StadiumInfo& S = T.sta;
+    if (S.owner) { err = "Le club est déjà propriétaire de son stade."; return false; }
+    int64_t c = stadiumBuyPrice();
+    if (c > mgr.budget) { err = "Budget insuffisant (" + money(c) + ")."; return false; }
+    mgr.budget -= c; mgr.seasonStadiumCost += c;
+    S.owner = 1; S.extPending = 0; S.extQuota = 0;
+    season.news.push_back(fmt("Le club rachète son stade à la mairie pour %s : plus de loyer, agrandissements libres, mais entretien à sa charge.", money(c).c_str()));
+    return true;
+}
+bool Career::requestExtension(std::string& err) {
+    StadiumInfo& S = g_world.teams[userTeam].sta;
+    if (S.owner) { err = "Propriétaire : pas besoin d'autorisation pour agrandir."; return false; }
+    if (S.extPending) { err = "Une demande est déjà à l'étude à la mairie."; return false; }
+    S.extPending = 2;
+    season.news.push_back("Demande d'agrandissement du stade déposée à la mairie : réponse dans deux mois.");
+    return true;
+}
+static const int ANNEX_MAX[3] = { 1, 2, 3 };
+int64_t Career::annexCost(int kind) const {
+    const Team& T = g_world.teams[userTeam]; const StadiumInfo& S = T.sta;
+    int L = (kind == 0 ? S.annexReserve : kind == 1 ? S.annexYouth : S.annexTraining) + 1;
+    static const double BASE[3] = { 120, 90, 150 };
+    return std::max<int64_t>(10, (int64_t)(BASE[kind] * L * statusCostMul(T)));
+}
+bool Career::buildAnnex(int kind, std::string& err) {
+    Team& T = g_world.teams[userTeam]; StadiumInfo& S = T.sta;
+    uint8_t& lv = kind == 0 ? S.annexReserve : kind == 1 ? S.annexYouth : S.annexTraining;
+    if (lv >= ANNEX_MAX[kind]) { err = "Niveau maximum déjà atteint."; return false; }
+    int64_t c = annexCost(kind);
+    if (c > mgr.budget) { err = "Budget insuffisant (" + money(c) + ")."; return false; }
+    mgr.budget -= c; mgr.seasonStadiumCost += c;
+    lv++;
+    static const char* N[3] = { "stade de l'équipe réserve", "stade des jeunes", "complexe d'entraînement" };
+    season.news.push_back(fmt("Construction : %s (niveau %d) pour %s.", N[kind], (int)lv, money(c).c_str()));
+    return true;
 }

@@ -2863,7 +2863,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 15;
+static const unsigned SAVE_VERSION = 16;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -2976,7 +2976,7 @@ bool Career::load(const char* path) {
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
-    if (magic != SAVE_MAGIC || ver < 5 || ver > SAVE_VERSION) { fclose(f); return false; }
+    if (magic != SAVE_MAGIC || ver < 16 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }

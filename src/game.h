@@ -103,6 +103,17 @@ struct StadiumInfo {
     char sponsor[32] = { 0 };
     int32_t lastAtt = 0, lastGate = 0, bestAtt = 0;
     int32_t seasonAttTotal = 0, seasonHomeMatches = 0;
+    // pelouse et foncier (build 5)
+    uint8_t turf = 85;              // état de la pelouse : 100 parfaite ... 0 champ de patates
+    uint8_t owner = 0;              // 0 : stade loué à la mairie ; 1 : stade acheté par le club
+    uint8_t annexReserve = 0;       // stade annexe de l'équipe réserve (0 / 1)
+    uint8_t annexYouth = 0;         // stade des jeunes (0 à 2)
+    uint8_t annexTraining = 0;      // complexe d'entraînement (0 à 3)
+    uint8_t extPending = 0;         // demande d'agrandissement à la mairie : mois restants avant la réponse
+    uint8_t repaired = 0;           // regarnissage déjà fait ce mois-ci
+    uint8_t pad2 = 0;
+    int32_t extQuota = 0;           // places d'agrandissement accordées par la mairie
+    int32_t rentK = 0;              // loyer annuel versé à la mairie (k€)
     int capacity() const { int c = 0; for (auto& x : s) c += x.seats + x.vip; return c; }
 };
 // produits dérivés (boutique) en plus du maillot
@@ -116,6 +127,8 @@ struct Merch {
     int32_t shirtUnits = 0, shirtRevenue = 0, onlineRevenue = 0;
 };
 const char* merchName(int k);
+const char* turfStateName(int q);
+int turfQualityFor(int team, int month);    // état de la pelouse du stade d'un club (0-100) ; month 0 août ... 10 juin
 int merchRefPrice(int k, int status);
 int merchMinShop(int k);                    // niveau de boutique requis
 void initMerch(Team& t);
@@ -704,6 +717,16 @@ struct Career {
     static int64_t projectCost(const Team& t, int kind, int stand, int amount);
     static int projectMonths(int kind, int amount);
     int64_t namingOffer() const;
+    // pelouse et foncier
+    int64_t turfRepairCost() const;
+    int64_t turfReplaceCost() const;
+    bool repairTurf(std::string& err);
+    bool replaceTurf(std::string& err);
+    int64_t stadiumBuyPrice() const;
+    bool buyStadium(std::string& err);
+    bool requestExtension(std::string& err);
+    int64_t annexCost(int kind) const;          // 0 réserve, 1 jeunes, 2 entraînement
+    bool buildAnnex(int kind, std::string& err);
     int expectedAttendance(int stand, bool vip) const;
     int cdl = -1;                           // Coupe de la Ligue
     int superRegions = -1;                  // Méga Coupe des Régions (vainqueurs des supercoupes de région)

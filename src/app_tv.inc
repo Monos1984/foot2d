@@ -33,14 +33,21 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     s.kickoffTime = fmt("%dh%02d", hour, minute);
     s.kickoffDate = kickoffText(comp, match, true);
     s.night = hour >= 20 || (winter && hour >= 17) || C.kind == 3 || C.kind == 7;
-    // météo selon la saison (réglage « Aléatoire »)
-    if (g_settings.pitch == 5) {
+    // carrière : le terrain dépend de la météo, de la saison et de la qualité de la pelouse (pas de choix manuel)
+    {
         float x = r.f();
         bool heated = lvl <= 1;       // pelouses chauffées en pro
+        int turf = s.neutral ? 90 : turfQualityFor(s.home, month);
+        int kind = s.neutral || !H.sta.init ? 0 : H.sta.pitch;   // 0 naturelle, 1 hybride, 2 synthétique
         if (month <= 1 || month >= 9) s.pitch = x < 0.35f ? 1 : x < 0.9f ? 0 : 2;
         else if (month == 2 || month == 3 || month == 7 || month == 8) s.pitch = x < 0.45f ? 0 : x < 0.88f ? 2 : 3;
         else s.pitch = x < 0.3f ? 0 : x < 0.6f ? 2 : x < 0.8f ? 3 : (heated ? 2 : 4);
-        if (H.sta.pitch == 2 && s.pitch == 3) s.pitch = 2;      // synthétique : pas de boue
+        // pelouse abîmée : la pluie la transforme vite en bourbier
+        if (s.pitch == 2 && turf < 40 && r.chance((40 - turf) / 40.f)) s.pitch = 3;
+        if (s.pitch == 0 && turf < 20 && winter && r.chance(0.4f)) s.pitch = 3;
+        if (kind == 1 && s.pitch == 3 && r.chance(0.6f)) s.pitch = 2;   // hybride : draine mieux
+        if (kind == 2) { if (s.pitch == 3) s.pitch = 2; if (s.pitch == 4) s.pitch = 0; }   // synthétique : ni boue ni gel
+        s.turf = kind == 2 ? std::max(turf, 70) : turf;
     }
     s.weather = s.pitch == 2 ? 2 : s.pitch == 4 ? 3 : s.pitch == 3 ? 1 : 0;
     // télévision : L1, L2, Coupe de France dès le 9e tour (32es), Coupe de la Ligue, Europe, supercoupes

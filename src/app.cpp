@@ -763,7 +763,7 @@ static void screenSetup() {
                                           "Santiago Bernabéu (Madrid)", "Maracanã (Rio de Janeiro)", "Terrain municipal" };
     std::vector<std::string> rows = {
         fmt("Durée d'une mi-temps : %d min", HALF_MINUTES[g_settings.halfIdx]),
-        fmt("Terrain : %s", PITCH_NAMES[g_setup.pitch]),
+        g_mctx.career ? fmt("Terrain : %s  (pelouse %s, %d %%)", PITCH_NAMES[g_setup.pitch], turfStateName(g_setup.turf), g_setup.turf) : fmt("Terrain : %s", PITCH_NAMES[g_setup.pitch]),
         fmt("Difficulté : %s", DIFF_NAMES[g_setup.difficulty]),
         fmt("Tactique %s : %s", H.shortName.c_str(), FORMATIONS[g_setup.formation[0] >= 0 ? g_setup.formation[0] : H.formation].name),
         fmt("Tactique %s : %s", A.shortName.c_str(), FORMATIONS[g_setup.formation[1] >= 0 ? g_setup.formation[1] : A.formation].name),
@@ -808,7 +808,7 @@ static void screenSetup() {
     if (dl && r >= 0) {
         switch (r) {
         case 0: g_settings.halfIdx = (g_settings.halfIdx + dl + NUM_HALF) % NUM_HALF; break;
-        case 1: g_setup.pitch = (g_setup.pitch + dl + 6) % 6; break;
+        case 1: if (g_mctx.career) toast("Carrière : le terrain dépend de la météo, de la saison et de la pelouse"); else g_setup.pitch = (g_setup.pitch + dl + 6) % 6; break;
         case 2: g_setup.difficulty = (g_setup.difficulty + dl + 3) % 3; break;
         case 3: case 4: {
             int t = r - 3; int team = t == 0 ? g_setup.home : g_setup.away;
@@ -3465,6 +3465,7 @@ void appTestStart(const char* mode) {
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;
         if (m == "match2") g_setup.side[IN_KB1] = 0;
         g_setup.pitch = 1;
+        if (getenv("FOOT_TURF")) g_setup.turf = atoi(getenv("FOOT_TURF"));
         if (m == "photo") { g_setup.cupPhoto = true; g_setup.side[IN_KB1] = 1; }
         if (m == "toss") g_setup.side[IN_KB1] = 1;
         launchMatch();
@@ -3671,7 +3672,7 @@ void appTestStart(const char* mode) {
         int p, q, gg; g_career.tierOfTeam(user, &p, &q, &gg);
         openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2;
     }
-    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "market" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
+    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "market" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
         int user = -1;
         for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Lavallois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true;
@@ -3696,6 +3697,8 @@ void appTestStart(const char* mode) {
         if (m == "stadium2") { g_screen = SC_STADIUM; g_stTab = 1; }
         if (m == "stadium3") { g_screen = SC_STADIUM; g_stTab = 2; }
         if (m == "stadium4") { g_screen = SC_STADIUM; g_stTab = 3; }
+        if (m == "stadium6") { g_screen = SC_STADIUM; g_stTab = 5; g_world.teams[user].sta.turf = 18; }
+        if (m == "stadium7") { g_screen = SC_STADIUM; g_stTab = 6; }
         if (m == "stadcrash") { g_screen = SC_STADIUM; g_stTab = 0; g_stSel = 8; }
         if (m == "cuphub") { for (int k = 0; k < 3000; k++) { auto pm = S.advance(false); if (pm.comp < 0) break; if (S.comps[pm.comp].format != FMT_LEAGUE) { g_pending = pm; g_needAdvance = false; break; } simulateMatch(S.comps[pm.comp].matches[pm.match], &S.comps[pm.comp]); S.recordResult(pm.comp, pm.match); S.checkRound(pm.comp); } g_screen = SC_HUB; }
         if (m == "confirm") askConfirm("Revenir au menu principal ? (la partie est sauvegardée automatiquement)", []() {});

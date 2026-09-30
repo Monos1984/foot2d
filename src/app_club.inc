@@ -150,6 +150,87 @@ static void drawStadiumPlan(const StadiumInfo& S, int x, int y, int w, int h) {
     }
 }
 
+// vue isométrique : pelouse en losange, tribunes en relief (hauteur selon le nombre de places), toits, projecteurs, public
+static void drawStadiumIso(const StadiumInfo& S, int x, int y, int w, int h, unsigned clubColor) {
+    DrawRectangle(x, y, w, h, Color{ 20, 26, 40, 255 });
+    DrawRectangleGradientV(x, y, w, h / 2, Color{ 60, 100, 170, 255 }, Color{ 20, 26, 40, 255 });
+    const float PW = 68.f, PL = 105.f;
+    float sc = std::min(w / 200.f, h / 150.f) * 0.9f;
+    float cx = x + w * 0.5f - (PW / 2 - PL / 2) * 0.62f * sc, cy = y + h * 0.5f + 6 - (PW / 2 + PL / 2) * 0.31f * sc;
+    auto iso = [&](float wx, float wy, float wz) { return Vector2{ cx + (wx - wy) * 0.62f * sc, cy + (wx + wy) * 0.31f * sc - wz * sc }; };
+    auto quad = [&](Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color col) { DrawTriangle(a, c, b, col); DrawTriangle(a, d, c, col); DrawTriangle(a, b, c, col); DrawTriangle(a, c, d, col); };
+    auto shade = [](Color c, float k) { return Color{ (unsigned char)(c.r * k), (unsigned char)(c.g * k), (unsigned char)(c.b * k), 255 }; };
+    // sol et pelouse (bandes)
+    float M = 26.f;
+    quad(iso(-M, -M, 0), iso(PW + M, -M, 0), iso(PW + M, PL + M, 0), iso(-M, PL + M, 0), Color{ 70, 74, 84, 255 });
+    int turf = S.turf;
+    for (int b = 0; b < 10; b++) {
+        float y0 = PL * b / 10.f, y1 = PL * (b + 1) / 10.f;
+        Color g = b % 2 ? Color{ 44, 128, 50, 255 } : Color{ 38, 114, 44, 255 };
+        if (turf < 50) g = Color{ (unsigned char)(g.r + (50 - turf)), (unsigned char)(g.g - (50 - turf) / 2), g.b, 255 };
+        quad(iso(0, y0, 0), iso(PW, y0, 0), iso(PW, y1, 0), iso(0, y1, 0), g);
+    }
+    Color L = { 235, 235, 235, 200 };
+    DrawLineV(iso(0, 0, 0), iso(PW, 0, 0), L); DrawLineV(iso(PW, 0, 0), iso(PW, PL, 0), L);
+    DrawLineV(iso(PW, PL, 0), iso(0, PL, 0), L); DrawLineV(iso(0, PL, 0), iso(0, 0, 0), L);
+    DrawLineV(iso(0, PL / 2, 0), iso(PW, PL / 2, 0), L);
+    // tribunes : 0 principale (côté x < 0), 1 face (x > PW), 2 et 3 virages (y < 0, y > PL) ; dessinées de l'arrière vers l'avant
+    int order[4] = { 2, 0, 1, 3 };
+    for (int oi = 0; oi < 4; oi++) {
+        int i = order[oi];
+        const Stand& st = S.s[i];
+        float d = std::max(4.f, std::min(30.f, std::sqrt((float)(st.seats + st.vip)) / 4.5f));   // profondeur (m)
+        float hgt = d * 0.8f;
+        Color c = st.kind == STK_COVERED ? Color{ 150, 160, 190, 255 } : st.kind == STK_SEATS ? Color{ 120, 130, 160, 255 } : Color{ 120, 108, 92, 255 };
+        if (i == g_stSel && g_stTab == 0) c = Color{ 220, 190, 80, 255 };
+        Vector2 a, b, a2, b2;     // bord avant (au sol) et bord arrière (en hauteur)
+        if (i == 0) { a = iso(-2, 0, 0); b = iso(-2, PL, 0); a2 = iso(-2 - d, 0, hgt); b2 = iso(-2 - d, PL, hgt); }
+        else if (i == 1) { a = iso(PW + 2, 0, 0); b = iso(PW + 2, PL, 0); a2 = iso(PW + 2 + d, 0, hgt); b2 = iso(PW + 2 + d, PL, hgt); }
+        else if (i == 2) { a = iso(0, -2, 0); b = iso(PW, -2, 0); a2 = iso(0, -2 - d, hgt); b2 = iso(PW, -2 - d, hgt); }
+        else { a = iso(0, PL + 2, 0); b = iso(PW, PL + 2, 0); a2 = iso(0, PL + 2 + d, hgt); b2 = iso(PW, PL + 2 + d, hgt); }
+        quad(a, b, b2, a2, shade(c, i == 1 || i == 3 ? 0.8f : 1.f));
+        // gradins et public
+        int rows = std::max(2, (int)(d / 2.5f));
+        for (int r = 1; r < rows; r++) {
+            float k = (float)r / rows;
+            Vector2 p = { a.x + (a2.x - a.x) * k, a.y + (a2.y - a.y) * k }, q = { b.x + (b2.x - b.x) * k, b.y + (b2.y - b.y) * k };
+            DrawLineV(p, q, shade(c, 0.7f));
+            int dots = (int)(std::sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)) / 3);
+            for (int j = 0; j < dots; j++) if ((j * 7 + r * 3 + i) % 5 < 3) {
+                float t = (j + 0.5f) / dots;
+                static const Color CR[] = { { 200, 40, 50, 255 }, { 230, 230, 235, 255 }, { 40, 70, 160, 255 } };
+                Color pc = (j + r) % 4 == 0 ? hexc(clubColor) : CR[(j + r * 2) % 3];
+                DrawPixelV(Vector2{ p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t - 1 }, pc);
+            }
+        }
+        // mur arrière et toit
+        Vector2 a3 = { a2.x, a2.y + hgt * sc }, b3 = { b2.x, b2.y + hgt * sc };
+        if (i == 0 || i == 2) quad(a2, b2, b3, a3, shade(c, 0.55f));
+        if (st.kind == STK_COVERED) {
+            float rz = hgt + 4.f;
+            Vector2 r1, r2, r3, r4;
+            if (i == 0) { r1 = iso(-1, 0, rz); r2 = iso(-1, PL, rz); r3 = iso(-3 - d, PL, rz + 1); r4 = iso(-3 - d, 0, rz + 1); }
+            else if (i == 1) { r1 = iso(PW + 1, 0, rz); r2 = iso(PW + 1, PL, rz); r3 = iso(PW + 3 + d, PL, rz + 1); r4 = iso(PW + 3 + d, 0, rz + 1); }
+            else if (i == 2) { r1 = iso(0, -1, rz); r2 = iso(PW, -1, rz); r3 = iso(PW, -3 - d, rz + 1); r4 = iso(0, -3 - d, rz + 1); }
+            else { r1 = iso(0, PL + 1, rz); r2 = iso(PW, PL + 1, rz); r3 = iso(PW, PL + 3 + d, rz + 1); r4 = iso(0, PL + 3 + d, rz + 1); }
+            Color roof = { 200, 205, 215, 150 };
+            DrawTriangle(r1, r3, r2, roof); DrawTriangle(r1, r4, r3, roof); DrawTriangle(r1, r2, r3, roof); DrawTriangle(r1, r3, r4, roof);
+            DrawLineV(r1, r2, Color{ 240, 240, 250, 220 });
+        }
+        if (st.vip > 0) { Vector2 m = { (a.x + b.x) / 2, (a.y + b.y) / 2 }; DrawRectangle((int)m.x - 5, (int)m.y - 3, 10, 3, Color{ 240, 200, 60, 255 }); }
+    }
+    // projecteurs aux quatre coins
+    if (S.lights > 0) {
+        float corners[4][2] = { { -14, -14 }, { PW + 14, -14 }, { -14, PL + 14 }, { PW + 14, PL + 14 } };
+        for (int k = 0; k < 4; k++) {
+            Vector2 base = iso(corners[k][0], corners[k][1], 0), top = iso(corners[k][0], corners[k][1], 18.f + S.lights * 4.f);
+            DrawLineEx(base, top, 1.5f, Color{ 90, 94, 110, 255 });
+            DrawRectangle((int)top.x - 3, (int)top.y - 2, 7, 4, Color{ 255, 250, 200, 255 });
+        }
+    }
+    drawTextPx(fmt("Pelouse : %s", turfStateName(S.turf)), x + 4, y + h - 12, 10, C_DIM);
+}
+
 // icônes des produits dérivés (couleurs du club)
 static void drawMerchIcon(int k, int x, int y, const Kit& kit) {
     Color a = hexc(kit.shirt), b = hexc(kit.shirt2 != kit.shirt ? kit.shirt2 : (((((kit.shirt >> 16) & 255) * 0.3f + ((kit.shirt >> 8) & 255) * 0.59f + (kit.shirt & 255) * 0.11f) / 255.f) > 0.55f ? 0x202020 : 0xF2F2F2));
@@ -175,16 +256,19 @@ static void screenStadium() {
     int cap = S.capacity();
     drawTextPx(fmt("Capacité : %d places   Supporters : %d   Dernière affluence : %d (%d%%)", cap, S.fans, S.lastAtt, cap ? S.lastAtt * 100 / cap : 0), 12, 31, 10, C_TXT);
     drawTextPx("Budget : " + money(M.budget), VW - 170, 31, 10, M.budget >= 0 ? C_GOOD : C_BAD);
-    static const char* TABS[] = { "Tribunes et billets", "Équipements", "Boutique", "Sponsors et club", "Travaux en cours" };
-    for (int i = 0; i < 5; i++) if (button(12 + i * 124, 44, 120, 14, TABS[i], g_stTab == i)) { g_stTab = i; g_stLW = ListW(); }
-    if (IN.pgUp) g_stTab = (g_stTab + 4) % 5;
-    if (IN.pgDn) g_stTab = (g_stTab + 1) % 5;
+    static const char* TABS[] = { "Tribunes", "Équipements", "Boutique", "Sponsors", "Travaux", "Pelouse", "Foncier" };
+    const int NT = 7;
+    for (int i = 0; i < NT; i++) if (button(12 + i * 88, 44, 85, 14, TABS[i], g_stTab == i)) { g_stTab = i; g_stLW = ListW(); }
+    if (IN.pgUp) g_stTab = (g_stTab + NT - 1) % NT;
+    if (IN.pgDn) g_stTab = (g_stTab + 1) % NT;
     { static int prevTab = -1; if (prevTab != g_stTab) { g_stSel = 0; prevTab = g_stTab; } }
     int y = 62;
     auto launch = [&](int kind, int stand, int amount) {
         int64_t cost = Career::projectCost(T, kind, stand, amount);
+        bool town = S.owner == 0 && (kind == PJ_SEATS || kind == PJ_COVER || kind == PJ_UPGRADE_SEATS);
+        if (town) cost = cost * 6 / 10;
         int months = Career::projectMonths(kind, amount);
-        askConfirm(fmt("%s : coût %s, durée %d mois. Lancer les travaux ?", projectName(kind), money(cost).c_str(), months), [kind, stand, amount]() {
+        askConfirm(fmt("%s : coût %s%s, durée %d mois. Lancer les travaux ?", projectName(kind), money(cost).c_str(), town ? " (après la part de la mairie)" : "", months), [kind, stand, amount]() {
             Project p; p.kind = kind; p.stand = stand; p.amount = amount;
             std::string err;
             if (g_career.startProject(p, err)) toast("Travaux lancés"); else toast(err);
@@ -192,7 +276,9 @@ static void screenStadium() {
     };
     if (g_stTab == 0) {
         if (g_stSel < 0 || g_stSel > 3) g_stSel = 0;
-        drawStadiumPlan(S, 12, y, 200, 150);
+        static bool isoView = true;
+        if (isoView) drawStadiumIso(S, 12, y, 200, 150, T.home.shirt); else drawStadiumPlan(S, 12, y, 200, 150);
+        if (button(14, y + 2, 64, 12, isoView ? "Vue dessus" : "Vue 3D", false)) isoView = !isoView;
         if (IN.up) g_stSel = (g_stSel + 3) % 4;
         if (IN.down) g_stSel = (g_stSel + 1) % 4;
         int x = 222;
@@ -409,6 +495,80 @@ static void screenStadium() {
             drawTextPx(what, 18, yy + 2, 10, C_TXT);
             drawTextPx(fmt("%d mois restant%s", p.monthsLeft, p.monthsLeft > 1 ? "s" : ""), VW - 260, yy + 2, 10, C_HI);
             drawTextPx(money(p.cost), VW - 110, yy + 2, 10, C_DIM);
+        }
+        drawFooter("LB/RB : onglet   Retour");
+    } else if (g_stTab == 5) {
+        // ---- pelouse : jauge d'état, entretien, remplacement
+        static const char* KIND[] = { "naturelle", "hybride", "synthétique" };
+        drawSection(12, y, VW - 24, "ÉTAT DE LA PELOUSE"); y += 16;
+        int q = S.turf;
+        int gw = VW - 48;
+        for (int k = 0; k < gw; k++) {
+            float f = (float)k / gw;
+            Color c = f < 0.1f ? Color{ 120, 70, 30, 255 } : f < 0.25f ? Color{ 200, 90, 40, 255 } : f < 0.45f ? Color{ 220, 180, 50, 255 } : f < 0.65f ? Color{ 170, 200, 60, 255 } : Color{ 60, 190, 80, 255 };
+            DrawRectangle(24 + k, y, 1, 14, k < gw * q / 100 ? c : Color{ c.r, c.g, c.b, 50 });
+        }
+        DrawRectangleLines(23, y - 1, gw + 2, 16, C_TXT);
+        drawTextPx("champ de patates", 26, y + 17, 10, C_DIM);
+        drawTextPx("parfaite", 24 + gw - textWidth("parfaite", 10), y + 17, 10, C_DIM);
+        y += 32;
+        drawTextPx(fmt("État : %s (%d %%)   -   Pelouse %s", turfStateName(q), q, KIND[std::min(2, (int)S.pitch)]), 24, y, 10, q >= 65 ? C_GOOD : q >= 25 ? C_HI : C_BAD); y += 16;
+        const char* EFF = q >= 75 ? "Aucun effet : le ballon roule parfaitement." : q >= 45 ? "Le ballon roule un peu moins vite, quelques faux rebonds." :
+                          q >= 20 ? "Ballon freiné, faux rebonds fréquents : jeu au sol difficile. Sous la pluie, le terrain devient boueux." :
+                                    "Champ de patates : le ballon saute sur les mottes, dévie sans cesse et s'arrête dans les trous !";
+        for (auto& l : wrapText(std::string("En match : ") + EFF, VW - 60)) { drawTextPx(l, 24, y, 10, C_TXT); y += 12; }
+        y += 4;
+        for (auto& l : wrapText("Usure : chaque match à domicile (plus en hiver et quand la réserve joue ici faute de stade annexe). Repousse chaque mois, surtout au printemps et en été. Hybride : s'use deux fois moins ; synthétique : presque pas, mais vieillit.", VW - 60)) { drawTextPx(l, 24, y, 10, C_DIM); y += 12; }
+        y += 8;
+        int64_t rc = g_career.turfRepairCost(), nc = g_career.turfReplaceCost();
+        if (button(24, y, 280, 16, "Regarnir la pelouse (+25 %) : " + money(rc), false, S.pitch != 2 && !S.repaired)) {
+            std::string err; if (g_career.repairTurf(err)) toast("Pelouse regarnie"); else toast(err);
+        }
+        if (button(316, y, 300, 16, std::string("Changer toute la pelouse (100 %) : ") + money(nc))) {
+            askConfirm(fmt("Poser une pelouse %s neuve pour %s ?", KIND[std::min(2, (int)S.pitch)], money(nc).c_str()), []() { std::string err; if (g_career.replaceTurf(err)) toast("Nouvelle pelouse posée"); else toast(err); }, "Changer", "Annuler");
+        }
+        y += 22;
+        if (S.repaired) drawTextPx("Regarnissage déjà effectué ce mois-ci.", 24, y, 10, C_DIM);
+        y += 14;
+        drawTextPx("Type de pelouse (naturelle -> hybride -> synthétique) : onglet Équipements.", 24, y, 10, C_DIM);
+        drawFooter("LB/RB : onglet   Retour");
+    } else if (g_stTab == 6) {
+        // ---- foncier : stade loué ou acheté, demandes à la mairie, stades annexes
+        drawSection(12, y, VW - 24, "PROPRIÉTÉ DU STADE"); y += 16;
+        if (S.owner == 0) {
+            drawTextPx(fmt("Stade municipal loué à la mairie : loyer %s par an.", money(S.rentK).c_str()), 24, y, 10, C_TXT); y += 12;
+            drawTextPx("La mairie finance 40 % des tribunes, mais tout agrandissement doit être autorisé.", 24, y, 10, C_DIM); y += 14;
+            std::string ext = S.extPending ? fmt("Demande d'agrandissement à l'étude (réponse dans %d mois)", (int)S.extPending) :
+                              S.extQuota > 0 ? fmt("Agrandissement autorisé : encore %d places", S.extQuota) : std::string("Aucune autorisation d'agrandissement");
+            drawTextPx(ext, 24, y, 10, S.extQuota > 0 ? C_GOOD : C_HI); y += 14;
+            if (button(24, y, 250, 16, "Demander un agrandissement à la mairie", false, !S.extPending)) { std::string err; if (g_career.requestExtension(err)) toast("Demande déposée"); else toast(err); }
+            int64_t bp = g_career.stadiumBuyPrice();
+            if (button(286, y, 330, 16, "Acheter le stade à la mairie : " + money(bp))) {
+                askConfirm(fmt("Acheter le stade pour %s ? Plus de loyer ni d'autorisation, mais le gros entretien et les tribunes seront entièrement à la charge du club.", money(bp).c_str()),
+                           []() { std::string err; if (g_career.buyStadium(err)) toast("Le club est propriétaire de son stade"); else toast(err); }, "Acheter", "Annuler");
+            }
+            y += 24;
+        } else {
+            drawTextPx("Le club est propriétaire de son stade : aucun loyer, agrandissements libres.", 24, y, 10, C_GOOD); y += 12;
+            drawTextPx("Le gros entretien et la totalité des travaux de tribunes sont à la charge du club.", 24, y, 10, C_DIM); y += 24;
+        }
+        drawSection(12, y, VW - 24, "STADES ANNEXES ET COMPLEXE"); y += 16;
+        struct Ax { const char* name; int level, maxL; const char* desc; };
+        Ax ax[3] = { { "Stade de la réserve", S.annexReserve, 1, "La réserve ne joue plus sur la pelouse principale : beaucoup moins d'usure." },
+                     { "Stade des jeunes", S.annexYouth, 2, "Formation : les jeunes du centre sortent meilleurs (potentiel et niveau)." },
+                     { "Complexe d'entraînement", S.annexTraining, 3, "Progression des joueurs plus rapide ; la pelouse principale repousse mieux." } };
+        for (int k = 0; k < 3; k++) {
+            int yy = y + k * 32;
+            DrawRectangle(12, yy, VW - 24, 30, C_ITEM);
+            drawTextPx(ax[k].name, 18, yy + 3, 10, C_HI);
+            for (int l = 0; l < ax[k].maxL; l++) DrawRectangle(180 + l * 12, yy + 4, 10, 8, l < ax[k].level ? C_GOOD : Color{ 0, 0, 0, 120 });
+            drawTextPx(ax[k].desc, 18, yy + 16, 10, C_DIM);
+            bool maxed = ax[k].level >= ax[k].maxL;
+            if (button(VW - 190, yy + 7, 174, 16, maxed ? "Niveau maximum" : "Construire : " + money(g_career.annexCost(k)), false, !maxed) && !maxed) {
+                int kk = k;
+                askConfirm(fmt("Construire (%s) pour %s ? Entretien mensuel à prévoir.", ax[k].name, money(g_career.annexCost(k)).c_str()),
+                           [kk]() { std::string err; if (g_career.buildAnnex(kk, err)) toast("Construction terminée"); else toast(err); }, "Construire", "Annuler");
+            }
         }
         drawFooter("LB/RB : onglet   Retour");
     }

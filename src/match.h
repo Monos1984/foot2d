@@ -103,6 +103,7 @@ struct MatchSetup {
     int aggHome = 0, aggAway = 0; // buts du match aller (équipe à domicile de CE match / extérieur)
     bool neutral = false;
     int pitch = 0;
+    int turf = 100;              // état de la pelouse (100 parfaite ... 0 champ de patates)
     int difficulty = 1;          // 0 facile 1 normal 2 difficile
     std::string title;
     std::string stadium;
@@ -224,6 +225,7 @@ struct Match {
     int ctrlPlayer[NUM_INPUTS] = { -1, -1, -1, -1, -1, -1 };
     Controls ctl[NUM_INPUTS];
     float pitchFriction = 1.0f, pitchBounce = 0.5f;
+    float turfBad = 0;              // 0 pelouse correcte ... 1 champ de patates : faux rebonds, ballon freiné
     int possTeam = -1;
     float possTime[2] = { 0, 0 };
     int shots[2] = { 0, 0 };
