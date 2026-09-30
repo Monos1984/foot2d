@@ -778,13 +778,14 @@ void Match::armOffside(int kicker) {
     for (int j = t * 11; j < t * 11 + 11; j++) {
         if (j == kicker || !pl[j].onPitch) continue;
         float pr = progress(t, pl[j].pos);
-        if (pr > 0.5f && pr > b2 + 0.004f && pr > bp + 0.004f) offsideSet.push_back(j);
+        // hors-jeu : dans la moitié adverse, devant le ballon ET devant l'avant-dernier adversaire (même niveau = en jeu)
+        if (pr > 0.5f + 0.0025f && pr > b2 + 0.0025f && pr > bp + 0.0025f) offsideSet.push_back(j);
     }
 }
 
-void Match::checkOffsideTouch(int i) {
+void Match::checkOffsideTouch(int i, bool deliberate) {
     if (!offsideArmed) return;
-    if (pl[i].team != offsideTeam) { offsideArmed = false; return; }
+    if (pl[i].team != offsideTeam) { if (deliberate) offsideArmed = false; return; }
     bool off = std::find(offsideSet.begin(), offsideSet.end(), i) != offsideSet.end();
     offsideArmed = false;
     if (off && state == MS_PLAY) {
@@ -817,6 +818,21 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     // tir cadré ?
     V2 g = goalCenter(p.team);
     if ((g - ball.pos).len() < 35 && dir.dot((g - ball.pos).norm()) > 0.85f && speed > 16) shots[p.team]++;
+}
+
+// frappe en force près du but : comme un penalty manqué, le ballon peut s'envoler au-dessus de la barre
+float Match::shotLift(int i, V2 d, float speed, float pw, float vz) {
+    const MPlayer& p = pl[i];
+    V2 g = goalCenter(p.team);
+    float dist = (g - ball.pos).len();
+    if (pw < 0.72f || dist > 24.f || dist < 3.f || d.norm().dot((g - ball.pos).norm()) < 0.75f) return vz;
+    float skill = (p.shoot * 0.6f + p.compo * 0.4f) / 100.f;
+    float close = clampf((24.f - dist) / 14.f, 0.f, 1.f);                  // 1 à 10 m et moins
+    float risk = (pw - 0.72f) * 3.6f * (1.3f - skill) * close;               // frappe à pleine puissance d'un joueur moyen à 10 m : ~45 %
+    if (!R.chance(clampf(risk, 0.f, 0.6f))) return vz;
+    float h = GOAL_H + R.frange(0.15f, 1.6f) + (1.f - skill) * R.frange(0.f, 1.2f);   // hauteur à la ligne de but
+    float tt = dist / std::max(8.f, speed);
+    return std::max(vz, (h + 0.5f * GRAV * tt * tt) / tt);
 }
 
 int Match::bestPassTarget(int i, V2 dir, bool lob, float maxDist) const {
@@ -1128,8 +1144,7 @@ void Match::updateBall(float dt) {
                 b.vel = away * spd; b.vz = R.frange(1, 4);
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 p.cool = 0.5f;
-                offsideArmed = false;
-                playSfx(SFX_CROWD_OOH);
+                playSfx(SFX_CROWD_OOH);        // une parade du gardien ne remet pas en jeu un attaquant hors-jeu
             }
             return;
         }
@@ -1147,13 +1162,12 @@ void Match::updateBall(float dt) {
             }
         }
         if (rel > 17 && !p.gk) {
-            // ballon trop fort : déviation
-            checkOffsideTouch(best);
+            // ballon trop fort : déviation (non délibérée : un défenseur qui dévie ne remet pas les attaquants en jeu)
+            checkOffsideTouch(best, false);
             if (state != MS_PLAY) return;
             b.vel = b.vel * -0.25f + V2(R.frange(-3, 3), R.frange(-3, 3));
             b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
             p.cool = 0.3f;
-            offsideArmed = false;
             return;
         }
         takePossession(best);
@@ -1289,13 +1303,13 @@ void Match::goalScored(int t) {
     playSfx(SFX_GOAL);
     // célébration : le buteur court vers le poteau de corner ou vers le public, ses coéquipiers le rejoignent
     celebScorer = (sc >= 0 && pl[sc].team == t) ? sc : -1;
-    celebType = R.range(0, 2);
+    celebType = R.range(0, 6);     // 0 poteau de corner, 1 glissade à genoux, 2 vers le public, 3 l'avion, 4 salto, 5 la pile humaine, 6 la danse
     {
         V2 g = goalCenter(t);
         float gy = g.y == 0 ? 1.5f : PITCH_L - 1.5f;
         if (celebScorer >= 0) {
             V2 sp = pl[celebScorer].pos;
-            celebTarget = celebType == 2 ? V2(PITCH_W / 2 + R.frange(-8, 8), gy) : V2(sp.x < PITCH_W / 2 ? 2.f : PITCH_W - 2.f, sp.y + (g.y == 0 ? -1.f : 1.f) * std::min(12.f, std::fabs(sp.y - gy) * 0.5f));
+            celebTarget = celebType == 2 || celebType == 6 ? V2(PITCH_W / 2 + R.frange(-8, 8), gy) : V2(sp.x < PITCH_W / 2 ? 2.f : PITCH_W - 2.f, sp.y + (g.y == 0 ? -1.f : 1.f) * std::min(12.f, std::fabs(sp.y - gy) * 0.5f));
             pl[celebScorer].state = PS_CELEB; pl[celebScorer].st = 0;
         }
     }
@@ -1763,6 +1777,14 @@ void Match::updateSetPiece(float dt) {
     int defHuman = -1;
     for (int c = 0; c < NUM_INPUTS; c++) if (S.side[c] == ot) { defHuman = c; break; }
     bool penalty = sp == SP_PENALTY || sp == SP_SHOOTOUT;
+    // penalty contre un joueur humain : il choisit en secret le plongeon (gauche / centre / droite) ; rien n'est affiché
+    if (penalty && defHuman >= 0) {
+        if (spT < dt * 1.5f) penDive = 0;
+        V2 dd = ctl[defHuman].dir;
+        if (dd.x < -0.5f) penDive = -1;
+        else if (dd.x > 0.5f) penDive = 1;
+        else if (std::fabs(dd.y) > 0.5f) penDive = 0;
+    }
 
     auto doKick = [&](int kind) { // kind 0 court, 1 long
         V2 aim = spAim;
@@ -1832,7 +1854,7 @@ void Match::updateSetPiece(float dt) {
             penGk = gkDef;
             if (G.onPitch) {
                 float side;
-                if (defHuman >= 0) side = ctl[defHuman].dir.x;
+                if (defHuman >= 0) side = (float)penDive;
                 else { float r = R.f(); side = r < 0.4f ? -1.f : r < 0.8f ? 1.f : 0.f; }
                 if (std::fabs(side) > 0.2f) {
                     // plongeon au moment de la frappe : le gardien part sur un côté, un tir bien placé reste imparable
@@ -2072,7 +2094,7 @@ void Match::humanControlSnes(int i, const Controls& c, float dt) {
                     d = (corner - p.pos).norm();
                 }
                 d = rot(d, R.frange(-1, 1) * acc2 * 0.07f);
-                kickBall(i, d, 17 + pw * 15, 0.8f + pw * 4.2f, true);
+                kickBall(i, d, 17 + pw * 15, shotLift(i, d, 17 + pw * 15, pw, 0.8f + pw * 4.2f), true);
             }
         }
     } else {
@@ -2147,7 +2169,7 @@ void Match::humanControl(int i, const Controls& c, float dt) {
                     float pw = std::min(1.f, ch / 0.55f);
                     float acc2 = (100 - p.shoot) / 100.f;
                     V2 d = rot(c.dir.len2() > 0.01f ? c.dir.norm() : p.face, R.frange(-1, 1) * acc2 * 0.07f);
-                    kickBall(i, d, 17 + pw * 15, 0.8f + pw * 4.2f, true);
+                    kickBall(i, d, 17 + pw * 15, shotLift(i, d, 17 + pw * 15, pw, 0.8f + pw * 4.2f), true);
                 }
                 p.charge = 0;
             }
@@ -2241,7 +2263,7 @@ void Match::aiCarrier(int i, float dt) {
                 float tx = PITCH_W / 2 + side * R.frange(2.2f, 3.4f) + R.frange(-1, 1) * (acc * 3.5f + acc * acc * 5.f + dist * 0.05f);
                 V2 aim = (V2(tx, g.y) - p.pos).norm();
                 float pw = clampf(18 + p.shoot / 6.f + R.frange(-2, 4), 18, 33);        // puissance selon la qualité de frappe
-                kickBall(i, aim, pw, R.frange(0.3f, 2.0f) + dist * 0.025f, false);
+                kickBall(i, aim, pw, shotLift(i, aim, pw, (pw - 18.f) / 15.f, R.frange(0.3f, 2.0f) + dist * 0.025f), false);
                 return;
             }
         }
@@ -2724,11 +2746,95 @@ void Match::shootoutNext() {
     if (penTaken[t] > penTaken[1 - t]) t = 1 - t;
     else if (penTaken[t] == penTaken[1 - t]) t = (penTaken[0] + penTaken[1]) % 2 == 0 ? shootTeam : 1 - shootTeam;
     int n = penTaken[t];
-    auto& ord = shootOrder[t];
-    shootKicker = ord[n % ord.size()];
+    int E = std::max(1, (int)shootElig[t].size());
+    int pos = n % E;
+    if (pos == 0) shootDone[t].clear();                 // tous les tireurs sont passés : on repart de la liste de départ
+    if (pos < (int)shootList[t].size()) { shootoutKick(t, shootList[t][pos]); return; }
+    // du 6e au dernier tireur : choix au cas par cas parmi ceux qui n'ont pas encore tiré
+    if (humanSide(t)) { shootUI = 3; shootUITeam = t; shootSel = 0; shootUIT = 0; return; }
+    std::vector<int> rest = shootRemaining(t);
+    std::stable_sort(rest.begin(), rest.end(), [&](int a, int b) { if (pl[a].gk != pl[b].gk) return !pl[a].gk; return pl[a].shoot > pl[b].shoot; });
+    shootoutKick(t, rest.empty() ? shootElig[t][0] : rest[0]);
+}
+
+void Match::shootoutKick(int t, int kicker) {
+    shootKicker = kicker;
+    shootDone[t].push_back(kicker);
     attackDir[t] = shootGoal == 0 ? -1 : 1; attackDir[1 - t] = -attackDir[t];
     beginSetPiece(SP_SHOOTOUT, t, V2(PITCH_W / 2, shootGoal == 0 ? 11.f : PITCH_L - 11.f));
     state = MS_SETPIECE;
+}
+
+std::vector<int> Match::shootRemaining(int t) const {
+    std::vector<int> v;
+    for (int i : shootElig[t]) if (std::find(shootDone[t].begin(), shootDone[t].end(), i) == shootDone[t].end()) v.push_back(i);
+    return v;
+}
+
+// séance de tirs au but : tireurs autorisés (même nombre des deux côtés), liste des 5 premiers tireurs
+void Match::shootoutSetup() {
+    for (int t = 0; t < 2; t++) {
+        shootElig[t].clear(); shootList[t].clear(); shootDone[t].clear();
+        for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch && !pl[i].sentOff) shootElig[t].push_back(i);
+    }
+    for (int t = 0; t < 2; t++) {
+        shootExcl[t] = std::max(0, (int)shootElig[t].size() - (int)shootElig[1 - t].size());
+        if (shootExcl[t] > 0 && !humanSide(t)) {
+            // supériorité numérique : l'ordinateur écarte ses moins bons tireurs (jamais le gardien)
+            std::vector<int> v = shootElig[t];
+            std::stable_sort(v.begin(), v.end(), [&](int a, int b) { if (pl[a].gk != pl[b].gk) return pl[a].gk; return pl[a].shoot > pl[b].shoot; });
+            for (int k = 0; k < shootExcl[t]; k++) { int drop = v[v.size() - 1 - k]; shootElig[t].erase(std::find(shootElig[t].begin(), shootElig[t].end(), drop)); }
+            shootExcl[t] = 0;
+        }
+        if (!humanSide(t)) {
+            std::vector<int> v = shootElig[t];
+            std::stable_sort(v.begin(), v.end(), [&](int a, int b) { if (pl[a].gk != pl[b].gk) return !pl[a].gk; return pl[a].shoot > pl[b].shoot; });
+            for (int k = 0; k < 5 && k < (int)v.size(); k++) shootList[t].push_back(v[k]);
+        }
+    }
+    shootNextUI();
+}
+
+// ouvre l'écran de choix suivant pour une équipe humaine, sinon lance la séance
+void Match::shootNextUI() {
+    for (int t = 0; t < 2; t++) {
+        if (!humanSide(t)) continue;
+        if (shootExcl[t] > 0) { shootUI = 1; shootUITeam = t; shootSel = 0; shootUIT = 0; return; }
+        if ((int)shootList[t].size() < std::min(5, (int)shootElig[t].size())) { shootUI = 2; shootUITeam = t; shootSel = 0; shootUIT = 0; return; }
+    }
+    shootUI = 0; shootUITeam = -1;
+    shootoutNext();
+}
+
+std::vector<int> Match::shootChoices() const {
+    int t = shootUITeam;
+    std::vector<int> v;
+    if (t < 0) return v;
+    if (shootUI == 1) return shootElig[t];
+    if (shootUI == 2) { for (int i : shootElig[t]) if (std::find(shootList[t].begin(), shootList[t].end(), i) == shootList[t].end()) v.push_back(i); return v; }
+    return shootRemaining(t);
+}
+
+void Match::updateShootUI(float dt) {
+    shootUIT += dt;
+    std::vector<int> ch = shootChoices();
+    if (ch.empty()) { shootNextUI(); return; }
+    if (shootSel >= (int)ch.size()) shootSel = 0;
+    bool ok = tossNav(shootUITeam, shootSel, (int)ch.size(), dt);
+    if (!ok || shootUIT < 0.4f) return;
+    int t = shootUITeam, pick = ch[shootSel];
+    shootUIT = 0; shootSel = 0;
+    if (shootUI == 1) {
+        shootElig[t].erase(std::find(shootElig[t].begin(), shootElig[t].end(), pick));
+        shootExcl[t]--;
+        shootNextUI();
+    } else if (shootUI == 2) {
+        shootList[t].push_back(pick);
+        shootNextUI();
+    } else {
+        shootUI = 0; shootUITeam = -1;
+        shootoutKick(t, pick);
+    }
 }
 
 void Match::finishMatch() {
@@ -2778,6 +2884,7 @@ void Match::update(float dt) {
     updateReferee(dt);
     lastFoulT += dt;
     if (ceremony) { updateCeremony(dt); return; }
+    if (shootUI > 0) { if (msgT > 0) msgT -= dt; updateShootUI(dt); return; }
     // bagarre en cours (bousculade, bagarre, combat)
     if (updateFight(dt)) return;
     // provocation : juste après une faute subie, le joueur humain peut aller au contact (bouton tir / lob)
@@ -2872,15 +2979,26 @@ void Match::update(float dt) {
             V2 want;
             if (i == celebScorer) {
                 V2 d = celebTarget - p.pos;
-                if (d.len() > 0.6f) { want = d.norm() * 6.5f; p.face = d.norm(); p.state = PS_CELEB; }
-                else if (celebType == 1 && p.state != PS_SLIDE) { p.state = PS_SLIDE; p.st = 0; p.slideDir = p.face; p.vel = p.face * 4.f; }   // glissade à genoux
-                else if (p.state == PS_SLIDE) { want = p.vel * 0.9f; if (p.st > 0.8f) { p.state = PS_CELEB; p.st = 0; } }
+                bool arrived = d.len() <= 0.6f;
+                if (!arrived && p.state != PS_DOWN) {
+                    want = d.norm() * 6.5f; p.face = d.norm(); p.state = PS_CELEB;
+                    if (celebType == 3) want += d.norm().perp() * (std::sin(stateT * 5.f) * 3.5f);   // l'avion : course en zigzag, bras écartés
+                }
+                else if (celebType == 1 && p.state != PS_SLIDE && p.st < 10.f) { p.state = PS_SLIDE; p.st = 0; p.slideDir = p.face; p.vel = p.face * 4.f; }   // glissade à genoux
+                else if (p.state == PS_SLIDE) { want = p.vel * 0.9f; if (p.st > 0.8f) { p.state = PS_CELEB; p.st = 10.f; } }
+                else if (celebType == 4 && p.z <= 0.f && p.vz <= 0.f && p.st < 12.f) { p.vz = 5.2f; p.z = 0.01f; p.st = 12.f; }   // salto
+                else if (celebType == 5 && p.state != PS_DOWN) { p.state = PS_DOWN; }                                        // la pile humaine : le buteur se couche
+                else if (celebType == 6) { float a = stateT * 6.f; p.face = V2(std::cos(a), std::sin(a)); want = V2(std::cos(a * 0.5f), 0) * 1.2f; }   // la danse
+                if (p.z > 0.f || p.vz > 0.f) { p.vz -= 10.8f * dt; p.z += p.vz * dt; if (p.z <= 0.f) { p.z = 0.f; p.vz = 0.f; } float a = stateT * 14.f; p.face = V2(std::cos(a), std::sin(a)); }
                 p.st += dt;
             } else if (celebScorer >= 0 && p.team == pl[celebScorer].team && !p.gk) {
-                // les coéquipiers courent féliciter le buteur
-                V2 d = pl[celebScorer].pos + V2((i % 3 - 1) * 1.1f, (i % 2 ? 0.9f : -0.9f)) - p.pos;
-                if (d.len() > 1.0f && stateT < 4.2f) { want = d.norm() * std::min(6.f, d.len() * 2.f); p.face = d.norm(); if (p.state == PS_CELEB) p.state = PS_NORMAL; }
-                else if (p.state != PS_CELEB) { p.state = PS_CELEB; p.st = 0; }
+                // les coéquipiers courent féliciter le buteur (pile humaine : ils se jettent dessus)
+                bool pile = celebType == 5 && pl[celebScorer].state == PS_DOWN;
+                float spread = pile ? 0.45f : 1.f;
+                V2 d = pl[celebScorer].pos + V2((i % 3 - 1) * 1.1f * spread, (i % 2 ? 0.9f : -0.9f) * spread) - p.pos;
+                if (d.len() > (pile ? 0.5f : 1.0f) && stateT < 5.6f) { want = d.norm() * std::min(6.f, d.len() * 2.f); p.face = d.norm(); if (p.state == PS_CELEB) p.state = PS_NORMAL; }
+                else if (pile && p.state != PS_DOWN) { p.state = PS_DOWN; p.st = 0; }
+                else if (!pile && p.state != PS_CELEB) { p.state = PS_CELEB; p.st = 0; }
             } else if (p.team != (celebScorer >= 0 ? pl[celebScorer].team : -1) && !p.gk) {
                 // l'équipe qui encaisse regagne tête basse son camp
                 V2 home = fromTeamFrame(p.team, 0.35f, 0.5f);
@@ -2892,7 +3010,10 @@ void Match::update(float dt) {
             p.anim += p.vel.len() * dt;
         }
         updateBall(dt);
-        if (stateT > 5.0f) startReplay();
+        if (stateT > 6.5f) {       // célébration un peu plus longue
+            for (auto& q : pl) { if (q.state == PS_DOWN && q.onPitch && !q.injured) q.state = PS_CELEB; q.z = 0; q.vz = 0; }
+            startReplay();
+        }
         break;
     case MS_REPLAY:
         rpPos = (rpPos + 1) % REPLAY_N;
@@ -2972,15 +3093,9 @@ void Match::update(float dt) {
             if (nextSp >= 1 && nextSp <= 3) startPeriod(nextSp);
             else if (nextSp == 4) {
                 shootout = true;
-                for (int t = 0; t < 2; t++) {
-                    shootOrder[t].clear();
-                    for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch && !pl[i].gk) shootOrder[t].push_back(i);
-                    std::stable_sort(shootOrder[t].begin(), shootOrder[t].end(), [&](int a, int b) { return pl[a].shoot > pl[b].shoot; });
-                    for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch && pl[i].gk) shootOrder[t].push_back(i);
-                }
                 if (!tossDoneTAB) shootTeam = R.range(0, 1);
                 pens[0] = pens[1] = 0; penTaken[0] = penTaken[1] = 0;
-                shootoutNext();
+                shootoutSetup();
             } else finishMatch();
         }
         break;

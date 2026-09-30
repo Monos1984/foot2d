@@ -5,6 +5,7 @@
 #include "game.h"
 #include "match.h"
 #include "crashlog.h"
+#include "rumble.h"
 #include <memory>
 #include <functional>
 #include <map>
@@ -956,7 +957,13 @@ static void screenMatch(float dt) {
             g_acc += std::min(dt, 0.1f);
             while (g_acc >= step) { m.update(step); g_acc -= step; }
         }
-        for (int i = 0; i < m.sfxN; i++) audioPlay(m.sfxQueue[i]);
+        for (int i = 0; i < m.sfxN; i++) {
+            audioPlay(m.sfxQueue[i]);
+            // vibrations des manettes des joueurs humains : but, poteau ou barre
+            int sfx = m.sfxQueue[i];
+            if (g_settings.vibration && (sfx == SFX_GOAL || sfx == SFX_POST))
+                for (int p = 0; p < 4; p++) if (m.S.side[IN_PAD1 + p] >= 0 && IsGamepadAvailable(p)) rumbleStart(p, sfx == SFX_GOAL ? 0.85f : 0.55f, sfx == SFX_GOAL ? 0.7f : 0.25f);
+        }
         m.sfxN = 0;
         // hymnes nationaux
         if (m.anthemReq >= 0) { audioAnthem((unsigned)(m.anthemReq == 0 ? m.S.home : m.S.away) * 7919u + 17u); m.anthemReq = -1; }
@@ -2983,6 +2990,7 @@ static void screenOptions() {
         "Configurer le clavier et les manettes",
         std::string("Musique des menus : ") + (!g_settings.music ? "non" : g_settings.musicTrack == 0 ? "tous les thèmes" : audioTrackName(g_settings.musicTrack - 1)),
         fmt("Commentaires pendant les matchs : %s", g_settings.commentary ? "oui" : "non"),
+        fmt("Vibrations des manettes : %s", g_settings.vibration ? "oui" : "non"),
         "Aide des commandes",
         "Retour" };
     int s = menuRun(g_optLW, items, 50, 340);
@@ -2999,6 +3007,10 @@ static void screenOptions() {
         g_settings.save();
     }
     if (s == 8 || (g_optLW.cur == 8 && (IN.left || IN.right))) { g_settings.commentary = !g_settings.commentary; g_settings.save(); }
+    if (s == 9 || (g_optLW.cur == 9 && (IN.left || IN.right))) {
+        g_settings.vibration = !g_settings.vibration; g_settings.save();
+        if (g_settings.vibration) for (int p = 0; p < 4; p++) if (IsGamepadAvailable(p)) rumbleStart(p, 0.6f, 0.3f);   // essai
+    }
     int d = IN.left ? -1 : IN.right ? 1 : 0;
     int c = g_optLW.cur;
     if (s >= 0 && s < 6) d = 1;
@@ -3014,8 +3026,8 @@ static void screenOptions() {
         g_settings.save();
     }
     drawFooter("Gauche/Droite : modifier   Retour");
-    if (s == 9) { g_screen = SC_HELP; return; }
-    if (IN.back || s == 10) { g_settings.save(); g_screen = g_optBack; }
+    if (s == 10) { g_screen = SC_HELP; return; }
+    if (IN.back || s == 11) { g_settings.save(); g_screen = g_optBack; }
 }
 
 static void screenHelp() {
@@ -3035,7 +3047,7 @@ static void screenHelp() {
         "   Attention : un tacle par derrière = faute, carton jaune ou rouge, penalty dans la surface !",
         "GARDIEN : il plonge tout seul. Quand il a le ballon : bouton 1 = relance à la main, bouton 2 = dégagement",
         "COUPS DE PIED ARRÊTÉS : orientez la visée puis bouton 1 (court / tir) ou bouton 2 (long)",
-        "PENALTY : direction + appui long pour la puissance. En défense, orientez le plongeon du gardien.",
+        "PENALTY : direction + appui long pour la puissance. En défense : gauche / droite / haut-bas (centre) = plongeon secret.",
         "",
         "Échap / P / Start : pause (remplacements, radar, son...)      F11 : plein écran",
         "RÈGLES : hors-jeu, touches, corners, 6 mètres, fautes, cartons, penalties, prolongations,",
@@ -3305,6 +3317,7 @@ void appInit() {
 
 void appFrame(float dt) {
     inputPoll(IN, CTL);
+    rumbleUpdate(dt);
     {   // navigation des boutons à la manette
         static int lastScreen = -1;
         if ((int)g_screen != lastScreen) { g_btnFocus = -1; lastScreen = (int)g_screen; }
@@ -3467,7 +3480,7 @@ void appTestStart(const char* mode) {
             Match& M = *g_match; M.ceremony = false; M.startPeriod(0);
             M.state = MS_PLAY; M.clock = 20;
             if (m == "subtest") { M.substitute(0, 6, 0); M.state = MS_STOP; M.stateT = 0; M.nextSp = SP_THROWIN; M.nextSpTeam = 0; M.nextSpPos = V2(0.2f, 45.f); M.cam = V2(10, 50); }
-            if (m == "goaltest") { int f = 10; M.ball.pos = V2(PITCH_W / 2, 3); M.pl[f].pos = V2(PITCH_W / 2 + 3, 8); M.ball.lastTouch = f; M.ball.lastTeam = 0; M.attackDir[0] = -1; M.goalScored(0); }
+            if (m == "goaltest") { int f = 10; M.ball.pos = V2(PITCH_W / 2, 3); M.pl[f].pos = V2(PITCH_W / 2 + 3, 8); M.ball.lastTouch = f; M.ball.lastTeam = 0; M.attackDir[0] = -1; M.goalScored(0); if (getenv("FOOT_CELEB")) M.celebType = atoi(getenv("FOOT_CELEB")); }
             if (m == "cardtest") { M.pl[14].pos = M.pl[3].pos + V2(0.5f, 0); M.foul(14, 3, true); M.pendCardOff = 14; M.pendCardType = 1; }
         }
     } else if (m == "setup") {
@@ -3494,11 +3507,13 @@ void appTestStart(const char* mode) {
     } else if (m == "kits") {
         int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true; openKits();
-    } else if (m == "penonly") {
+    } else if (m == "penonly" || m == "penpick") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("ENG"), false, -1, -1);
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;
+        if (m == "penpick") g_setup.side[IN_KB1] = 0;     // équipe humaine : choix des tireurs
         g_setup.pensOnly = true; g_setup.decisive = true; g_setup.noET = true;
         launchMatch();
+        if (m == "penpick") { g_match->pl[15].onPitch = false; g_match->pl[15].sentOff = true; }   // l'adversaire a pris un rouge : il faut écarter un joueur
     } else if (m == "pick") {
         openPick(PM_CAREER);
     } else if (m == "fk" || m == "corner" || m == "pen" || m == "throw" || m == "rain" || m == "snow") {

@@ -29,6 +29,7 @@ struct Settings {
     bool music = true, commentary = true;
     int musicTrack = 0;          // 0 enchaînement des thèmes, 1..N thème fixe
     float deadzone = 0.35f;
+    bool vibration = true;       // vibrations des manettes (but, poteau, barre)
     Settings();
     void resetControls();
     void load();

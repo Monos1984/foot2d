@@ -118,7 +118,7 @@ static void buildPitch(int type, uint64_t key) {
     arc(0, 0, 1, 0, 1.5708f, false, 0, false); arc(PITCH_W, 0, 1, 1.5708f, 3.1416f, false, 0, false);
     arc(0, PITCH_L, 1, 4.7124f, 6.2832f, false, 0, false); arc(PITCH_W, PITCH_L, 1, 3.1416f, 4.7124f, false, 0, false);
     // panneaux publicitaires
-    static const char* ADS[] = { "FF 2D", "BALLON D'OR", "SUPER BUT", "CRAMPONS+", "GOAL FM", "STADE TV", "PIXEL COLA", "AMIGOAL" };
+    static const char* ADS[] = { "SSW", "BALLON D'OR", "SUPER BUT", "CRAMPONS+", "GOAL FM", "STADE TV", "PIXEL COLA", "AMIGOAL" };
     static const unsigned ADC[] = { 0xD62828, 0x1D3557, 0xF77F00, 0x2A9D8F, 0x6A4C93, 0xE9C46A, 0x264653, 0xE63946 };
     float bd = 4.0f; // distance du terrain
     int adi = 0;
@@ -529,6 +529,42 @@ static void drawMiniPitch(int x, int y, int w, int h, int arrow, Color kitc) {
     if (arrow == 2) { DrawRectangle(x + 1, y + h / 2, w - 2, h / 2 - 1, Color{ 255, 255, 255, 40 }); arrowDn(x + w / 2, y + h / 4, h / 2); }
     if (arrow == 3) { arrowUp(x + w / 2 - 8, y + h / 2 + 4, h / 3); arrowDn(x + w / 2 + 8, y + h / 2 - 4, h / 3); }
 }
+// séance de tirs au but : écarter des joueurs, liste des 5 tireurs, tireur suivant (6e à 11e)
+static void drawShootUI(const Match& m) {
+    if (m.shootUI <= 0 || m.shootUITeam < 0) return;
+    int t = m.shootUITeam;
+    std::vector<int> ch = m.shootChoices();
+    int pw = 250, rows = (int)ch.size(), ph = 30 + rows * 10 + 4, px = MW / 2 - pw / 2, py = std::max(14, MH / 2 - ph / 2 - 6);
+    DrawRectangle(px + 3, py + 3, pw, ph, Color{ 0, 0, 0, 120 });
+    DrawRectangle(px, py, pw, ph, Color{ 14, 22, 48, 240 });
+    DrawRectangleLines(px, py, pw, ph, Color{ 240, 200, 60, 255 });
+    DrawRectangle(px, py, pw, 13, hexc(m.kit[t].shirt));
+    std::string title = m.shootUI == 1 ? fmt("%s : ÉCARTER %d JOUEUR%s", m.team(t).shortName.c_str(), m.shootExcl[t], m.shootExcl[t] > 1 ? "S" : "")
+                      : m.shootUI == 2 ? fmt("%s : TIREUR N°%d (liste des 5)", m.team(t).shortName.c_str(), (int)m.shootList[t].size() + 1)
+                      : fmt("%s : TIREUR SUIVANT (n°%d)", m.team(t).shortName.c_str(), m.penTaken[t] + 1);
+    int tw = textWidth(title, 10);
+    DrawRectangle(px + pw / 2 - tw / 2 - 3, py + 1, tw + 6, 11, Color{ 0, 0, 0, 150 });
+    drawTextPx(title, px + pw / 2 - tw / 2, py + 1, 10, WHITE);
+    std::string sub = m.shootUI == 1 ? "Supériorité numérique : même nombre de tireurs" : m.shootUI == 2 ? "Ordre des 5 premiers tireurs" : "Joueurs qui n'ont pas encore tiré";
+    drawTextPx(sub, px + 6, py + 15, 10, Color{ 170, 185, 220, 255 });
+    for (int k = 0; k < rows; k++) {
+        int i = ch[k], y = py + 27 + k * 10;
+        bool on = k == m.shootSel;
+        if (on) DrawRectangle(px + 3, y, pw - 6, 10, Color{ 240, 200, 60, 255 });
+        Color c = on ? BLACK : WHITE;
+        drawTextPx(fitText(m.playerName(i) + (m.pl[i].gk ? " (G)" : ""), pw - 60, 10), px + 8, y, 10, c);
+        std::string r = fmt("tir %d", (int)m.pl[i].shoot);
+        drawTextPx(r, px + pw - 8 - textWidth(r, 10), y, 10, on ? BLACK : Color{ 170, 185, 220, 255 });
+    }
+    if (m.shootUI == 2 && !m.shootList[t].empty()) {
+        std::string l = "Liste :";
+        for (size_t k = 0; k < m.shootList[t].size(); k++) l += fmt(" %d.", (int)k + 1) + m.playerName(m.shootList[t][k]);
+        drawTextPx(fitText(l, MW - 8, 10), 4, std::min(MH - 22, py + ph + 3), 10, WHITE);
+    }
+    std::string h = "Haut/Bas : choisir    Tir : valider";
+    drawTextPx(h, MW / 2 - textWidth(h, 10) / 2, MH - 11, 10, WHITE);
+}
+
 static void drawTossUI(const Match& m) {
     if ((!m.ceremony && m.tossKind == 0) || m.tossUI <= 0) return;
     float t = (float)GetTime();
@@ -1186,6 +1222,7 @@ void renderMatch(const Match& m, bool radar) {
         }
     }
     if (!replay) drawTossUI(m);
+    if (!replay) drawShootUI(m);
     // bandeau de la cérémonie
     if (!replay && m.trophyActive) {
         const Team& WT = m.team(m.trophyTeam);

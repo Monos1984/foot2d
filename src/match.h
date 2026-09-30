@@ -161,11 +161,22 @@ struct Match {
     int penTaken[2] = { 0, 0 };
     int lastPenMiss = 0;
     float penMaxZ = 0;
+    int penDive = 0;                // plongeon choisi par le gardien humain : -1 gauche, 0 centre, 1 droite
     int penGk = -1;                 // gardien face à un penalty (allonge réduite)            // dernier tir au but : 0 marqué, 1 arrêté, 2 au-dessus, 3 à côté/poteau
     bool shootout = false;
     int shootTeam = 0;
     int shootKicker = -1;
-    std::vector<int> shootOrder[2];
+    std::vector<int> shootElig[2];  // tireurs autorisés (après avoir écarté des joueurs en cas de supériorité numérique)
+    std::vector<int> shootList[2];  // liste ordonnée des 5 premiers tireurs
+    std::vector<int> shootDone[2];  // tireurs déjà passés dans le tour en cours
+    int shootExcl[2] = { 0, 0 };    // joueurs restant à écarter
+    int shootUI = 0, shootUITeam = -1, shootSel = 0; float shootUIT = 0;   // choix : 1 écarter, 2 liste des 5, 3 tireur suivant
+    void shootoutSetup();
+    void shootNextUI();
+    void shootoutKick(int t, int kicker);
+    void updateShootUI(float dt);
+    std::vector<int> shootChoices() const;
+    std::vector<int> shootRemaining(int t) const;
     std::vector<int> penLog[2];     // 1 marqué, 0 raté
     int period = 0;                 // 0: 1re MT, 1: 2e MT, 2-3: prolongation
     float clock = 0;                // minutes de jeu
@@ -302,7 +313,8 @@ struct Match {
     void foul(int offender, int victim, bool fromBehind);
     void goalScored(int team);
     void endPeriod();
-    void checkOffsideTouch(int i);
+    void checkOffsideTouch(int i, bool deliberate = true);
+    float shotLift(int i, V2 d, float speed, float pw, float vz);
     void armOffside(int kicker);
     V2 goalCenter(int team) const;    // but ATTAQUÉ par l'équipe
     V2 ownGoal(int team) const;
