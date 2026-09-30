@@ -339,12 +339,15 @@ static void screenStadium() {
                         TT.sponsor.clear(); g_career.mgr.sponsorIncome = 0; g_career.mgr.sponsorYears = 0; toast("Contrat rompu"); });
                 y += 12;
             } else {
-                static const char* SPN[] = { "Boulangerie Martin", "Garage du Centre", "Pixel Cola", "Crédit Régional", "Transports Leroy", "Amigoal", "Assurances du Sud", "Supermarché Plus", "BTP Moreau", "Brasserie des Sports" };
+                static const char* SPN[] = { "Boulangerie Martin", "Garage du Centre", "Pixel Cola", "Crédit Régional", "Transports Leroy", "Amigoal", "Assurances du Sud", "Supermarché Plus", "BTP Moreau", "Brasserie des Sports",
+                                             "Broke Studio", "Alekmaul Studio", "SGDK", "PVSNESLIB", "OFFGAME", "Double Side Game", "Champagne Beurton et Fils", "Electric Dreams",
+                                             "Rétro Arcade", "Cartouche 16 bits", "Mutuelle du Sport", "Optique Vision+", "Pizzeria Da Luigi", "Radio Stade FM" };
+                const int NSPN = (int)(sizeof SPN / sizeof SPN[0]);
                 int cap = S.capacity();
                 int64_t base = std::max<int64_t>(2, (int64_t)(MM.incomeBase / 12 + cap / 200));
                 int64_t off = std::max<int64_t>(2, base * PCT[dur] / 100);
-                int k = (int)((hashStr(T.name) + g_career.year) % 10);
-                if (T.status == CS_PRO) k = 2 + (int)(hashStr(T.name) % 4);
+                int k = (int)((hashStr(T.name) + g_career.year) % NSPN);
+                if (T.status == CS_PRO) { static const int PRO[] = { 2, 3, 5, 10, 11, 14, 16, 17 }; k = PRO[(hashStr(T.name) + g_career.year) % 8]; }
                 drawTextPx(fmt("Offre : %s - ", SPN[k]) + money(off) + " par an", x, y, 10, C_TXT);
                 drawTextPx(fmt("Durée : %d saison%s  (total %s)", dur, dur > 1 ? "s" : "", money(off * dur).c_str()), x, y + 12, 10, C_DIM);
                 if (button(VW - 330, y - 3, 50, 16, "- an", false, dur > 1) && dur > 1) dur--;

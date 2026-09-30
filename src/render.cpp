@@ -118,8 +118,10 @@ static void buildPitch(int type, uint64_t key) {
     arc(0, 0, 1, 0, 1.5708f, false, 0, false); arc(PITCH_W, 0, 1, 1.5708f, 3.1416f, false, 0, false);
     arc(0, PITCH_L, 1, 4.7124f, 6.2832f, false, 0, false); arc(PITCH_W, PITCH_L, 1, 3.1416f, 4.7124f, false, 0, false);
     // panneaux publicitaires
-    static const char* ADS[] = { "SSW", "BALLON D'OR", "SUPER BUT", "CRAMPONS+", "GOAL FM", "STADE TV", "PIXEL COLA", "AMIGOAL" };
-    static const unsigned ADC[] = { 0xD62828, 0x1D3557, 0xF77F00, 0x2A9D8F, 0x6A4C93, 0xE9C46A, 0x264653, 0xE63946 };
+    static const char* ADS[] = { "SSW", "BROKE STUDIO", "SUPER BUT", "ALEKMAUL", "GOAL FM", "SGDK", "PIXEL COLA", "PVSNESLIB",
+                                 "OFFGAME", "DOUBLE SIDE", "BEURTON", "ELEC. DREAMS", "BALLON D'OR", "CRAMPONS+", "STADE TV", "AMIGOAL" };
+    static const unsigned ADC[] = { 0xD62828, 0x1D3557, 0xF77F00, 0x2A9D8F, 0x6A4C93, 0x3A7D44, 0x264653, 0xE63946,
+                                    0xB02020, 0x5A189A, 0x8C6D1F, 0x0077B6, 0x1D3557, 0x2A9D8F, 0xE9C46A, 0xE63946 };
     float bd = 4.0f; // distance du terrain
     int adi = 0;
     auto board = [&](float x1, float y1, float x2, float y2, bool horiz) {
@@ -150,9 +152,9 @@ static void buildPitch(int type, uint64_t key) {
             adi++;
             return;
         }
-        ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, hexc(ADC[adi % 8]));
+        ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, hexc(ADC[adi % 16]));
         ImageDrawRectangleLines(&img, Rectangle{ a.x, a.y, (float)w, (float)h }, 1, hexc(0x111111));
-        if (horiz) ImageDrawText(&img, ADS[adi % 8], (int)a.x + 3, (int)a.y, 10, WHITE);
+        if (horiz) ImageDrawText(&img, ADS[adi % 16], (int)a.x + 3, (int)a.y, 10, WHITE);
         adi++;
     };
     for (float x = -8; x < PITCH_W + 8; x += 14) { board(x, -bd - 2.0f, x + 13.8f, -bd, true); board(x, PITCH_L + bd, x + 13.8f, PITCH_L + bd + 2.0f, true); }
