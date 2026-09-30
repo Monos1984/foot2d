@@ -1690,6 +1690,29 @@ void Career::endSeason() {
         else msgs.push_back(std::string(mine ? "[Votre club] " : "") + "RELÉGATION : " + t.name + " descend en " + cut + ".");
         addReputation(kv.first, ta < kv.second ? 4 : -5);
     }
+    // corruption prouvée : rétrogradation administrative d'une division
+    if (kind == CK_CLUB && life.adminRelegate && userTeam >= 0) {
+        life.adminRelegate = 0;
+        int p, q, g;
+        int cur = tierOfTeam(userTeam, &p, &q, &g);
+        if (cur >= 0) {
+            Pyramid& P = pyramids[p];
+            int tq = -1;
+            for (int t2 = cur + 1; t2 < (int)P.tiers.size() && tq < 0; t2++) tq = P.poolIndex(t2, P.keyFor(t2, userTeam));
+            if (tq >= 0) {
+                Pool& A = P.pools[q];
+                A.clubs.erase(std::remove(A.clubs.begin(), A.clubs.end(), userTeam), A.clubs.end());
+                for (auto& gr : A.groups) gr.erase(std::remove(gr.begin(), gr.end(), userTeam), gr.end());
+                Pool& B = P.pools[tq];
+                B.clubs.push_back(userTeam);
+                if (B.groups.empty()) B.groups.push_back({});
+                int gi = 0; for (int k = 1; k < (int)B.groups.size(); k++) if (B.groups[k].size() < B.groups[gi].size()) gi = k;
+                B.groups[gi].push_back(userTeam);
+                msgs.push_back("[Votre club] AFFAIRE DE CORRUPTION : rétrogradation administrative en " + P.tiers[B.tier].name + ".");
+                addReputation(userTeam, -15);
+            }
+        }
+    }
     // dépôt de bilan : rétrogradation administrative (au moins deux divisions, jusqu'au Régional 1)
     if (kind == CK_CLUB && mgr.managerMode && mgr.bankrupt && userTeam >= 0) {
         mgr.bankrupt = 0;
@@ -2863,7 +2886,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 16;
+static const unsigned SAVE_VERSION = 17;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -2966,6 +2989,7 @@ bool Career::save(const char* path) const {
     saveV13(w);                   // version 13
     saveV14(w);                   // version 14
     saveV15(w);                   // version 15
+    saveV17(w);                   // version 17 : vie privée, corruption
     fclose(f);
     return true;
 }
@@ -2976,7 +3000,7 @@ bool Career::load(const char* path) {
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
-    if (magic != SAVE_MAGIC || ver < 16 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
+    if (magic != SAVE_MAGIC || ver < 17 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }
@@ -3068,6 +3092,7 @@ bool Career::load(const char* path) {
     if (ver >= 14) loadV14(r);
     nlLeague.clear(); nlYear = -1; opts = Opts(); newEuro = NewEuroSpots(); prevUeclWinner = -1; coachCat = 0; coachU21Podium.clear(); mgr.sponsorYears = mgr.namingYears = 0;
     if (ver >= 15) loadV15(r);
+    if (ver >= 17) loadV17(r);
     g_world.rebuildCountryClubs(pyramids);
     fclose(f);
     return r.ok;
@@ -3324,6 +3349,7 @@ void Career::resetV7() {
     euroOnly = false;
     intlFormat = 0; honourLog.clear(); honourVenue.clear(); uclFinalVenue.clear(); uefaFinalVenue.clear(); tdcVenue.clear(); intertoto = -1;
     managerName.clear(); managerNation = -1; managerSkin = 0; managerHair = 0; managerAge = 45; newsRead.clear(); retiring.clear(); mgr.boardRequests = 0;
+    life = PlayerLife();
 }
 
 // aperçu des qualifiés européens sans modifier la carrière (bilan de fin de saison)

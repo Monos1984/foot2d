@@ -250,6 +250,7 @@ static const char* DIPLOMAS[] = { "UEFA Pro", "UEFA A (DES)", "UEFA B (BEF)", "S
 static std::vector<ManagerDef> g_managers;
 static bool g_managersLoaded = false;
 static int g_managerSel = -1;         // manager choisi pour la prochaine carrière
+static int g_mgReturn = -1;           // écran à rouvrir après la création obligatoire d'un manager
 static void loadManagers() {
     if (g_managersLoaded) return;
     g_managersLoaded = true;
@@ -263,8 +264,8 @@ static void loadManagers() {
         while (true) { size_t b = l.find('|', a); p.push_back(l.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 1; }
         ManagerDef m; m.name = p[0];
         if (p.size() > 1) m.nation = p[1];
-        if (p.size() > 2) m.skin = atoi(p[2].c_str()) % 4;
-        if (p.size() > 3) m.hair = atoi(p[3].c_str()) % 5;
+        if (p.size() > 2) m.skin = atoi(p[2].c_str()) % NUM_SKINS;
+        if (p.size() > 3) m.hair = atoi(p[3].c_str()) % NUM_HAIRS;
         if (p.size() > 4) m.age = std::max(25, std::min(85, atoi(p[4].c_str())));
         if (p.size() > 8) { m.bday = std::max(1, std::min(31, atoi(p[5].c_str()))); m.bmonth = std::max(1, std::min(12, atoi(p[6].c_str()))); m.place = p[7]; m.diploma = atoi(p[8].c_str()) & 3; }
         if (p.size() > 9) m.gender = atoi(p[9].c_str()) ? 1 : 0;
@@ -298,7 +299,7 @@ static void screenManagers() {
         std::vector<std::string> rows = {
             "Nom : " + M.name + (g_mgTyping && g_mgField == 0 && ((int)(GetTime() * 2)) % 2 ? "_" : ""),
             "Nationalité : " + (ni >= 0 ? g_world.teams[ni].name : M.nation),
-            fmt("Teint : %d", M.skin + 1), fmt("Cheveux : %d", M.hair + 1), fmt("Âge : %d ans", M.age),
+            std::string("Couleur de peau : ") + SKIN_NAMES[M.skin % NUM_SKINS], std::string("Cheveux : ") + HAIR_NAMES[M.hair % NUM_HAIRS], fmt("Âge : %d ans", M.age),
             fmt("Jour de naissance : %d", M.bday), std::string("Mois de naissance : ") + MONTHS_FR2[std::max(1, std::min(12, M.bmonth))],
             "Lieu de naissance : " + (M.place.empty() && !(g_mgTyping && g_mgField == 7) ? std::string("(non renseigné)") : M.place) + (g_mgTyping && g_mgField == 7 && ((int)(GetTime() * 2)) % 2 ? "_" : ""),
             std::string("Diplôme d'entraîneur : ") + DIPLOMAS[M.diploma & 3],
@@ -307,8 +308,7 @@ static void screenManagers() {
             "Supprimer ce manager", "Terminé" };
         // portrait
         Kit suit; suit.shirt = 0x1B2A63; suit.shirt2 = 0x1B2A63; suit.shorts = 0x202020; suit.socks = 0x101010;
-        DrawRectangle(470, 50, 120, 130, Color{ 30, 50, 90, 255 });
-        drawPlayerSprite(530, 170, suit, M.skin, M.hair, 0, 0, PS_NORMAL, false, 0, 8);
+        drawPortrait(470, 50, 120, M.skin, M.hair, M.gender, suit, hashStr(M.name));
         if (ni >= 0) drawKitIcon(g_world.teams[ni].home, 476, 56, 2);
         if (g_mgTyping) {
             textEdit(g_mgField == 7 ? M.place : M.name, 40);
@@ -324,8 +324,8 @@ static void screenManagers() {
             case 1: { std::vector<int> nat; for (int i = 0; i < NUM_NATIONS; i++) nat.push_back(i);
                       int k = 0; for (int i = 0; i < (int)nat.size(); i++) if (nat[i] == ni) k = i;
                       k = (k + d + (int)nat.size()) % (int)nat.size(); M.nation = NATIONS[nat[k]].code; break; }
-            case 2: M.skin = (M.skin + d + 4) % 4; break;
-            case 3: M.hair = (M.hair + d + 5) % 5; break;
+            case 2: M.skin = (M.skin + d + NUM_SKINS) % NUM_SKINS; break;
+            case 3: M.hair = (M.hair + d + NUM_HAIRS) % NUM_HAIRS; break;
             case 4: M.age = std::max(25, std::min(85, M.age + d)); break;
             case 5: M.bday = (M.bday - 1 + d + 31) % 31 + 1; break;
             case 6: M.bmonth = (M.bmonth - 1 + d + 12) % 12 + 1; break;
@@ -354,7 +354,22 @@ static void screenManagers() {
     drawFooter("OK : modifier / créer   Le manager choisi est utilisé au lancement d'une carrière   Retour");
     if (s == n) { g_managers.push_back(ManagerDef()); g_managers.back().name = "Nouveau manager"; g_mgEdit = n; g_mgField = 0; g_mgTyping = true; g_textMode = true; g_mgLW = ListW(); while (GetCharPressed() > 0) {} saveManagers(); }
     else if (s >= 0) { g_mgEdit = s; g_mgLW = ListW(); }
-    if (IN.back) g_screen = SC_EDITMENU;
+    if (IN.back) { if (g_mgReturn >= 0) { g_screen = (Screen)g_mgReturn; g_mgReturn = -1; } else g_screen = SC_EDITMENU; }
+}
+
+// carrière (club ou sélection) : un entraîneur / manager est obligatoire
+static bool requireManager(Screen back) {
+    loadManagers();
+    if (g_managerSel >= 0 && g_managerSel < (int)g_managers.size()) return true;
+    if (!g_managers.empty()) { g_managerSel = 0; toast("Manager : " + g_managers[0].name + " (modifiable dans les options de carrière)"); return true; }
+    g_managers.push_back(ManagerDef()); g_managers.back().name = "Nouveau manager";
+    g_managerSel = (int)g_managers.size() - 1;
+    g_mgEdit = g_managerSel; g_mgField = 0; g_mgTyping = true; g_textMode = true; g_mgLW = ListW(); while (GetCharPressed() > 0) {}
+    saveManagers();
+    g_mgReturn = (int)back;
+    g_screen = SC_MANAGERS;
+    toast("Un entraîneur est obligatoire : créez votre manager");
+    return false;
 }
 
 // ---------------- à propos

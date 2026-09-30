@@ -187,7 +187,7 @@ void Match::init(const MatchSetup& setup) {
             p = MPlayer();
             p.team = t; p.slot = s; p.gk = (s == 0);
             p.squad = onField[t][s];
-            loadAttrs(p, T.squad[p.squad], mult, ids[t]);
+            loadAttrs(p, T.squad[p.squad], mult * S.bribeMult[t] * (p.squad == S.bribeSquad[t] ? 0.6f : 1.f), ids[t]);
         }
         mentality[t] = std::max(0, std::min(4, T.mentality));
         S.tac[t][0] = T.pressing; S.tac[t][1] = T.defLine; S.tac[t][2] = T.width; S.tac[t][3] = T.tempo; S.tac[t][4] = T.passStyle;
@@ -1778,11 +1778,13 @@ void Match::updateSetPiece(float dt) {
     ball.z = sp == SP_THROWIN ? 1.9f : 0;
     int human = -1;
     for (int c = 0; c < NUM_INPUTS; c++) if (S.side[c] == p.team) { human = c; break; }
+    if (S.lockSquad[p.team] >= 0 && p.squad != S.lockSquad[p.team]) human = -1;       // carrière de joueur : un coéquipier frappe
     // gardien adverse lors d'un penalty (humain : choisit la direction du plongeon)
     int ot = 1 - p.team;
     int gkDef = ot * 11;
     int defHuman = -1;
     for (int c = 0; c < NUM_INPUTS; c++) if (S.side[c] == ot) { defHuman = c; break; }
+    if (S.lockSquad[ot] >= 0 && pl[ot * 11].squad != S.lockSquad[ot]) defHuman = -1;
     bool penalty = sp == SP_PENALTY || sp == SP_SHOOTOUT;
     // penalty contre un joueur humain : il choisit en secret le plongeon (gauche / centre / droite) ; rien n'est affiché
     if (penalty && defHuman >= 0) {
@@ -1996,6 +1998,19 @@ void Match::assignHumans() {
         std::vector<int> ctrls;
         for (int c = 0; c < NUM_INPUTS; c++) if (S.side[c] == t) ctrls.push_back(c);
         if (ctrls.empty()) continue;
+        if (S.lockSquad[t] >= 0) {
+            // carrière de joueur : on ne contrôle que son propre joueur (spectateur s'il est sur le banc ou sorti)
+            int me = -1;
+            for (int j = t * 11; j < t * 11 + 11; j++) if (pl[j].onPitch && pl[j].squad == S.lockSquad[t]) me = j;
+            for (size_t k = 0; k < ctrls.size(); k++) {
+                int c = ctrls[k], cur = ctrlPlayer[c];
+                int want = k == 0 ? me : -1;
+                if (cur >= 0 && cur != want) { pl[cur].human = -1; pl[cur].charging = false; }
+                ctrlPlayer[c] = want;
+                if (want >= 0) pl[want].human = c;
+            }
+            continue;
+        }
         std::vector<int> taken;
         // propriétaire du ballon ?
         int owner = ball.owner >= 0 && pl[ball.owner].team == t ? ball.owner : -1;

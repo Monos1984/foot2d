@@ -16,8 +16,13 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE };
 static void openPlayer(int team, int idx, Screen back);
+static bool g_lifePick = false;            // choix du club pour une carrière de joueur
+static int g_lifeTab = 0;
+static void lifeStartCareer(int club);
+static void lifeCheckPromotion();
+static bool requireManager(Screen back);
 
 static Screen g_screen = SC_SPLASH;
 static MenuInput IN;
@@ -500,6 +505,7 @@ static void screenPick() {
         if (g_stack.size() > 1) g_stack.pop_back();
         else if (g_pickMode == PM_FRIENDLY_AWAY) { g_pickMode = PM_FRIENDLY_HOME; }
         else if (g_pickMode == PM_BROWSE) g_screen = SC_COMPS;
+        else if (g_pickMode == PM_CAREER && g_lifePick) g_screen = SC_LIFENEW;
         else if (g_pickMode == PM_INTL) { g_screen = g_euroModePick || g_coachModePick ? SC_MAIN : g_leagueModePick ? SC_LEAGUEMODE : SC_INTL; g_leagueModePick = false; g_euroModePick = false; g_coachModePick = false; }
         else if (g_pickMode == PM_CUSTOM) g_screen = SC_CUSTOM;
         else if (g_pickMode == PM_EDIT) g_screen = SC_EDITMENU;
@@ -518,7 +524,7 @@ static void screenPick() {
             if (it.team == g_friendlyHome) { toast("Choisissez une autre équipe"); break; }
             startSetup(g_friendlyHome, it.team, false, -1, -1);
             break;
-        case PM_CAREER: startCareerWith(it.team, SC_PICK); break;
+        case PM_CAREER: if (g_lifePick) lifeStartCareer(it.team); else startCareerWith(it.team, SC_PICK); break;
         case PM_INTL: {
             if (g_coachModePick) { g_intlSel = { it.team }; toast("Sélection choisie : " + g_world.teams[it.team].name); if (g_stack.size() > 1) g_stack.pop_back(); break; }
             auto f = std::find(g_intlSel.begin(), g_intlSel.end(), it.team);
@@ -571,6 +577,7 @@ static void screenPick() {
         if (g_leagueModePick) { startLeagueMode(); return; }
         if (g_coachModePick) {
             if (g_coachCatPick >= 2 && NATIONS[g_intlSel[0]].conf != UEFA) { toast("Catégorie U19 / U17 : réservée aux sélections européennes (Euro U19 / U17)"); return; }
+            if (!requireManager(SC_PICK)) return;
             g_coachModePick = false;
             applyChosenManager();
             g_career.coachCat = g_coachCatPick;
@@ -638,6 +645,29 @@ static void startSetup(int home, int away, bool career, int comp, int match) {
             if (ac) g_setup.side[devs[k++]] = 1;
         }
         g_setup.delegSubs = g_career.kind == CK_CLUB && g_career.mgr.delegSubs;
+        if (g_career.kind == CK_CLUB) {
+            const PlayerLife& L = g_career.life;
+            // carrière de joueur : on ne contrôle que son joueur, l'entraîneur choisit la composition
+            if (L.isPlayer) {
+                g_world.teams[g_career.userTeam].xi.clear();
+                int t = -1, idx = -1; Player* me = g_career.lifePlayer(&t);
+                if (me && (t == home || t == away)) for (int i = 0; i < (int)g_world.teams[t].squad.size(); i++) if (g_world.teams[t].squad[i].id == me->id) idx = i;
+                if (idx >= 0) g_setup.lockSquad[t == home ? 0 : 1] = idx;
+                else for (int d = 0; d < NUM_INPUTS; d++) g_setup.side[d] = -1;     // pas concerné : on regarde le match
+            }
+            // valise : l'adversaire est diminué
+            if (L.bribeComp == comp && L.bribeMatch == match && L.bribeTeam >= 0) {
+                int s = L.bribeTeam == home ? 0 : 1;
+                static const float MUL[3] = { 0.93f, 0.97f, 0.85f };
+                g_setup.bribeMult[s] = MUL[L.bribeKind % 3];
+                if (L.bribeKind == 1) {
+                    const Team& O = g_world.teams[L.bribeTeam];
+                    int best = -1, bo = -1;
+                    for (int i = 0; i < (int)O.squad.size(); i++) if (O.squad[i].pos != POS_GK && O.squad[i].overall() > bo) { bo = O.squad[i].overall(); best = i; }
+                    g_setup.bribeSquad[s] = best;
+                }
+            }
+        }
     } else {
         g_setup.title = "Match amical";
         g_setup.side[IsGamepadAvailable(0) ? IN_PAD1 : IN_KB1] = 0;
@@ -1618,6 +1648,7 @@ static void screenHub() {
         crashMark("carrière : avance du calendrier (saison %d)", g_career.year);
         g_pending = S.advance(false);
         g_needAdvance = false;
+        lifeCheckPromotion();
         g_career.mgrTick();
         if (collectDraws()) { g_screen = SC_DRAW; return; }
     }
@@ -1693,13 +1724,18 @@ static void screenHub() {
     struct HI { std::string label; int id; };
     std::vector<std::pair<std::string, std::vector<HI>>> secs;
     std::vector<HI> m1;
-    if (g_pending.comp >= 0) { m1.push_back({ "Jouer le match", 0 }); m1.push_back({ "Simuler le match", 1 }); m1.push_back({ "Programme de la journée", 22 }); }
+    bool lifeP = club && g_career.life.isPlayer;
+    if (g_pending.comp >= 0) {
+        m1.push_back({ "Jouer le match", 0 }); m1.push_back({ "Simuler le match", 1 }); m1.push_back({ "Programme de la journée", 22 });
+        if (club) m1.push_back({ "Valise à l'arbitre...", 41 });
+    }
     else if (S.finished) m1.push_back({ club ? "Bilan de fin de saison" : "Bilan du tournoi", 2 });
     if (!m1.empty()) secs.push_back({ "MATCH", m1 });
     if (club) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 }, { "Coefficients UEFA", 10 }, { "Arbitres", 19 } } });
     else if (euro) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 }, { "Coefficients UEFA", 10 } } });
     else secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 } } });
-    if (club) secs.push_back({ "CLUB", { { "Effectif, tactique et contrats", 5 }, { "Gestion du club", 20 }, { fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""), 14 } } });
+    if (lifeP) secs.push_back({ "MA CARRIÈRE", { { "Ma fiche", 42 }, { "Vie du joueur (argent, couple, paris)", 40 }, { "Effectif du club", 5 }, { fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""), 14 } } });
+    else if (club) secs.push_back({ "CLUB", { { "Effectif, tactique et contrats", 5 }, { "Gestion du club", 20 }, { "Vie privée du manager", 40 }, { fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""), 14 } } });
     else if (g_career.coach) secs.push_back({ "SÉLECTION", { { "Convocations", 30 }, { "Effectif et tactique", 5 }, { "Organisation et stades", 31 }, { "Bilan du sélectionneur", 32 }, { fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""), 14 } } });
     else secs.push_back({ "ÉQUIPE", { { "Effectif et tactique", 5 }, { "Fiche de l'équipe", 9 } } });
     secs.push_back({ "PARTIE", { { "Sauvegarder", 7 }, { "Options", 21 }, { "Menu principal", 8 } } });
@@ -1710,9 +1746,10 @@ static void screenHub() {
     if (IN.up) g_hubSel = (g_hubSel - 1 + n) % n;
     if (IN.down) g_hubSel = (g_hubSel + 1) % n;
     int act = -1, k = 0, my = y;
-    const int mw = 230, rh = 12;
+    const int mw = 230;
+    const int rh = std::max(10, std::min(12, (VH - 18 - y - (int)secs.size() * 13) / std::max(1, n)));
     for (auto& sc : secs) {
-        drawSection(8, my, mw, sc.first); my += 11;
+        drawSection(8, my, mw, sc.first); my += rh < 12 ? 10 : 11;
         for (auto& it : sc.second) {
             bool hover = IN.mouse.x >= 8 && IN.mouse.x < 8 + mw && IN.mouse.y >= my && IN.mouse.y < my + rh;
             if (hover && IN.mouseMoved) g_hubSel = k;
@@ -1838,6 +1875,9 @@ static void screenHub() {
     case 30: openCallup(SC_HUB); break;
     case 31: g_screen = SC_HOSTS; break;
     case 32: g_screen = SC_COACHLOG; break;
+    case 40: g_lifeTab = 0; g_screen = SC_LIFE; break;
+    case 41: g_screen = SC_BRIBE; break;
+    case 42: { int t = -1; int idx = -1; Player* me = g_career.lifePlayer(&t); if (me) { for (int i = 0; i < (int)g_world.teams[t].squad.size(); i++) if (g_world.teams[t].squad[i].id == me->id) idx = i; openPlayer(t, idx, SC_HUB); } break; }
     case 22: if (!openMatchday(g_pending.comp, g_pending.match, false)) toast("Un seul match pour ce tour"); break;
     case 21: g_optBack = SC_HUB; g_optLW = ListW(); g_screen = SC_OPTIONS; break;
     }
@@ -2976,6 +3016,7 @@ static void screenIntl() {
 #include "app_editors.inc"
 #include "app_players.inc"
 #include "app_coach.inc"
+#include "app_life.inc"
 
 // ------------------------------------------------------------------ options / aide
 static void screenOptions() {
@@ -3208,16 +3249,17 @@ static void screenMain(float dt) {
     drawPlayerSprite((int)px - 40, 138, k2, 3, 0, 2, fr + 1, PS_NORMAL, false, 0, 2);
     DrawEllipse((int)px + 12, 138, 4, 1.5f, Color{ 0, 0, 0, 80 });
     DrawCircle((int)px + 12, 135, 3, WHITE);
-    std::vector<std::string> items = { "Match amical", "Compétitions internationales", "Carrière club (saisons)", "Carrière de sélectionneur", "Championnat (1res divisions)", "Coupes d'Europe (C1 et C3)", "Compétition personnalisée",
+    std::vector<std::string> items = { "Match amical", "Compétitions internationales", "Carrière club (saisons)", "Carrière de joueur / joueuse", "Carrière de sélectionneur", "Championnat (1res divisions)", "Coupes d'Europe (C1 et C3)", "Compétition personnalisée",
                                        "Charger une partie", "Entraînement", "Fiches des clubs", "Éditeurs (clubs, sponsors, managers)", "Options", "À propos", "Soutenir le jeu (Tipeee)", "Quitter" };
     // familles de menus : couleur et description
-    static const int GRP[15] = { 0, 0, 1, 1, 1, 1, 0, 2, 0, 2, 2, 3, 3, 3, 3 };
+    static const int GRP[16] = { 0, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 3, 3, 3, 3 };
     static const Color GC[4] = { { 60, 190, 90, 255 }, { 240, 190, 50, 255 }, { 80, 150, 240, 255 }, { 150, 160, 180, 255 } };
     static const char* GN[4] = { "JOUER", "CARRIÈRES", "CLUBS ET DONNÉES", "SYSTÈME" };
-    static const char* DESC[15] = {
+    static const char* DESC[16] = {
         "Un match entre deux équipes au choix : clubs ou sélections, stade, météo, durée, prolongation, tirs au but.",
         "Coupe du monde, Euro, CAN, Copa América... et les compétitions de jeunes : Euro Espoirs, U19, U17, tournoi olympique.",
         "Prenez un club français, de la Ligue 1 au district, et menez-le saison après saison : gestion, mercato, stade.",
+        "Créez votre joueur ou joueuse, choisissez un club et vivez sa carrière : temps de jeu, salaire, vie privée, paris...",
         "Dirigez une sélection (A, Espoirs, U19 ou U17) : convocations, Ligue des nations, qualifications, phases finales.",
         "Les premières divisions : jusqu'à 4 clubs contrôlés, championnat, coupes nationales et coupes d'Europe.",
         "Ligue des champions et Coupe UEFA (formule 2003) ou C1, Ligue Europa et Ligue Conférence (nouvelle formule).",
@@ -3230,18 +3272,18 @@ static void screenMain(float dt) {
         "Crédits et informations sur le jeu.",
         "Soutenir le développement du jeu sur Tipeee : fr.tipeee.com/le-bazar-de-monos (ouvre le navigateur).",
         "Quitter Super Soccer World." };
-    int mx = 34, mw = 300, my = 136, rh = 13;
-    DrawRectangle(mx - 6, my - 6, mw + 12, rh * 15 + 12, Color{ 6, 12, 28, 190 });
-    DrawRectangleLines(mx - 6, my - 6, mw + 12, rh * 15 + 12, Color{ 240, 200, 60, 180 });
+    int mx = 34, mw = 300, my = 136, rh = 12;
+    DrawRectangle(mx - 6, my - 6, mw + 12, rh * 16 + 12, Color{ 6, 12, 28, 190 });
+    DrawRectangleLines(mx - 6, my - 6, mw + 12, rh * 16 + 12, Color{ 240, 200, 60, 180 });
     int s = listRun(g_mainLW, (int)items.size(), mx, my, mw, (int)items.size(), rh, [&](int i, int x, int y, bool sel) {
         Color gc = GC[GRP[i]];
-        DrawRectangle(x + 4, y + 3, 6, 7, sel ? Color{ 40, 30, 10, 255 } : gc);
+        DrawRectangle(x + 4, y + 2, 6, 7, sel ? Color{ 40, 30, 10, 255 } : gc);
         drawTextPx(items[i], x + 16, y + 1, 10, sel ? BLACK : C_TXT);
         if (i == 0 || GRP[i] != GRP[i - 1]) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 2, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ gc.r, gc.g, gc.b, 170 }); }
     });
     {   // panneau d'information sur l'entrée sélectionnée
-        int cur = std::max(0, std::min(14, g_mainLW.cur));
-        int px = mx + mw + 22, pw = VW - px - 20, py = my - 6, ph = rh * 15 + 12;
+        int cur = std::max(0, std::min(15, g_mainLW.cur));
+        int px = mx + mw + 22, pw = VW - px - 20, py = my - 6, ph = rh * 16 + 12;
         Color gc = GC[GRP[cur]];
         DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
         DrawRectangle(px, py, pw, 16, Color{ gc.r, gc.g, gc.b, 230 });
@@ -3260,6 +3302,8 @@ static void screenMain(float dt) {
     }
     drawFooter("Flèches / souris / manette   OK : valider   F9 : musique");
     { std::string v = std::string("v") + GAME_VERSION + fmt(" build %d", GAME_BUILD); drawTextPx(v, VW - 8 - textWidth(v, 10), VH - 14, 10, Color{ 200, 210, 240, 200 }); }
+    if (s == 3) { g_careerActive = false; openLifeNew(); return; }
+    if (s >= 4) s--;              // entrées suivantes décalées d'un cran
     if (s == 3) {
         g_careerActive = false;
         g_intlCandidates.clear();
@@ -3343,6 +3387,9 @@ void appFrame(float dt) {
     audioMusic(g_screen != SC_MATCH && g_screen != SC_HALFTIME && g_screen != SC_TVINTRO && g_screen != SC_SETUP && g_screen != SC_STUDIO);
     switch (g_screen) {
     case SC_SPLASH: screenSplash(dt); break;
+    case SC_LIFENEW: screenLifeNew(); break;
+    case SC_LIFE: screenLife(); break;
+    case SC_BRIBE: screenBribe(); break;
     case SC_MAIN: screenMain(dt); break;
     case SC_PICK: screenPick(); break;
     case SC_SETUP: screenSetup(); break;
@@ -3508,6 +3555,34 @@ void appTestStart(const char* mode) {
     } else if (m == "kits") {
         int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true; openKits();
+    } else if (m == "lifenew") {
+        openLifeNew();
+    } else if (m == "lifehub" || m == "life" || m == "life2" || m == "life3" || m == "lifesim" || m == "bribe" || m == "lifematch") {
+        int club = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Lavallois") club = i;
+        openLifeNew(); g_lifeNew.name = "Kylian Testeur"; g_lifeNew.age = m == "lifehub" ? 17 : 22;
+        lifeStartCareer(club);
+        if (m == "lifesim") {
+            Season& S = g_career.season;
+            for (int k = 0; k < 400; k++) {
+                auto pm = S.advance(false); if (pm.comp < 0) break;
+                g_career.mgrTick();
+                if (k == 5) { std::string e; g_career.bribe(pm.comp, pm.match, 2, e); g_career.life.cash += 500000; g_career.lifeBuy(0, 3, e); g_career.lifeDate(e); }
+                auto& C = S.comps[pm.comp]; simulateMatch(C.matches[pm.match], &C); S.recordResult(pm.comp, pm.match); g_career.mgrAfterMatch(pm.comp, pm.match); S.finishRoundOthers(pm.comp, pm.match); S.checkRound(pm.comp);
+                lifeCheckPromotion();
+            }
+            g_screen = SC_LIFE; g_lifeTab = 0;
+        }
+        if (m == "life") { g_screen = SC_LIFE; g_lifeTab = 0; }
+        if (m == "lifehub") { g_needAdvance = true; g_screen = SC_HUB; }
+        if (m == "life2") { g_screen = SC_LIFE; g_lifeTab = 3; }
+        if (m == "lifematch") {
+            g_pending = g_career.season.advance(false); g_needAdvance = false;
+            const MatchRes& mm = g_career.season.comps[g_pending.comp].matches[g_pending.match];
+            startSetup(mm.home, mm.away, true, g_pending.comp, g_pending.match); launchMatch();
+            g_match->ceremony = false; g_match->startPeriod(0); g_match->state = MS_PLAY;
+        }
+        if (m == "life3") { g_screen = SC_LIFE; g_lifeTab = 1; }
+        if (m == "bribe") { g_career.life.isPlayer = 0; g_needAdvance = true; screenHub(); g_screen = SC_BRIBE; }
     } else if (m == "penonly" || m == "penpick") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("ENG"), false, -1, -1);
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;

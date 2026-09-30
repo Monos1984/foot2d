@@ -104,6 +104,9 @@ struct MatchSetup {
     bool neutral = false;
     int pitch = 0;
     int turf = 100;              // état de la pelouse (100 parfaite ... 0 champ de patates)
+    float bribeMult[2] = { 1.f, 1.f };   // « valise » : équipe adverse diminuée
+    int bribeSquad[2] = { -1, -1 };      // joueur adverse acheté (index dans l'effectif)
+    int lockSquad[2] = { -1, -1 };       // carrière de joueur : le joueur humain ne contrôle que ce joueur (index dans l'effectif)
     int difficulty = 1;          // 0 facile 1 normal 2 difficile
     std::string title;
     std::string stadium;

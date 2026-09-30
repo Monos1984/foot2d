@@ -261,6 +261,7 @@ void Career::mgrTick() {
         mgr.lastMonth++;
         stadiumMonth(*this);
         trainingMonth();
+        lifeMonth();
         if (mgr.lastMonth == 5) { aiTransfers(40); genOffers(1 + g_rng.range(0, 2)); boardReview(); refreshFreeAgents(15); }     // mercato d'hiver
         if (mgr.lastMonth == 6) for (auto& p : g_world.teams[userTeam].squad) if (p.contract != 2 && contractYears(p) <= 1 && p.age >= 20)
             season.news.push_back(p.name + " entre dans sa dernière année de contrat : prolongez-le avant la fin de la saison ou il partira libre.");
@@ -300,6 +301,7 @@ static bool has(const std::string& a, const char* b) { return a.find(b) != std::
 
 void Career::mgrAfterMatch(int comp, int mi) {
     if (kind != CK_CLUB || userTeam < 0) return;
+    lifeAfterMatch(comp, mi);
     const Competition& C = season.comps[comp];
     const MatchRes& m = C.matches[mi];
     if (!m.played) return;

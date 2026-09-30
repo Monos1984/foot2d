@@ -60,7 +60,7 @@ static bool firstLegScore(const Competition* c, const MatchRes& m, int& aggHome,
 void simulateMatch(MatchRes& m, const Competition* c) {
     Rng& r = g_rng;
     double rh = teamStrength(m.home), ra = teamStrength(m.away);
-    double d = rh - ra + (m.neutral ? 0 : 4.0);
+    double d = rh - ra + (m.neutral ? 0 : 4.0) + lifeBribeDelta(m);
     // écart de niveau « tassé » : un gros écart donne une large victoire, rarement un score fleuve (les favoris gèrent)
     double dd = 30.0 * std::tanh(d / 30.0);
     double lh = 1.38 * std::exp(dd / 22.0), la = 1.13 * std::exp(-dd / 22.0);

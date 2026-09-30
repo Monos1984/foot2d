@@ -282,18 +282,20 @@ static const char* SPR_LYING[5] = { ".hh.........", "hss.SSS.....", ".sSSSSSPPkk
 // plongeon du gardien : corps à l'horizontale, bras tendus
 static const char* SPR_DIVE[5] = { ".....SSS....", "bkkPPSSSShss", "bkkPPSSSShss", "......SSS...", "............" };
 
-static unsigned SKIN[4] = { 0xF2C9A0, 0xD9A066, 0xA86B3C, 0x6B4226 };
-static unsigned HAIR[5] = { 0x1A1A1A, 0x5A3A1A, 0xE8C35A, 0xB5502A, 0x3B2A1A };
+static unsigned SKIN[NUM_SKINS] = { 0xF2C9A0, 0xD9A066, 0xA86B3C, 0x6B4226, 0xFFE0C8, 0x8A5A34 };
+static unsigned HAIR[NUM_HAIRS] = { 0x1A1A1A, 0x5A3A1A, 0xE8C35A, 0xB5502A, 0x3B2A1A, 0x9A9A9A, 0xEDEDED };
+const char* SKIN_NAMES[NUM_SKINS] = { "claire", "mate", "hâlée", "foncée", "très claire", "brune" };
+const char* HAIR_NAMES[NUM_HAIRS] = { "noirs", "châtains", "blonds", "roux", "bruns", "gris", "blancs" };
 
 static float colorBright(unsigned c) { return (((c >> 16) & 255) * 0.3f + ((c >> 8) & 255) * 0.59f + (c & 255) * 0.11f) / 255.f; }
 static int g_bootCol = 0;          // couleur des chaussures du joueur en cours de dessin
 static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair, bool gk, unsigned gkShirt) {
     auto dim = [](Color c, float f) { return Color{ (unsigned char)(c.r * f), (unsigned char)(c.g * f), (unsigned char)(c.b * f), 255 }; };
     switch (ch) {
-    case 'h': return hexc(HAIR[hair % 5]);
-    case 'H': return dim(hexc(HAIR[hair % 5]), 0.7f);
-    case 's': return hexc(SKIN[skin % 4]);
-    case 't': return dim(hexc(SKIN[skin % 4]), 0.82f);
+    case 'h': return hexc(HAIR[hair % NUM_HAIRS]);
+    case 'H': return dim(hexc(HAIR[hair % NUM_HAIRS]), 0.7f);
+    case 's': return hexc(SKIN[skin % NUM_SKINS]);
+    case 't': return dim(hexc(SKIN[skin % NUM_SKINS]), 0.82f);
     case 'e': return Color{ 25, 20, 20, 255 };
     case 'c': case 'n': case 'K': {
         if (gk) return ch == 'K' ? hexc(gkShirt) : dim(hexc(gkShirt), 0.75f);
@@ -1369,4 +1371,32 @@ void renderMatch(const Match& m, bool radar) {
     }
     rlDrawRenderBatchActive();
     rlPopMatrix();
+}
+
+// portrait (fiche joueur, manager, vie privée) : visage, cheveux (courts ou longs), maillot du club
+void drawPortrait(int x, int y, int size, int skin, int hair, int gender, const Kit& kit, unsigned seed) {
+    float u = size / 32.f;
+    auto R = [&](float a, float b, float w, float h, Color c) { DrawRectangle(x + (int)(a * u), y + (int)(b * u), std::max(1, (int)(w * u + 0.5f)), std::max(1, (int)(h * u + 0.5f)), c); };
+    Color sk = hexc(SKIN[skin % NUM_SKINS]), skd = Color{ (unsigned char)(sk.r * 0.82f), (unsigned char)(sk.g * 0.82f), (unsigned char)(sk.b * 0.82f), 255 };
+    Color hc = hexc(HAIR[hair % NUM_HAIRS]);
+    Color sh = hexc(kit.shirt), sh2 = hexc(kit.shirt2 != kit.shirt ? kit.shirt2 : (colorBright(kit.shirt) > 0.55f ? 0x202020 : 0xF2F2F2));
+    R(0, 0, 32, 32, Color{ 40, 56, 96, 255 });
+    DrawRectangleGradientV(x, y, size, size, Color{ 70, 100, 160, 255 }, Color{ 24, 34, 60, 255 });
+    if (gender) R(8, 7, 16, 19, hc);                                  // cheveux longs derrière le visage
+    R(4, 25, 24, 7, sh); R(13, 25, 6, 3, sh2);                        // épaules, col
+    R(13, 20, 6, 6, skd);                                             // cou
+    R(10, 8, 12, 14, sk);                                             // visage
+    R(9, 12, 1, 4, skd); R(22, 12, 1, 4, skd);                        // oreilles
+    unsigned v = seed * 2654435761u;
+    int style = (int)(v >> 7) % 3;
+    if (gender) { R(9, 5, 14, 4, hc); R(9, 8, 2, 10, hc); R(21, 8, 2, 10, hc); }
+    else if (style == 0) { R(10, 5, 12, 4, hc); }                     // courts
+    else if (style == 1) { R(9, 5, 14, 5, hc); R(9, 9, 1, 3, hc); R(22, 9, 1, 3, hc); }
+    else { R(11, 6, 10, 2, hc); }                                     // rasés
+    R(12, 13, 2, 2, Color{ 30, 24, 24, 255 }); R(18, 13, 2, 2, Color{ 30, 24, 24, 255 });   // yeux
+    R(12, 12, 2, 1, Color{ hc.r, hc.g, hc.b, 200 }); R(18, 12, 2, 1, Color{ hc.r, hc.g, hc.b, 200 });
+    R(15, 15, 2, 3, skd);                                             // nez
+    R(14, 19, 4, 1, gender ? Color{ 190, 70, 80, 255 } : Color{ 120, 60, 50, 255 });   // bouche
+    if (!gender && (v >> 12) % 4 == 0) R(11, 19, 10, 3, Color{ hc.r, hc.g, hc.b, 170 });   // barbe
+    DrawRectangleLines(x, y, size, size, Color{ 240, 200, 60, 200 });
 }

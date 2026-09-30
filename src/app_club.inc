@@ -69,6 +69,7 @@ static void screenCareerOpt() {
     }
     if (IN.back || s == 8) { g_screen = g_newBack; return; }
     if (s == 9) {
+        if (!requireManager(SC_CAREEROPT)) return;
         applyChosenManager();
         g_career.opts = O;
         g_career.newClubCareer(g_newTeam, 2026);

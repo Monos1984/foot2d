@@ -28,6 +28,7 @@ static void screenPlayer() {
     drawBackground("Fiche joueur");
     drawKitIcon(T.home, 12, 32, 2);
     drawTextPx(fmt("%d. ", p.num) + p.name, 34, 31, 20, C_HI);
+    drawPortrait(VW - 76, 30, 64, p.skin, p.hair, p.gender, T.home, (unsigned)p.id);
     drawTextPx(T.name + "  -  " + (p.pos == POS_GK ? "Gardien" : p.pos == POS_DF ? "Défenseur" : p.pos == POS_MF ? "Milieu" : "Attaquant"), 34, 52, 10, C_TXT);
     int d, m, y; std::string place;
     playerBirth(p, curYear(), d, m, y, place, T.culture, T.dept);
@@ -122,6 +123,8 @@ static void screenPlayerEdit() {
     std::vector<Row> rows = {
         { "Nom", g_pe.name, 0, nullptr, 0, 0 },
         { "Genre", g_pe.gender ? "Femme" : "Homme", 1, &g_pe.gender, 0, 1 },
+        { "Couleur de peau", SKIN_NAMES[g_pe.skin % NUM_SKINS], 1, &g_pe.skin, 0, NUM_SKINS - 1 },
+        { "Cheveux", HAIR_NAMES[g_pe.hair % NUM_HAIRS], 1, &g_pe.hair, 0, NUM_HAIRS - 1 },
         { "Poste", PN[posv & 3], 1, &g_pe.pos, 0, 3 },
         { "Numéro", fmt("%d", g_pe.num), 1, &g_pe.num, 1, 99 },
         { "Âge", fmt("%d", g_pe.age), 1, &g_pe.age, 15, 45 },
@@ -149,8 +152,8 @@ static void screenPlayerEdit() {
     int x = 12, w = 400, y = 44;
     for (int i = 0; i < n; i++) {
         bool sel = i == g_peRow;
-        if (IN.click && g_peTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 13) g_peRow = i;
-        DrawRectangle(x, y, w, 12, sel ? C_SEL : C_ITEM);
+        if (IN.click && g_peTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 12) g_peRow = i;
+        DrawRectangle(x, y, w, 11, sel ? C_SEL : C_ITEM);
         Color c = sel ? BLACK : C_TXT;
         if (rows[i].kind == 2) drawTextCentered(rows[i].label, x + w / 2, y + 1, 10, c, false);
         else {
@@ -159,11 +162,12 @@ static void screenPlayerEdit() {
             if (g_peTyping == i && fmod(GetTime(), 1.0) < 0.5) v += "_";
             drawTextPx(rows[i].kind == 0 ? fitText(v, w - 160, 10) : "< " + v + " >", x + 150, y + 1, 10, c);
         }
-        y += 13;
+        y += 12;
     }
     // aperçu
     Player pv = g_pe;
     drawTextPx(fmt("Note générale : %d", pv.overall()), 430, 50, 10, C_HI);
+    drawPortrait(VW - 84, 130, 72, pv.skin, pv.hair, pv.gender, T.home, (unsigned)pv.id);
     drawTextPx(fmt("Valeur : %s", money(pv.value()).c_str()), 430, 64, 10, C_TXT);
     if (g_careerActive) { drawTextPx("Modification enregistrée", 430, 84, 10, C_DIM); drawTextPx("dans la sauvegarde de la carrière.", 430, 96, 10, C_DIM); }
     else { drawTextPx("Modification enregistrée dans", 430, 84, 10, C_DIM); drawTextPx("joueurs_perso.txt (appliquée", 430, 96, 10, C_DIM); drawTextPx("à chaque nouvelle partie).", 430, 108, 10, C_DIM); }
@@ -180,7 +184,7 @@ static void screenPlayerEdit() {
     const Row& R = rows[g_peRow];
     if (R.kind == 1 && R.v && dd) *R.v = (uint8_t)std::max(R.lo, std::min(R.hi, (int)*R.v + dd));
     if (R.kind == 3 && dd) { int k = g_pe.nation + dd; if (k < -1) k = NUM_NATIONS - 1; if (k >= NUM_NATIONS) k = -1; g_pe.nation = (int16_t)k; }
-    if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 44 && IN.mouse.y < 44 + n * 13)) {
+    if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 44 && IN.mouse.y < 44 + n * 12)) {
         if (R.kind == 0) { g_peTyping = g_peRow; g_textMode = true; while (GetCharPressed() > 0) {} }
         else if (R.kind == 2) {
             if (g_peRow == n - 2) {

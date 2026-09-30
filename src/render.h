@@ -18,4 +18,8 @@ void drawTextCentered(const std::string& s, int cx, int y, int size, Color c, bo
 int textWidth(const std::string& s, int size);
 void drawKitIcon(const Kit& k, int x, int y, int scale);
 void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir, int frame, int state, bool gk, unsigned gkShirt, int scale = 1);
+const int NUM_SKINS = 6, NUM_HAIRS = 7;
+extern const char* SKIN_NAMES[NUM_SKINS];
+extern const char* HAIR_NAMES[NUM_HAIRS];
+void drawPortrait(int x, int y, int size, int skin, int hair, int gender, const Kit& kit, unsigned seed);
 std::string fitText(const std::string& s, int maxw, int size);

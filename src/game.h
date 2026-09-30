@@ -540,6 +540,34 @@ struct CustomCompDef {
     int groups = 4;
 };
 
+// vie privée du manager ou du joueur incarné (carrière de joueur / joueuse) ; « valise à l'arbitre »
+struct PlayerLife {
+    uint8_t isPlayer = 0;           // 1 : carrière de joueur / joueuse ; 0 : vie privée du manager
+    uint8_t house = 0, car = 0;     // logement 0 studio ... 4 villa ; voiture 0 aucune ... 4 supercar
+    uint8_t relation = 0;           // 0 célibataire, 1 en couple, 2 fiancé(e), 3 marié(e)
+    uint8_t love = 0;               // complicité du couple (0-100)
+    uint8_t morale = 65;            // moral (0-100) : influence les performances
+    uint8_t betPick = 0;            // pari : 0 victoire à domicile, 1 nul, 2 victoire à l'extérieur
+    uint8_t bribeKind = 0;          // 0 arbitre, 1 joueur adverse, 2 équipe adverse
+    uint8_t heat = 0;               // soupçons (0-100) : risque d'enquête
+    uint8_t adminRelegate = 0;      // rétrogradation administrative prononcée (fin de saison)
+    uint8_t suspendedM = 0;         // joueur : mois de suspension (corruption)
+    uint8_t partnerGender = 1;
+    int32_t pid = -1;               // identifiant du joueur incarné
+    int32_t salaryK = 0;            // salaire annuel (k€)
+    int64_t cash = 0;               // argent personnel (€)
+    int32_t betComp = -1, betMatch = -1, betStake = 0; float betOdds = 0;
+    int32_t betsWon = 0, betsLost = 0; int64_t betBalance = 0;
+    int32_t bribeComp = -1, bribeMatch = -1, bribeTeam = -1;
+    int32_t bribes = 0, bribesCaught = 0;
+    char partner[32] = { 0 };
+};
+const char* lifeHouseName(int k);
+const char* lifeCarName(int k);
+int64_t lifeHousePrice(int k);
+int64_t lifeCarPrice(int k);
+float lifeBribeDelta(const MatchRes& m);      // écart de niveau dû à une valise (simulation)
+
 struct Career {
     Season season;
     std::vector<Pyramid> pyramids;
@@ -612,6 +640,26 @@ struct Career {
     int prevUeclWinner = -1;
     void addNewEuroCups();
     void routeNewEuro();
+    // vie privée, carrière de joueur, corruption (build 5)
+    PlayerLife life;
+    void lifeStart(bool isPlayer, int pid);
+    int32_t lifeSalaryK() const;
+    Player* lifePlayer(int* team = nullptr);
+    void lifeMonth();
+    void lifeAfterMatch(int comp, int mi);
+    bool lifeBuy(int what, int level, std::string& err);     // what : 0 logement, 1 voiture
+    bool lifeGift(int kind, std::string& err);                // 0 fleurs, 1 restaurant, 2 bijou, 3 voyage
+    bool lifeDate(std::string& err);                          // sortir pour faire une rencontre
+    bool lifePropose(std::string& err);
+    bool lifeWedding(std::string& err);
+    bool lifeBreakUp(std::string& err);
+    bool lifeBet(int comp, int mi, int pick, int stake, std::string& err);
+    float lifeOdds(int comp, int mi, int pick) const;
+    void lifeResolveBets();
+    int64_t bribeCost(int comp, int mi, int kind) const;      // k€
+    bool bribe(int comp, int mi, int kind, std::string& err);
+    void saveV17(Writer& w) const;
+    void loadV17(Reader& r);
     void saveV15(Writer& w) const;
     void loadV15(Reader& r);
     // ---- archives des clubs (version 14)
