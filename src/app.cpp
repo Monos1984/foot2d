@@ -656,6 +656,7 @@ static void startSetup(int home, int away, bool career, int comp, int match) {
         Competition& C = S.comps[comp];
         MatchRes& m = C.matches[match];
         g_setup.decisive = m.decisive;
+        g_setup.goalAssist = C.format == FMT_UCL2000 || C.format == FMT_UEFA2000 || C.format == FMT_NEWEURO || C.kind == 43;   // arbitres de surface
         g_setup.neutral = m.neutral;
         g_setup.noET = m.noET;
         g_setup.awayGoals = C.awayGoals;
@@ -3744,6 +3745,8 @@ void appTestStart(const char* mode) {
         if (m == "duel") g_setup.side[IN_KB1] = 0;
         launchMatch();
         Match& M = *g_match;
+        if (m == "anthem" && getenv("FOOT_CER")) return;
+        if (m == "anthem" && getenv("FOOT_ASSIST")) { M.S.goalAssist = true; M.ceremony = false; M.startPeriod(0); M.state = MS_PLAY; return; }
         if (m == "anthem") { M.cerPhase = 10; M.cerT = 0; for (int k = 0; k < 22; k++) M.pl[k].pos = anthemSpot(k / 11, k % 11); return; }
         M.ceremony = false; M.startPeriod(0); M.state = MS_PLAY;
         if (m == "duel") { M.fightLevel = 2; M.startFight(5, 16); M.duelHp[1] = 55; }

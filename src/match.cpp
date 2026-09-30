@@ -254,6 +254,8 @@ void Match::init(const MatchSetup& setup) {
         cerPhase = -1;
         for (int t = 0; t < 2; t++) for (int s2 = 0; s2 < 11; s2++) { MPlayer& p = pl[t * 11 + s2]; p.pos = tunnelSpot(t, s2 + 1); p.face = V2(1, 0); }
         refPos = V2(-3.f, PITCH_L / 2);
+        ballStage = 1; pedestal = V2(1.4f, PITCH_L / 2 + 2.4f);
+        ball.pos = pedestal; ball.z = 0.95f;
     }
     msg = team(0).name + " - " + team(1).name; msg2 = S.stadium.empty() ? S.title : S.stadium; msgT = 3.0f;
     {
@@ -270,7 +272,7 @@ void Match::init(const MatchSetup& setup) {
     }
     if (S.pensOnly && !S.training) {
         // séance de tirs au but seule : pas de cérémonie ni de jeu, tirage au sort puis tirs
-        S.decisive = true; ceremony = false; cerPhase = 99;
+        S.decisive = true; ceremony = false; cerPhase = 99; ballStage = 0; ball.z = 0;
         for (int t = 0; t < 2; t++) for (int s2 = 0; s2 < 11; s2++) { V2 tg; formationTarget(t * 11 + s2, tg); pl[t * 11 + s2].pos = tg; pl[t * 11 + s2].vel = V2(); }
         period = 1; state = MS_BREAK; stateT = 0; nextSp = 4;
         msg = "SÉANCE DE TIRS AU BUT"; msg2 = team(0).shortName + " - " + team(1).shortName; msgT = 3;
@@ -348,6 +350,8 @@ void Match::updateCeremony(float dt) {
         cam = cam + (f - cam) * std::min(1.f, dt * (anth ? 3.f : 1.5f));
     }
     float t = cerT;
+    if (ballStage == 2) { ball.pos = refPos + V2(0.4f, 0.15f); ball.z = 0.5f; ball.vel = V2(); ball.owner = -1; }
+    else if (ballStage == 1) { ball.pos = pedestal; ball.z = 0.95f; ball.vel = V2(); ball.owner = -1; }
     auto walkTo = [&](MPlayer& p, V2 tg, float spd) {
         V2 d = tg - p.pos;
         p.vel = d.len() > 0.08f ? d.norm() * std::min(spd, d.len() * 4) : V2();
@@ -377,7 +381,7 @@ void Match::updateCeremony(float dt) {
         bool allIn = true;
         for (int k = 0; k < 22; k++) {
             int tt = k / 11, s2 = k % 11;
-            if (t < 0.6f + s2 * 0.45f) { allIn = false; continue; }
+            if (t < 2.6f + s2 * 0.45f) { allIn = false; continue; }
             V2 tg = S.cupPhoto ? photoSpot(k) : S.anthems ? anthemSpot(tt, s2) : lineSpot(tt, s2) + V2(tt ? 30.f : 0.f, 0);
             V2 mid(1.5f + s2 * 0.2f, PITCH_L / 2 + (tt ? 1.f : -1.f));
             MPlayer& p = pl[k];
@@ -385,8 +389,13 @@ void Match::updateCeremony(float dt) {
             if (!walkTo(p, out ? tg : mid, out ? 4.f : 3.2f)) allIn = false;
             p.state = PS_NORMAL;
         }
-        refPos = refPos + (V2(PITCH_W / 2 - 16, PITCH_L / 2) - refPos) * std::min(1.f, dt * 0.8f); refFace = V2(1, 0);
-        if (t > 0.5f && t < 0.6f) { msg = "ENTRÉE DES JOUEURS"; msg2 = team(0).name + " - " + team(1).name; msgT = 3.f; }
+        // l'arbitre sort le premier et prend le ballon du match sur son présentoir
+        if (ballStage == 1) {
+            V2 tg = pedestal - V2(0.6f, 0.2f), d = tg - refPos;
+            if (d.len() > 0.15f) { refPos = refPos + d.norm() * std::min(3.2f * dt, d.len()); refFace = d.norm(); }
+            else { ballStage = 2; say("L'arbitre récupère le ballon du match sur son présentoir.", 2.5f, true); }
+        } else { refPos = refPos + (V2(PITCH_W / 2 - 16, PITCH_L / 2) - refPos) * std::min(1.f, dt * 0.8f); refFace = V2(1, 0); }
+        if (t > 2.5f && t < 2.6f) { msg = "ENTRÉE DES JOUEURS"; msg2 = team(0).name + " - " + team(1).name; msgT = 3.f; }
         if (allIn || t > 16.f) { cerPhase = S.anthems ? 10 : S.cupPhoto ? 0 : 1; cerT = 0; }
         if (skip && t > 0.3f) toToss();
         break;
@@ -510,7 +519,7 @@ void Match::updateCeremony(float dt) {
     default: break;
     }
     if (cerPhase == 5 && cerT > 1.8f) {
-        ceremony = false; tossUI = 0;
+        ceremony = false; tossUI = 0; ballStage = 0; ball.z = 0;
         for (auto& p : pl) p.state = PS_NORMAL;
         startPeriod(0);
         const char* refName = S.referee >= 0 && S.referee < NUM_REFEREES ? REFEREES[S.referee].name : "";

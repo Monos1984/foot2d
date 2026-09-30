@@ -900,6 +900,13 @@ void renderMatch(const Match& m, bool radar) {
     V2 bpos; float bz;
     if (replay) { const BallSnap& b = m.rb[m.rpPos]; bpos = V2(b.x, b.y); bz = b.z; }
     else { bpos = m.ball.pos; bz = m.ball.z; }
+    if (!replay && m.ballStage == 1) {     // présentoir du ballon au bout du tunnel
+        int px = SX(m.pedestal.x), py = SY(m.pedestal.y);
+        DrawEllipse(px + 1, py, 4, 1.5f, Color{ 0, 0, 0, 80 });
+        DrawRectangle(px - 2, py - (int)(0.95f * PPM * HZ) + 2, 4, (int)(0.95f * PPM * HZ) - 1, Color{ 190, 190, 200, 255 });
+        DrawRectangle(px - 3, py - (int)(0.95f * PPM * HZ) + 1, 6, 2, Color{ 230, 200, 80, 255 });
+        DrawRectangle(px - 3, py - 1, 6, 2, Color{ 120, 120, 130, 255 });
+    }
     std::vector<DrawItem> items;
     bool tunnelHide = !replay && m.inTunnelPhase();
     for (int i = 0; i < 22; i++) {
@@ -914,6 +921,24 @@ void renderMatch(const Match& m, bool radar) {
     if (!replay && !m.S.training && !(tunnelHide && m.refPos.x < -1.4f)) {   // pas d'arbitre à l'entraînement
         items.push_back({ m.refPos.y, 2, 0 });
         DrawEllipse(SX(m.refPos.x) + 1, SY(m.refPos.y), 4, 1.6f, Color{ 0, 0, 0, 70 });
+    }
+    // arbitres assistants : un par touche (chacun sa moitié de terrain, à hauteur de l'avant-dernier défenseur),
+    // et, si la compétition le prévoit, un derrière chaque but
+    static const Match* asMatch = nullptr; static float asY[2] = { 0, 0 };
+    std::vector<V2> assist;
+    if (!m.S.training && !m.ceremony) {
+        if (asMatch != &m) { asMatch = &m; asY[0] = PITCH_L * 0.75f; asY[1] = PITCH_L * 0.25f; }
+        std::vector<float> ys;
+        for (int i = 0; i < 22; i++) if (m.pl[i].onPitch) ys.push_back(replay ? m.rp[m.rpPos * 22 + i].y : m.pl[i].pos.y);
+        std::sort(ys.begin(), ys.end());
+        float lo = ys.size() > 2 ? ys[1] : PITCH_L * 0.25f, hi = ys.size() > 2 ? ys[ys.size() - 2] : PITCH_L * 0.75f;
+        float t0 = std::max(PITCH_L / 2, std::max(hi, bpos.y > PITCH_L / 2 ? bpos.y : 0.f)), t1 = std::min(PITCH_L / 2, std::min(lo, bpos.y < PITCH_L / 2 ? bpos.y : PITCH_L));
+        t0 = std::min(t0, PITCH_L - 0.5f); t1 = std::max(t1, 0.5f);
+        float k = std::min(1.f, GetFrameTime() * 4.f);
+        asY[0] += (t0 - asY[0]) * k; asY[1] += (t1 - asY[1]) * k;
+        assist.push_back(V2(-1.1f, asY[0])); assist.push_back(V2(PITCH_W + 1.1f, asY[1]));
+        if (m.S.goalAssist) { assist.push_back(V2(PITCH_W / 2 + 6.5f, -0.9f)); assist.push_back(V2(PITCH_W / 2 - 6.5f, PITCH_L + 0.9f)); }
+        for (int a = 0; a < (int)assist.size(); a++) { items.push_back({ assist[a].y, 4, a }); DrawEllipse(SX(assist[a].x) + 1, SY(assist[a].y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
     }
     DrawEllipse(SX(bpos.x) + (int)(bz * 1.5f), SY(bpos.y) + 1, 2.2f, 1.2f, Color{ 0, 0, 0, 90 });
     std::sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.y < b.y; });
@@ -944,6 +969,22 @@ void renderMatch(const Match& m, bool radar) {
             static const int PX[4][2] = { { -1, -2 }, { 1, -2 }, { 1, 0 }, { -1, 0 } };
             DrawRectangle(x + PX[bf][0], y + PX[bf][1], 1, 1, Color{ 40, 40, 40, 255 });
             DrawRectangle(x + PX[(bf + 2) & 3][0], y + PX[(bf + 2) & 3][1], 1, 1, Color{ 90, 90, 90, 255 });
+            continue;
+        }
+        if (it.kind == 4) {
+            Kit rk; rk.shirt = 0x151515; rk.shirt2 = 0x151515; rk.shorts = 0x101010; rk.socks = 0x101010;
+            V2 a = assist[it.idx];
+            int ax = SX(a.x), ay = SY(a.y);
+            bool line = it.idx < 2;
+            int dir = line ? (it.idx == 0 ? 2 : 3) : (it.idx == 2 ? 0 : 1);
+            bool offs = line && m.msgT > 0 && m.msg == "HORS-JEU" && ((it.idx == 0) == (bpos.y > PITCH_L / 2));
+            drawPlayerSprite(ax, ay, rk, (it.idx * 3 + 1) % 4, (it.idx * 5 + 2) % 7, dir, 0, offs ? PS_CELEB : PS_NORMAL, false, 0, 1);
+            if (line) {     // drapeau (rouge et jaune), levé en cas de hors-jeu
+                int fx = ax + (it.idx == 0 ? 3 : -5), fy = ay - (offs ? 16 : 8);
+                DrawRectangle(fx + 1, fy, 1, offs ? 7 : 5, Color{ 220, 220, 220, 255 });
+                DrawRectangle(fx + (it.idx == 0 ? 2 : -2), fy, 3, 2, Color{ 230, 40, 40, 255 });
+                DrawRectangle(fx + (it.idx == 0 ? 2 : -2), fy + 2, 3, 1, Color{ 250, 220, 40, 255 });
+            }
             continue;
         }
         if (it.kind == 2) {

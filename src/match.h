@@ -99,6 +99,7 @@ struct MatchSetup {
     int side[NUM_INPUTS] = { 0, -1, -1, -1, -1, -1 }; // -1 aucun, 0 domicile, 1 extérieur
     float halfSeconds = 180;     // durée réelle d'une mi-temps
     bool decisive = false;       // il faut un vainqueur
+    bool goalAssist = false;     // arbitres assistants supplémentaires derrière les buts (compétitions qui les utilisent)
     bool hasFirstLeg = false;
     int aggHome = 0, aggAway = 0; // buts du match aller (équipe à domicile de CE match / extérieur)
     bool neutral = false;
@@ -210,6 +211,8 @@ struct Match {
     std::vector<int> offsideSet;
     // message
     std::string msg, msg2;
+    int ballStage = 0;            // cérémonie : 1 ballon sur son présentoir au bout du tunnel, 2 porté par l'arbitre
+    V2 pedestal;
     float msgT = 0;
     int cardShow = 0;               // 1 jaune 2 rouge
     // événements
