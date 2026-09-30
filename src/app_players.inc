@@ -127,7 +127,7 @@ static void screenPlayerEdit() {
         { "Cheveux", HAIR_NAMES[g_pe.hair % NUM_HAIRS], 1, &g_pe.hair, 0, NUM_HAIRS - 1 },
         { "Poste", PN[posv & 3], 1, &g_pe.pos, 0, 3 },
         { "Numéro", fmt("%d", g_pe.num), 1, &g_pe.num, 1, 99 },
-        { "Âge", fmt("%d", g_pe.age), 1, &g_pe.age, 15, 45 },
+        { "Âge", fmt("%d", g_pe.age), 1, &g_pe.age, 13, 45 },
         { "Jour de naissance", fmt("%d", g_pe.bday), 1, &g_pe.bday, 1, 31 },
         { "Mois de naissance", MONTHS_FR[std::max(1, std::min(12, (int)g_pe.bmonth))], 1, &g_pe.bmonth, 1, 12 },
         { "Lieu de naissance", g_pe.birthPlace, 0, nullptr, 0, 0 },
@@ -281,7 +281,7 @@ static void newPlayerFor(int team, int gender = -1) {
     if (gender < 0) gender = T.youth == 6 ? 1 : 0;          // section féminine : une joueuse par défaut
     if ((gender == 1) != (T.youth == 6)) { toast(gender ? "Une joueuse évolue dans une équipe féminine (sélection ou club féminin)" : "Équipe féminine : seules des joueuses peuvent y être créées"); return; }
     p.gender = (uint8_t)gender;
-    p.name = gender ? "Nouvelle joueuse" : "Nouveau joueur"; p.age = 20; p.nation = (int16_t)(T.nation >= 0 ? T.nation : -1);
+    p.name = gender ? "Nouvelle joueuse" : "Nouveau joueur"; p.age = T.youth == 3 ? 14 : T.youth == 2 ? 16 : T.youth == 1 ? 18 : 20; p.nation = (int16_t)(T.nation >= 0 ? T.nation : -1);
     T.squad.push_back(p);
     g_plTeam = team; g_plIdx = (int)T.squad.size() - 1; g_plBack = SC_EDITDB;
     openPlayerEditorFwd();

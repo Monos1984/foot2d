@@ -774,7 +774,7 @@ static void screenCoeff() {
         static std::vector<int> clubs; static int builtYear = -1; static size_t builtN = 0;
         if (builtYear != yr || builtN != g_world.teams.size()) {
             clubs.clear();
-            for (int t = 0; t < (int)g_world.teams.size(); t++) if (g_world.teams[t].kind == TK_CLUB && g_world.teams[t].coefTotal() > 0) clubs.push_back(t);
+            for (int t = 0; t < (int)g_world.teams.size(); t++) if (g_world.teams[t].kind == TK_CLUB && g_world.teams[t].parent < 0 && !g_world.teams[t].youth && g_world.teams[t].coefTotal() > 0) clubs.push_back(t);
             std::sort(clubs.begin(), clubs.end(), [](int a, int b) { return g_world.teams[a].coefTotal() > g_world.teams[b].coefTotal(); });
             if (clubs.size() > 200) clubs.resize(200);
             builtYear = yr; builtN = g_world.teams.size();

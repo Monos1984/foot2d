@@ -95,6 +95,9 @@ const Referee REFEREES[] = {
     { "Grégory Barre", 42, 50, 72, 60, 2 }, { "Samir Haddad", 64, 47, 61, 63, 2 }, { "Ludovic Pasquier", 88, 60, 38, 50, 2 },
     { "Franck Rigal", 55, 75, 50, 40, 1 }, { "Mickaël Joubert", 60, 66, 55, 45, 1 }, { "Didier Galland", 70, 70, 45, 42, 1 },
     { "Hugo Renard", 47, 52, 68, 55, 1 }, { "Pascal Vidal", 82, 64, 40, 44, 1 }, { "Loïc Morvan", 53, 58, 63, 52, 1 },
+    // arbitres femmes
+    { "Stéphanie Martel", 58, 45, 70, 82, 5, true }, { "Laura Delmas", 64, 48, 62, 78, 4, true }, { "Manon Rivière", 50, 52, 72, 70, 3, true },
+    { "Camille Arnaud", 70, 50, 55, 66, 3, true }, { "Élodie Faure", 46, 55, 74, 64, 2, true }, { "Sarah Benali", 60, 60, 60, 58, 1, true },
 };
 const int NUM_REFEREES = sizeof(REFEREES) / sizeof(REFEREES[0]);
 

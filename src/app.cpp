@@ -191,7 +191,7 @@ static int listRun(ListW& w, int n, int x, int y, int wd, int rows, int rowH, st
 static int menuRun(ListW& w, const std::vector<std::string>& items, int y, int wd = 300) {
     int x = VW / 2 - wd / 2;
     return listRun(w, (int)items.size(), x, y, wd, (int)items.size(), 20, [&](int i, int xx, int yy, bool sel) {
-        drawTextCentered(items[i], xx + wd / 2, yy + 5, 10, sel ? Color{ 20, 20, 40, 255 } : C_TXT, false);
+        drawTextCentered(fitText(items[i], wd - 12, 10), xx + wd / 2, yy + 5, 10, sel ? Color{ 20, 20, 40, 255 } : C_TXT, false);
     });
 }
 
@@ -1738,7 +1738,7 @@ static void screenHub() {
     }
     else if (S.finished) m1.push_back({ club ? "Bilan de fin de saison" : "Bilan du tournoi", 2 });
     if (!m1.empty()) secs.push_back({ "MATCH", m1 });
-    if (club) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Engagements de la saison (toutes les équipes)", 44 }, { "Palmarès", 6 }, { "Archives des compétitions", 43 }, { "Coefficients UEFA", 10 }, { "Arbitres", 19 } } });
+    if (club) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Engagements de la saison", 44 }, { "Palmarès", 6 }, { "Archives des compétitions", 43 }, { "Coefficients UEFA", 10 }, { "Arbitres", 19 } } });
     else if (euro) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 }, { "Coefficients UEFA", 10 } } });
     else secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 } } });
     if (lifeP) secs.push_back({ "MA CARRIÈRE", { { "Ma fiche", 42 }, { "Vie du joueur (argent, couple, paris)", 40 }, { "Effectif du club", 5 }, { fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""), 14 } } });
@@ -2048,11 +2048,73 @@ static void screenSeasonEnd() {
                 cupLine(P.tiers[0].name, P.pools[q0].comps[0], false);
             }
         } else {
-            int yy = y;
-            for (auto& n : S.news) {
-                for (auto& l : wrapText(n, VW - 40)) { if (yy > VH - 28) break; drawTextPx(l, 20, yy, 10, C_GOOD); yy += 11; }
-                if (yy > VH - 28) break;
+            // actualités de la saison regroupées par catégorie (comme « Tout le club »)
+            static const char* CATN[10] = { "VOTRE CLUB", "COMPÉTITIONS", "RÉSERVES", "U19", "U17", "U15", "EFFECTIF & STAFF", "PRESSE", "VIE PRIVÉE", "AILLEURS" };
+            static const int NCAT = 10;
+            auto has = [](const std::string& s, const char* k) { return s.find(k) != std::string::npos; };
+            std::vector<std::pair<int, std::string>> rows;   // (catégorie ou -1 = titre, texte)
+            std::vector<std::string> byCat[NCAT];
+            struct Agg { int v = 0, n = 0, d = 0; std::string last; };
+            std::vector<std::pair<std::string, Agg>> agg[NCAT];   // résultats des équipes réserves / jeunes, cumulés par compétition
+            for (auto& n0 : S.news) {
+                std::string n = n0; int c = 9;
+                int bt = -1;
+                if (n.rfind("[Réserve] ", 0) == 0) bt = 2; else if (n.rfind("[U19] ", 0) == 0) bt = 3; else if (n.rfind("[U17] ", 0) == 0) bt = 4; else if (n.rfind("[U15] ", 0) == 0) bt = 5;
+                if (bt >= 0) {
+                    n = n.substr(n.find("] ") + 2);
+                    size_t cp = n.find(" : "), rp = n.rfind(" (");
+                    if (cp != std::string::npos && rp != std::string::npos && rp > cp) {
+                        std::string comp = n.substr(0, cp), res = n.substr(rp + 2);
+                        Agg* A = nullptr;
+                        for (auto& e : agg[bt]) if (e.first == comp) A = &e.second;
+                        if (!A) { agg[bt].push_back({ comp, Agg() }); A = &agg[bt].back().second; }
+                        if (res.rfind("victoire", 0) == 0 || res.rfind("qualifié", 0) == 0) A->v++; else if (res.rfind("défaite", 0) == 0 || res.rfind("éliminé", 0) == 0) A->d++; else A->n++;
+                        A->last = n.substr(cp + 3, rp - cp - 3);
+                        continue;
+                    }
+                    byCat[bt].push_back(n); continue;
+                }
+                if (n.rfind("[Votre club] ", 0) == 0) { n = n.substr(13); c = has(n, "U19") ? 3 : has(n, "U17") ? 4 : has(n, "Gambardella") ? 3 : 0; }
+                else if (n.rfind("Presse : ", 0) == 0) { n = n.substr(9); c = 7; }
+                else if (n.rfind("Vie privée : ", 0) == 0) { n = n.substr(13); c = 8; }
+                else if (has(n, "U19") || has(n, "Gambardella")) c = 3;
+                else if (has(n, "U17")) c = 4;
+                else if (has(n, "U15")) c = 5;
+                else if (has(n, "retraite") || has(n, "raccroche") || has(n, "Reconversion") || has(n, "se reconvertit") || has(n, "quitte les") || has(n, "centre de formation")) c = 6;
+                else if (has(n, g_world.teams[u].name.c_str())) c = 0;
+                else if (has(n, "AFFAIRE") || has(n, "Sanction") || has(n, "président") || has(n, "ligue prononce") || has(n, "Statut du club") || has(n, "Droits TV") || has(n, "DNCG") || has(n, "Sponsor") || has(n, "Objectif")) c = 0;
+                else if (has(n, " : ") || has(n, "Coupe") || has(n, "Ligue") || has(n, "Trophée")) c = 1;
+                byCat[c].push_back(n);
             }
+            for (int c = 2; c <= 5; c++) {
+                std::vector<std::string> sum;
+                for (auto& e : agg[c]) sum.push_back(fmt("%s : %d match%s - %d V / %d N / %d D   (dernier : %s)", e.first.c_str(), e.second.v + e.second.n + e.second.d, e.second.v + e.second.n + e.second.d > 1 ? "s" : "", e.second.v, e.second.n, e.second.d, e.second.last.c_str()));
+                byCat[c].insert(byCat[c].begin(), sum.begin(), sum.end());
+            }
+            for (int c = 0; c < NCAT; c++) {
+                if (byCat[c].empty()) continue;
+                rows.push_back({ -1, fmt("%s (%d)", CATN[c], (int)byCat[c].size()) });
+                for (auto& n : byCat[c]) {
+                    auto ls = wrapText(n, VW - 60);
+                    for (size_t k = 0; k < ls.size(); k++) rows.push_back({ k == 0 ? c : c + 100, ls[k] });
+                }
+            }
+            static int seScroll = 0;
+            int vis = (VH - 40 - y) / 11, maxS = std::max(0, (int)rows.size() - vis);
+            if (IN.down || IN.wheel < 0) seScroll += IN.wheel < 0 ? 3 : 1;
+            if (IN.up || IN.wheel > 0) seScroll -= IN.wheel > 0 ? 3 : 1;
+            seScroll = std::max(0, std::min(maxS, seScroll));
+            int yy = y;
+            for (int i = seScroll; i < (int)rows.size() && yy <= VH - 40 - 11; i++) {
+                auto& r = rows[i];
+                if (r.first < 0) { if (i > seScroll) yy += 3; drawSection(14, yy, VW - 28, r.second); yy += 13; continue; }
+                int c = r.first % 100;
+                Color col = c == 0 ? C_GOOD : c == 1 ? C_HI : c == 8 || c == 9 ? C_DIM : C_TXT;
+                if (r.first < 100) drawTextPx("-", 22, yy, 10, C_DIM);
+                drawTextPx(r.second, 32, yy, 10, col); yy += 11;
+            }
+            if (rows.empty()) drawTextCentered("Aucun fait marquant cette saison.", VW / 2, y + 20, 10, C_DIM);
+            if (maxS > 0) drawTextPx(fmt("Haut/Bas : défiler (%d/%d)", seScroll + 1, maxS + 1), VW - 190, VH - 44, 10, C_DIM);
         }
         drawFooter("Tab : onglet   OK : saison suivante");
         bool nextBtn = button(VW - 170, VH - 32, 150, 14, "Saison suivante >>", false);
@@ -3021,8 +3083,8 @@ static void screenIntl() {
     std::string fmtTxt = type == IT_WORLDCUP ? (bigFmt ? "48 équipes, format USA 2026 (12 groupes, 16es)" : "32 équipes (8 groupes, 8es de finale)") :
                          type == IT_EURO ? (bigFmt ? "24 équipes (6 groupes + 4 meilleurs 3es, 8es)" : "16 équipes (4 groupes, quarts)") :
                          type == IT_CAN || type == IT_ASIA ? "24 équipes" : type == IT_OFC ? "8 équipes" :
-                         type == IT_OLYMPICS ? "16 équipes U23 (+3 joueurs de plus de 23 ans), 4 groupes, quarts, médailles" :
-                         type == IT_OLY_W ? "12 sélections féminines A, 3 groupes (+2 meilleures 3es), quarts, médailles" :
+                         type == IT_OLYMPICS ? "16 équipes U23 (+3 de plus de 23 ans), 4 groupes, quarts" :
+                         type == IT_OLY_W ? "12 sélections féminines, 3 groupes (+2 meilleures 3es), quarts" :
                          type == IT_EURO_W ? "16 sélections féminines, 4 groupes, quarts" :
                          type == IT_WC_W ? "32 sélections féminines, 8 groupes, 8es de finale" :
                          type == IT_EURO21 ? "16 équipes Espoirs (U21), 4 groupes, quarts" :
@@ -3034,7 +3096,7 @@ static void screenIntl() {
     items.push_back(fmt("Qualifications : %s", g_intlQual && type != IT_COPA && !womenT ? "OUI (toutes les éliminatoires)" : "NON (phase finale directe)"));
     items.push_back("Pays organisateur : " + hostTxt);
     items.push_back(">>> Choisir mes sélections <<<");
-    int s = menuRun(g_intlLW, items, 60, 440);
+    int s = menuRun(g_intlLW, items, 60, 600);
     drawFooter("Gauche/Droite : modifier   OK : valider   Retour");
     int d = IN.left ? -1 : IN.right ? 1 : 0;
     if (d) {
@@ -3571,7 +3633,7 @@ void appTestStart(const char* mode) {
         if (m == "duel") g_setup.side[IN_KB1] = 0;
         launchMatch();
         Match& M = *g_match;
-        if (m == "anthem") { M.cerPhase = 10; M.cerT = 0; for (int k = 0; k < 22; k++) M.pl[k].pos = V2(PITCH_W / 2 - 13 + (k % 11) * 2.4f, PITCH_L / 2 + (k / 11 ? 1.4f : -1.4f)); return; }
+        if (m == "anthem") { M.cerPhase = 10; M.cerT = 0; for (int k = 0; k < 22; k++) M.pl[k].pos = V2(PITCH_W / 2 - 13 + (k % 11) * 2.4f, PITCH_L / 2 + (k / 11 ? 2.6f : -2.6f)); return; }
         M.ceremony = false; M.startPeriod(0); M.state = MS_PLAY;
         if (m == "duel") { M.fightLevel = 2; M.startFight(5, 16); M.duelHp[1] = 55; }
         if (m == "lap") { M.startPeriod(1); M.clock = 90; M.finishMatch(); g_trophyChecked = true; M.startLap(0); }
@@ -3759,11 +3821,11 @@ void appTestStart(const char* mode) {
     else if (m == "managers") g_screen = SC_MANAGERS;
     else if (m == "leaguemode") g_screen = SC_LEAGUEMODE;
     else if (m == "intlopt") g_screen = SC_INTL;
-    else if (m == "studio" || m == "history" || m == "comparch" || m == "clubend" || m == "news" || m == "newslist" || m == "seasonart" || m == "seasonart2" || m == "cdlbracket" || m == "finance2") {
+    else if (m == "studio" || m == "history" || m == "comparch" || m == "clubend" || m == "seasonnews" || m == "news" || m == "newslist" || m == "seasonart" || m == "seasonart2" || m == "cdlbracket" || m == "finance2") {
         int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Paris Saint-Germain") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true;
         Season& S = g_career.season;
-        if (m == "comparch" || m == "clubend") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } if (m == "clubend") { g_screen = SC_SEASONEND; seTab = 3; return; } g_career.endSeason(); g_caSel = -1; g_screen = SC_COMPARCH; return; }
+        if (m == "comparch" || m == "clubend" || m == "seasonnews") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } if (m != "comparch") { g_screen = SC_SEASONEND; seTab = m == "clubend" ? 3 : 1; return; } g_career.endSeason(); g_caSel = -1; g_screen = SC_COMPARCH; return; }
         if (m == "history") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } g_career.endSeason(); g_histTab = 5; g_screen = SC_HISTORY; return; }
         if (m == "seasonart") { showSeasonArticle(); return; }
         if (m == "cdlbracket") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } openCompView(g_career.cdl, -1, -1); g_cvMode = 0; for (int k = 0; k < (int)S.comps[g_career.cdl].stages.size(); k++) if (S.comps[g_career.cdl].stages[k].ties.size() == 8) g_cvStage = k; return; }

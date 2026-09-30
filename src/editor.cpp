@@ -158,7 +158,7 @@ void applyPlayerEdits(Team& t) {
         Player& p = t.squad[r.slot];
         auto I = [&](int k) { return atoi(r.f[k].c_str()); };
         auto U = [&](int k) { return (uint8_t)std::max(0, std::min(99, I(k))); };
-        p.name = r.f[0]; p.pos = (uint8_t)std::max(0, std::min(3, I(1))); p.num = (uint8_t)std::max(1, std::min(99, I(2))); p.age = (uint8_t)std::max(15, std::min(45, I(3)));
+        p.name = r.f[0]; p.pos = (uint8_t)std::max(0, std::min(3, I(1))); p.num = (uint8_t)std::max(1, std::min(99, I(2))); p.age = (uint8_t)std::max(13, std::min(45, I(3)));
         p.speed = U(4); p.shoot = U(5); p.pass = U(6); p.tackle = U(7); p.keep = U(8); p.stamina = U(9);
         p.dribble = U(10); p.heading = U(11); p.positioning = U(12); p.composure = U(13);
         p.bday = (uint8_t)std::max(0, std::min(31, I(14))); p.bmonth = (uint8_t)std::max(0, std::min(12, I(15))); p.birthPlace = r.f[16];

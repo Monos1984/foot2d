@@ -1271,7 +1271,7 @@ void Career::onCompetitionDone(int comp) {
         int t2 = 64 - (int)n.entrants[2].size();
         n.koTargets = { std::max(t2, in0 / 2), t2, 32, 16, 8, 4, 2, 1 };
         n.koNames = { "7e tour", "8e tour", "32es de finale", "16es de finale", "8es de finale", "Quarts de finale", "Demi-finales", "Finale" };
-        n.koTimes = { std::max(15.0, season.now + 0.5), 17, 20, 23, 26, 30, 34, 39 };
+        n.koTimes = { std::max(15.0, season.now + 0.5), 17, 20, 23, 26, 30, 35, 41.3 };     // finale : après la dernière journée de L1 (40), avant la finale de la C1 (43)
         n.regionalDraw = true; n.regionalRounds = 2;
         int idx = addComp(season, std::move(n));
         season.comps[idx].cupRound(0, season.comps[idx].entrants[0]);
@@ -1598,6 +1598,7 @@ static void computeUefaPoints(Career& K) {
     for (int t = 0; t < (int)g_world.teams.size(); t++) {
         Team& T = g_world.teams[t];
         if (T.kind != TK_CLUB) continue;
+        if (T.parent >= 0 || T.youth) { for (float& c : T.coefs) c = 0; continue; }     // réserves et jeunes : pas de coefficient UEFA
         for (int i = 0; i < 4; i++) T.coefs[i] = T.coefs[i + 1];
         auto it = cp.find(t);
         T.coefs[4] = it != cp.end() ? it->second : 0;

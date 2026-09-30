@@ -434,13 +434,14 @@ static void screenStadium() {
             } else {
                 static const char* SPN[] = { "Boulangerie Martin", "Garage du Centre", "Pixel Cola", "Crédit Régional", "Transports Leroy", "Amigoal", "Assurances du Sud", "Supermarché Plus", "BTP Moreau", "Brasserie des Sports",
                                              "Broke Studio", "Alekmaul Studio", "SGDK", "PVSNESLIB", "OFFGAME", "Double Side Game", "Champagne Beurton et Fils", "Electric Dreams",
-                                             "Rétro Arcade", "Cartouche 16 bits", "Mutuelle du Sport", "Optique Vision+", "Pizzeria Da Luigi", "Radio Stade FM" };
+                                             "Rétro Arcade", "Cartouche 16 bits", "Mutuelle du Sport", "Optique Vision+", "Pizzeria Da Luigi", "Radio Stade FM",
+                                             "Gamopat", "Oniromancie", "Atari", "Sega", "Nintendo", "Sony", "Sigames", "EA", "Amstrad", "Commodore", "Oric", "Capcom" };
                 const int NSPN = (int)(sizeof SPN / sizeof SPN[0]);
                 int cap = S.capacity();
                 int64_t base = std::max<int64_t>(2, (int64_t)(MM.incomeBase / 12 + cap / 200));
                 int64_t off = std::max<int64_t>(2, base * PCT[dur] / 100);
                 int k = (int)((hashStr(T.name) + g_career.year) % NSPN);
-                if (T.status == CS_PRO) { static const int PRO[] = { 2, 3, 5, 10, 11, 14, 16, 17 }; k = PRO[(hashStr(T.name) + g_career.year) % 8]; }
+                if (T.status == CS_PRO) { static const int PRO[] = { 2, 3, 5, 10, 11, 14, 16, 17, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 }; k = PRO[(hashStr(T.name) + g_career.year) % 20]; }
                 drawTextPx(fmt("Offre : %s - ", SPN[k]) + money(off) + " par an", x, y, 10, C_TXT);
                 drawTextPx(fmt("Durée : %d saison%s  (total %s)", dur, dur > 1 ? "s" : "", money(off * dur).c_str()), x, y + 12, 10, C_DIM);
                 if (button(VW - 330, y - 3, 50, 16, "- an", false, dur > 1) && dur > 1) dur--;

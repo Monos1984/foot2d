@@ -37,6 +37,19 @@ static std::vector<SeasonLine> seasonEntries(int t) {
         if (info.empty()) continue;
         out.push_back({ C.name, info, C.kind == 1 ? C_HI : C_TXT });
     }
+    // coupes dont la phase nationale est créée en cours de saison : Coupe de France (L1 et L2), Gambardella (National U19)
+    auto has = [&](const char* pre) { for (auto& l : out) if (l.comp.rfind(pre, 0) == 0) return true; return false; };
+    const Team& T = g_world.teams[t];
+    bool fr = T.nation >= 0 && strcmp(NATIONS[T.nation].code, "FRA") == 0;
+    if (fr && T.parent < 0 && !T.youth && !has("Coupe de France") && g_career.cdfNational < 0) {
+        int lv = teamLevel(t);
+        if (lv == 0 || t == g_career.cdfHolderDirect) out.push_back({ "Coupe de France", "entrée : 32es de finale (janvier)", C_TXT });
+        else if (lv == 1) out.push_back({ "Coupe de France", "entrée : 7e tour (phase nationale)", C_TXT });
+    }
+    if (T.youth == 1 && !has("Coupe Gambardella") && g_career.gambNational < 0) {
+        int yp = g_career.u19Pyramid(), p, q, g;
+        if (yp >= 0 && g_career.tierOfTeam(t, &p, &q, &g) == 0 && p == yp) out.push_back({ "Coupe Gambardella", "entrée : 1er tour fédéral", C_TXT });
+    }
     std::stable_sort(out.begin(), out.end(), [](const SeasonLine& a, const SeasonLine& b) { return (a.info == "championnat") > (b.info == "championnat"); });
     return out;
 }
@@ -82,17 +95,25 @@ static void drawClubSeason(int y, bool results) {
     int club = g_career.userTeam;
     auto fam = clubFamily(club);
     int col = 0, x0 = 16, yy = y;
+    std::vector<std::pair<int, std::vector<SeasonLine>>> all;
+    int total = 0;
     for (int t : fam) {
         auto lines = results ? seasonResults(t) : seasonEntries(t);
         if (lines.empty() && t != club) continue;
+        total += 14 + 11 * (int)lines.size() + 4;
+        all.push_back({ t, lines });
+    }
+    bool wide = y + total <= VH - 20;          // tout tient sur une colonne : pleine largeur
+    int w = wide ? VW - 32 : VW / 2 - 22, infoW = wide ? 330 : 150;
+    for (auto& e : all) {
+        int t = e.first; auto& lines = e.second;
         int need = 14 + 11 * (int)lines.size() + 4;
-        if (yy + need > VH - 20 && col == 0) { col = 1; x0 = VW / 2 + 6; yy = y; }
-        int w = VW / 2 - 22;
+        if (!wide && yy + need > VH - 20 && col == 0) { col = 1; x0 = VW / 2 + 6; yy = y; }
         drawSection(x0, yy, w, sectionName(t, club) + "  -  " + fitText(g_career.teamLevelName(t), w - 140, 10)); yy += 13;
         for (auto& l : lines) {
             if (yy > VH - 20) break;
-            drawTextPx(fitText(l.comp, w - 160, 10), x0 + 4, yy, 10, C_DIM);
-            drawTextPx(fitText(l.info, 150, 10), x0 + w - 148, yy, 10, l.c);
+            drawTextPx(fitText(l.comp, w - infoW - 10, 10), x0 + 4, yy, 10, C_DIM);
+            drawTextPx(fitText(l.info, infoW, 10), x0 + w - infoW + 2, yy, 10, l.c);
             yy += 11;
         }
         yy += 4;

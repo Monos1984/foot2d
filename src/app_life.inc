@@ -42,13 +42,15 @@ static void lifeStartCareer(int club) {
     // les plus jeunes commencent en réserve (ou en U19), les autres dans l'équipe fanion
     int dest = club;
     if (g_lifeNew.age <= 19) {
-        int best = -1;
+        // U15 (-15 ans), U17 (15-16 ans), U19 (17-18 ans), sinon réserve ; à défaut la catégorie existante la plus proche
+        int a = g_lifeNew.age, want = a <= 14 ? 3 : a <= 16 ? 2 : a <= 18 ? 1 : 0;
+        int best = -1, bestD = 99;
         for (int i = 0; i < (int)g_world.teams.size(); i++) {
             const Team& t = g_world.teams[i];
-            if (t.parent != club) continue;
-            bool youth = t.name.find("U19") != std::string::npos || t.name.find("U17") != std::string::npos;
-            if (g_lifeNew.age <= 18 && youth && t.name.find("U19") != std::string::npos) { best = i; break; }
-            if (!youth && best < 0) best = i;
+            if (t.parent != club || t.youth > 3) continue;
+            int d = std::abs(t.youth - want) * 2 + (t.youth < want ? 1 : 0);
+            if (t.youth == 0 && want > 0) d = 2 * want + 1;
+            if (d < bestD) { bestD = d; best = i; }
         }
         if (best >= 0) dest = best;
     }
@@ -107,7 +109,7 @@ static void screenLifeNew() {
         ">>> CHOISIR MON CLUB <<<", "Annuler" };
     Kit k; k.shirt = 0x1B2A63; k.shirt2 = 0xFFFFFF;
     drawPortrait(VW - 140, 50, 120, P.skin, P.hair, P.gender, k, hashStr(P.name));
-    drawTextCentered(P.age <= 19 ? "Débute en réserve ou en U19, puis monte en équipe première quand son niveau le permet." : "Débute directement dans l'équipe première.", VW / 2, 250, 10, C_DIM);
+    drawTextCentered(P.age <= 14 ? "Débute en U15, puis gravit les catégories (U17, U19, réserve) jusqu'à l'équipe première." : P.age <= 16 ? "Débute en U17, puis U19 et réserve avant l'équipe première." : P.age <= 19 ? "Débute en réserve ou en U19, puis monte en équipe première quand son niveau le permet." : "Débute directement dans l'équipe première.", VW / 2, 250, 10, C_DIM);
     if (P.gender) drawTextCentered("(les championnats et clubs féminins arrivent avec la section 11 de la mission)", VW / 2, 264, 10, C_DIM);
     if (g_lifeTyping) {
         textEdit(P.name, 30);
@@ -122,7 +124,7 @@ static void screenLifeNew() {
     if (d) switch (g_lifeLW.cur) {
     case 1: P.gender = !P.gender; if (P.name == "Nouveau joueur" || P.name == "Nouvelle joueuse") P.name = P.gender ? "Nouvelle joueuse" : "Nouveau joueur"; break;
     case 2: P.pos = (uint8_t)((P.pos + d + 4) % 4); break;
-    case 3: P.age = (uint8_t)std::max(16, std::min(32, P.age + d)); break;
+    case 3: P.age = (uint8_t)std::max(13, std::min(32, P.age + d)); break;
     case 4: P.skin = (uint8_t)((P.skin + d + NUM_SKINS) % NUM_SKINS); break;
     case 5: P.hair = (uint8_t)((P.hair + d + NUM_HAIRS) % NUM_HAIRS); break;
     case 6: g_lifeNat = (g_lifeNat + d + NUM_NATIONS) % NUM_NATIONS; break;

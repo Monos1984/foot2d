@@ -477,7 +477,7 @@ struct StaffMember { char name[32] = { 0 }; int32_t role = 0, level = 1, wage = 
 struct StaffMemberV13 { char name[32]; int32_t role, level, wage, age; };
 
 // arbitres
-struct Referee { const char* name; int severity; int homeBias; int advantage; int consistency; int level; };
+struct Referee { const char* name; int severity; int homeBias; int advantage; int consistency; int level; bool female = false; };
 extern const Referee REFEREES[];
 extern const int NUM_REFEREES;
 int refereeFor(int comp, int match);

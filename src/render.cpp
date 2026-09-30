@@ -136,9 +136,12 @@ static void buildPitch(int type, uint64_t key) {
     arc(0, PITCH_L, 1, 4.7124f, 6.2832f, false, 0, false); arc(PITCH_W, PITCH_L, 1, 3.1416f, 4.7124f, false, 0, false);
     // panneaux publicitaires
     static const char* ADS[] = { "SSW", "BROKE STUDIO", "SUPER BUT", "ALEKMAUL", "GOAL FM", "SGDK", "PIXEL COLA", "PVSNESLIB",
-                                 "OFFGAME", "DOUBLE SIDE", "BEURTON", "ELEC. DREAMS", "BALLON D'OR", "CRAMPONS+", "STADE TV", "AMIGOAL" };
+                                 "OFFGAME", "DOUBLE SIDE", "BEURTON", "ELEC. DREAMS", "BALLON D'OR", "CRAMPONS+", "STADE TV", "AMIGOAL",
+                                 "GAMOPAT", "ONIROMANCIE", "ATARI", "SEGA", "NINTENDO", "SONY", "SIGAMES", "EA", "AMSTRAD", "COMMODORE", "ORIC", "CAPCOM" };
     static const unsigned ADC[] = { 0xD62828, 0x1D3557, 0xF77F00, 0x2A9D8F, 0x6A4C93, 0x3A7D44, 0x264653, 0xE63946,
-                                    0xB02020, 0x5A189A, 0x8C6D1F, 0x0077B6, 0x1D3557, 0x2A9D8F, 0xE9C46A, 0xE63946 };
+                                    0xB02020, 0x5A189A, 0x8C6D1F, 0x0077B6, 0x1D3557, 0x2A9D8F, 0xE9C46A, 0xE63946,
+                                    0x3D5A80, 0x6A0572, 0xC1121F, 0x0B3D91, 0xE60012, 0x111111, 0x2B2D42, 0x1B1B1B, 0x8D0801, 0x33415C, 0x7B2CBF, 0x1F4E9E };
+    const int NADS = (int)(sizeof ADS / sizeof ADS[0]);
     float bd = 4.0f; // distance du terrain
     int adi = 0;
     auto board = [&](float x1, float y1, float x2, float y2, bool horiz) {
@@ -169,9 +172,9 @@ static void buildPitch(int type, uint64_t key) {
             adi++;
             return;
         }
-        ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, hexc(ADC[adi % 16]));
+        ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, hexc(ADC[adi % NADS]));
         ImageDrawRectangleLines(&img, Rectangle{ a.x, a.y, (float)w, (float)h }, 1, hexc(0x111111));
-        if (horiz) ImageDrawText(&img, ADS[adi % 16], (int)a.x + 3, (int)a.y, 10, WHITE);
+        if (horiz) ImageDrawText(&img, ADS[adi % NADS], (int)a.x + 3, (int)a.y, 10, WHITE);
         adi++;
     };
     for (float x = -8; x < PITCH_W + 8; x += 14) { board(x, -bd - 2.0f, x + 13.8f, -bd, true); board(x, PITCH_L + bd, x + 13.8f, PITCH_L + bd + 2.0f, true); }
@@ -942,7 +945,11 @@ void renderMatch(const Match& m, bool radar) {
             int rx = SX(m.refPos.x), ry = SY(m.refPos.y);
             int rframe = m.refVel.len() > 0.4f ? (int)(GetTime() * 9) : 0;
             bool showCard = m.refCardT > 0 && m.refCardT < 1.8f;
-            drawPlayerSprite(rx, ry, rk, 1, 0, showCard ? 0 : dirOf(m.refFace), rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
+            // coiffure : cheveux courts pour les arbitres hommes, longs (queue de cheval) pour les arbitres femmes
+            bool fem = m.S.referee >= 0 && m.S.referee < NUM_REFEREES && REFEREES[m.S.referee].female;
+            static const int MS[6][2] = { { 0, 0 }, { 0, 4 }, { 1, 3 }, { 2, 2 }, { 2, 6 }, { 3, 1 } };      // (peau, cheveux) donnant une coupe courte
+            int rs = fem ? 1 : MS[(m.S.referee + 6) % 6][0], rh = fem ? 1 : MS[(m.S.referee + 6) % 6][1];
+            drawPlayerSprite(rx, ry, rk, rs, rh, showCard ? 0 : dirOf(m.refFace), rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
             if (showCard) {
                 Color cc = m.refCardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
                 DrawRectangle(rx + 3, ry - 18, 3, 4, cc);
@@ -1281,7 +1288,7 @@ void renderMatch(const Match& m, bool radar) {
         drawTextPx(hint, 4, MH - 12, 10, Color{ 200, 200, 210, 170 });
     }
     // commentaires (deux lignes au plus)
-    if (m.S.commentary && m.comT > 0 && !m.comLine.empty() && !replay && !(m.ceremony && m.tossUI > 0 && m.tossUI != 5) && !(m.duel && m.fightT > 0)) {
+    if (m.S.commentary && m.comT > 0 && !m.comLine.empty() && !replay && !((m.ceremony || m.tossKind) && m.tossUI > 0) && m.shootUI <= 0 && !(m.duel && m.fightT > 0)) {   // pas de commentaire par-dessus le pile ou face / le choix des tireurs
         int maxw = MW - 80;
         std::vector<std::string> lines; std::string cur, word;
         for (size_t i = 0; i <= m.comLine.size(); i++) {
