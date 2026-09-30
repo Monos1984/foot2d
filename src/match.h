@@ -107,6 +107,7 @@ struct MatchSetup {
     std::string title;
     std::string stadium;
     bool noET = false;
+    bool pensOnly = false;       // amical : séance de tirs au but seulement
     bool awayGoals = false;
     int yellowLimit = 3;
     bool snes = true;             // commandes Super Nintendo
@@ -116,7 +117,7 @@ struct MatchSetup {
     float crowdFill = 0.7f;
     bool commentary = true;
     std::string channel;
-    std::string kickoffTime;       // buts à l'extérieur (aggHome = buts marqués à l'extérieur par l'équipe qui reçoit)
+    std::string kickoffTime, kickoffDate;      // buts à l'extérieur (aggHome = buts marqués à l'extérieur par l'équipe qui reçoit)
     bool awayKitHome = false, awayKitAway = true;
     int formation[2] = { -1, -1 };
     int training = 0;              // 0 match ; 1 penalties, 2 coups francs, 3 corners, 4 attaque-défense, 5 penalties (gardien)
@@ -158,6 +159,9 @@ struct Match {
     int score[2] = { 0, 0 };
     int pens[2] = { 0, 0 };
     int penTaken[2] = { 0, 0 };
+    int lastPenMiss = 0;
+    float penMaxZ = 0;
+    int penGk = -1;                 // gardien face à un penalty (allonge réduite)            // dernier tir au but : 0 marqué, 1 arrêté, 2 au-dessus, 3 à côté/poteau
     bool shootout = false;
     int shootTeam = 0;
     int shootKicker = -1;

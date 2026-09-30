@@ -267,6 +267,7 @@ static unsigned SKIN[4] = { 0xF2C9A0, 0xD9A066, 0xA86B3C, 0x6B4226 };
 static unsigned HAIR[5] = { 0x1A1A1A, 0x5A3A1A, 0xE8C35A, 0xB5502A, 0x3B2A1A };
 
 static float colorBright(unsigned c) { return (((c >> 16) & 255) * 0.3f + ((c >> 8) & 255) * 0.59f + (c & 255) * 0.11f) / 255.f; }
+static int g_bootCol = 0;          // couleur des chaussures du joueur en cours de dessin
 static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair, bool gk, unsigned gkShirt) {
     auto dim = [](Color c, float f) { return Color{ (unsigned char)(c.r * f), (unsigned char)(c.g * f), (unsigned char)(c.b * f), 255 }; };
     switch (ch) {
@@ -296,7 +297,8 @@ static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair,
     }
     case 'P': return hexc(gk ? 0x222222 : k.shorts);
     case 'k': return hexc(gk ? gkShirt : k.socks);
-    case 'b': return hexc(0x111111);
+    case 'b': { static const unsigned BOOT[5] = { 0x111111, 0x111111, 0xF2F2F2, 0xE8B830, 0xD83A2A }; return hexc(BOOT[g_bootCol % 5]); }
+    case 'g': return hexc(0xD8F060);                     // gants du gardien
     default: return BLANK;
     }
 }
@@ -313,6 +315,7 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
         for (int r = 0; r < 5; r++) for (int c = 0; c < 12; c++) {
             char ch = LY[r][c];
             if (ch == '.' || ch == ' ') continue;
+            if (gk && state == PS_DIVE && ch == 's' && c >= 10) ch = 'g';     // gants
             int cc = flip ? 11 - c : c;
             Color col = pixelColor(ch, c % 7, r, kit, skin, hair, gk, gkShirt);
             int px, py;
@@ -336,28 +339,36 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     else if (dir == 1) src = SPR_UP[f];
     else { src = SPR_RIGHT[f]; mirror = dir == 3; }
     // coiffure : courte, rasée ou longue (déterminée par le joueur)
-    char buf[12][8];
+    char buf[13][8] = {};
     for (int r = 0; r < 12; r++) { strncpy(buf[r], src[r], 7); buf[r][7] = 0; }
     int style = (hair * 7 + skin * 3) % 4;
     if (style == 1 && dir != 1) { for (int c = 0; c < 7; c++) if (buf[0][c] == 'h') buf[0][c] = (c == 2 || c == 4) ? 's' : 'h'; }
     else if (style == 2) { if (buf[2][1] == '.') buf[2][1] = 'h'; if (buf[2][5] == '.') buf[2][5] = 'h'; }
     else if (style == 3 && dir == 1) { buf[3][2] = 'h'; buf[3][3] = 'h'; buf[3][4] = 'h'; }
-    const char* spr[12]; for (int r = 0; r < 12; r++) spr[r] = buf[r];
+    // gardien : gants (mains)
+    if (gk) for (int r = 6; r < 9; r++) for (int c = 0; c < 7; c++) if (buf[r][c] == 's') buf[r][c] = 'g';
+    if (state == PS_CELEB && gk) for (int r = 0; r < 3; r++) for (int c = 0; c < 7; c++) if ((c == 0 || c == 6) && buf[r][c] == 's') buf[r][c] = 'g';
+    g_bootCol = (skin * 5 + hair * 3) % 5;
+    // course : le haut du corps rebondit d'un pixel pendant les foulées
+    bool bob = state == PS_NORMAL && (f == 1 || f == 3) && scale == 1;
+    int NR = 12;
+    if (bob) { for (int r = 12; r >= 10; r--) memcpy(buf[r], buf[r - 1], 8); NR = 13; }     // jambes en extension : corps relevé d'un pixel
+    const char* spr[13]; for (int r = 0; r < 13; r++) spr[r] = buf[r];
     auto filled = [&](int r, int c) {
-        if (r < 0 || r >= 12 || c < 0 || c >= 7) return false;
+        if (r < 0 || r >= NR || c < 0 || c >= 7) return false;
         const char* row = spr[r];
         if (c >= (int)strlen(row)) return false;
         return row[c] != '.' && row[c] != ' ';
     };
     // contour sombre (style 16 bits)
     Color outline = Color{ 10, 10, 20, 110 };
-    for (int r = 0; r < 12; r++) for (int c = -1; c <= 7; c++) {
+    for (int r = 0; r < NR; r++) for (int c = -1; c <= 7; c++) {
         if (filled(r, c)) continue;
         if (!(filled(r, c - 1) || filled(r, c + 1) || filled(r - 1, c) || filled(r + 1, c))) continue;
         int cc = mirror ? 6 - c : c;
-        DrawRectangle(x + (cc - 3) * scale, y - (12 - r) * scale, scale, scale, outline);
+        DrawRectangle(x + (cc - 3) * scale, y - (NR - r) * scale, scale, scale, outline);
     }
-    for (int r = 0; r < 12; r++) {
+    for (int r = 0; r < NR; r++) {
         const char* row = spr[r];
         int n = (int)strlen(row);
         for (int c = 0; c < n && c < 7; c++) {
@@ -370,7 +381,7 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
             if (mirror) shade = (ch == 'S' || ch == 'P' || ch == 'k') && (!filled(r, c - 1) || (ch == 'S' && !filled(r + 1, c)));
             if (shade) { col.r = (unsigned char)(col.r * 0.72f); col.g = (unsigned char)(col.g * 0.72f); col.b = (unsigned char)(col.b * 0.72f); }
             else if (ch == 'S' && r == 3 && scale >= 2) { col.r = (unsigned char)std::min(255, col.r + 25); col.g = (unsigned char)std::min(255, col.g + 25); col.b = (unsigned char)std::min(255, col.b + 25); }
-            DrawRectangle(x + (cc - 3) * scale, y - (12 - r) * scale, scale, scale, col);
+            DrawRectangle(x + (cc - 3) * scale, y - (NR - r) * scale, scale, scale, col);
         }
     }
 }
@@ -422,27 +433,80 @@ static const Color CTRL_COL[NUM_INPUTS] = { { 255, 230, 40, 255 }, { 60, 220, 25
 
 // ------------------------------------------------------------------ tirage au sort : pièce, ballon, terrain (écran de choix)
 static void drawCoin(int cx, int cy, float r, float w, int face) {
-    // w : largeur apparente (0..1) pendant la rotation ; face 0 = PILE, 1 = FACE
-    int rx = std::max(1, (int)(r * std::fabs(w)));
-    Color gold = { 232, 190, 64, 255 }, dark = { 160, 118, 24, 255 }, light = { 255, 232, 140, 255 };
-    DrawEllipse(cx + 1, cy + 2, (float)rx, r, Color{ 0, 0, 0, 90 });
-    DrawEllipse(cx, cy, (float)rx, r, dark);
-    DrawEllipse(cx, cy, (float)std::max(1, rx - 2), r - 2, gold);
-    if (rx < r * 0.45f) return;
-    float k = (float)rx / r;
-    if (face == 0) {   // PILE : grand « 1 » et étoiles
-        int h = (int)(r * 0.9f);
-        DrawRectangle(cx - (int)(2 * k), cy - h / 2, std::max(1, (int)(4 * k)), h, dark);
-        DrawRectangle(cx - (int)(5 * k), cy - h / 2 + 2, std::max(1, (int)(4 * k)), 3, dark);
-        DrawRectangle(cx - (int)(6 * k), cy + h / 2 - 2, std::max(1, (int)(12 * k)), 3, dark);
-        for (int i = 0; i < 6; i++) { float a = i * 1.047f; DrawRectangle(cx + (int)(std::cos(a) * r * 0.72f * k) - 1, cy + (int)(std::sin(a) * r * 0.72f) - 1, 2, 2, light); }
-    } else {           // FACE : profil
-        DrawCircle(cx - (int)(1 * k), cy - (int)(r * 0.15f), r * 0.32f * k + 1, dark);
-        DrawRectangle(cx - (int)(r * 0.18f * k), cy + (int)(r * 0.1f), std::max(2, (int)(r * 0.3f * k)), (int)(r * 0.35f), dark);
-        DrawRectangle(cx + (int)(r * 0.22f * k), cy - (int)(r * 0.18f), std::max(1, (int)(3 * k)), 3, dark);   // nez
-        DrawRectangle(cx - (int)(r * 0.45f * k), cy + (int)(r * 0.45f), std::max(2, (int)(r * 0.9f * k)), 2, dark);
+    // pièce en or avec relief : tranche visible pendant la rotation, listel cannelé, dégradé métallique, reflet mobile
+    // w : largeur apparente (0..1) ; face 0 = PILE (valeur), 1 = FACE (effigie)
+    float aw = std::fabs(w);
+    int rx = std::max(1, (int)(r * aw));
+    Color edgeD = { 120, 84, 16, 255 }, dark = { 150, 108, 22, 255 }, mid = { 214, 168, 48, 255 }, gold = { 238, 196, 70, 255 }, light = { 255, 236, 150, 255 };
+    // ombre portée
+    DrawEllipse(cx + 2, cy + 3, (float)rx + 1, r, Color{ 0, 0, 0, 80 });
+    // tranche (épaisseur) : visible quand la pièce est presque de profil
+    float thick = std::max(0.f, r * 0.16f * (1.f - aw));
+    if (thick >= 1.f) {
+        int tw = (int)thick + 1;
+        DrawRectangle(cx - rx - tw / 2, cy - (int)r + 2, tw, (int)(2 * r) - 4, edgeD);
+        for (int yy = cy - (int)r + 4; yy < cy + (int)r - 4; yy += 3) DrawRectangle(cx - rx - tw / 2, yy, tw, 1, dark);
+        DrawEllipse(cx - tw / 2, cy, (float)rx, r, edgeD);
     }
-    DrawCircleLines(cx, cy, 0, light);
+    // disque : dégradé concentrique
+    DrawEllipse(cx, cy, (float)rx, r, edgeD);
+    DrawEllipse(cx, cy, (float)std::max(1, rx - 1), r - 1, dark);
+    DrawEllipse(cx, cy, (float)std::max(1, rx - 2), r - 2, mid);
+    DrawEllipse(cx - (int)(r * 0.08f * aw), cy - (int)(r * 0.08f), (float)std::max(1, (int)((r - 4) * aw)), r - 4, gold);
+    if (rx < r * 0.3f) return;
+    float k = (float)rx / r;
+    // listel cannelé
+    for (int i = 0; i < 36; i++) {
+        float a = i * 6.2832f / 36;
+        int px = cx + (int)(std::cos(a) * (r - 2.5f) * k), py = cy + (int)(std::sin(a) * (r - 2.5f));
+        DrawPixel(px, py, (i & 1) ? light : dark);
+    }
+    DrawEllipseLines(cx, cy, std::max(1.f, (r - 5) * k), r - 5, dark);
+    if (face == 0) {
+        // PILE : grand « 1 » en relief entouré de 12 étoiles
+        int h = (int)(r * 0.8f);
+        int sw = std::max(1, (int)(4 * k));
+        DrawRectangle(cx - sw / 2 + 1, cy - h / 2 + 1, sw, h, dark);                     // ombre du relief
+        DrawRectangle(cx - sw / 2, cy - h / 2, sw, h, light);
+        DrawRectangle(cx - (int)(5 * k), cy - h / 2 + 2, std::max(1, (int)(5 * k)), 2, light);
+        DrawRectangle(cx - (int)(6 * k), cy + h / 2 - 2, std::max(2, (int)(12 * k)), 2, light);
+        DrawRectangle(cx - (int)(6 * k) + 1, cy + h / 2, std::max(2, (int)(12 * k)), 1, dark);
+        for (int i = 0; i < 12; i++) {
+            float a = i * 0.5236f - 1.5708f;
+            int sx = cx + (int)(std::cos(a) * r * 0.68f * k), sy = cy + (int)(std::sin(a) * r * 0.68f);
+            DrawPixel(sx, sy, light); DrawPixel(sx - 1, sy, mid); DrawPixel(sx + 1, sy, mid); DrawPixel(sx, sy - 1, mid); DrawPixel(sx, sy + 1, mid);
+        }
+    } else {
+        // FACE : effigie de profil tournée vers la droite (chevelure, visage, nez, œil, cou, épaules), couronne de laurier
+        float s = r * 0.30f;
+        int hx = cx - (int)(r * 0.04f * k), hy = cy - (int)(r * 0.18f);
+        DrawEllipse(hx - (int)(s * 0.15f * k) + 1, hy + 1, s * 1.05f * k + 1, s * 1.05f, dark);                 // ombre du relief
+        DrawEllipse(hx - (int)(s * 0.15f * k), hy, s * 1.05f * k + 1, s * 1.05f, mid);                          // chevelure (arrière)
+        DrawEllipse(hx + (int)(s * 0.22f * k), hy + (int)(s * 0.15f), s * 0.72f * k + 1, s * 0.88f, light);     // visage
+        DrawTriangle(Vector2{ (float)hx + s * 0.9f * k, (float)hy + s * 0.05f }, Vector2{ (float)hx + s * 0.9f * k, (float)hy + s * 0.45f },
+                     Vector2{ (float)hx + s * 1.25f * k, (float)hy + s * 0.38f }, light);                                   // nez
+        DrawPixel(hx + (int)(s * 0.55f * k), hy - (int)(s * 0.05f), dark);                                                // œil
+        DrawRectangle(hx - (int)(s * 0.05f * k), hy + (int)(s * 0.85f), std::max(2, (int)(s * 0.6f * k)), (int)(s * 0.7f), light);   // cou
+        DrawTriangle(Vector2{ (float)hx - s * 1.1f * k, (float)hy + s * 2.05f }, Vector2{ (float)hx + s * 1.2f * k, (float)hy + s * 2.05f },
+                     Vector2{ (float)hx + s * 0.25f * k, (float)hy + s * 1.35f }, light);                                   // épaules
+        DrawRectangle(hx - (int)(s * 1.1f * k), hy + (int)(s * 2.05f), std::max(2, (int)(s * 2.3f * k)), 1, dark);
+        for (int i = 0; i < 7; i++) {   // laurier
+            float a = 2.2f + i * 0.28f;
+            DrawPixel(cx + (int)(std::cos(a) * r * 0.66f * k), cy + (int)(std::sin(a) * r * 0.66f), light);
+            DrawPixel(cx - (int)(std::cos(a) * r * 0.66f * k), cy + (int)(std::sin(a) * r * 0.66f), light);
+        }
+    }
+    // reflet qui glisse sur la pièce
+    float gl = std::fmod((float)GetTime() * 0.7f, 1.6f) - 0.3f;
+    if (gl > 0 && gl < 1) {
+        int gx = cx - rx + (int)(gl * 2 * rx);
+        for (int d = -2; d <= 2; d++) {
+            float yy = 1.f - std::pow((gx + d - cx) / (float)std::max(1, rx), 2.f);
+            if (yy <= 0) continue;
+            int hh = (int)(r * std::sqrt(yy) * 0.85f);
+            DrawRectangle(gx + d, cy - hh, 1, hh * 2, Color{ 255, 255, 230, (unsigned char)(90 - std::abs(d) * 30) });
+        }
+    }
 }
 static void drawMiniBall(int cx, int cy, int r) {
     DrawCircle(cx + 1, cy + 2, (float)r, Color{ 0, 0, 0, 80 });
@@ -503,13 +567,24 @@ static void drawTossUI(const Match& m) {
         title("L'ARBITRE LANCE LA PIÈCE...");
         const float FLIP = 2.4f;
         float ft = std::min(m.cerT, FLIP);
-        float hgt = ft < FLIP ? std::sin(ft / FLIP * 3.14159f) * 40.f : 0.f;
+        float hgt = ft < FLIP ? std::sin(ft / FLIP * 3.14159f) * 46.f : 0.f;
         float spin = ft < FLIP ? m.cerT * (22.f - ft * 6.f) : 0.f;
         float w = std::cos(spin);
         int face = ft < FLIP ? (w >= 0 ? 0 : 1) : m.tossResult;
         int cx = MW / 2, cy = py + 78 - (int)hgt;
-        DrawEllipse(cx, py + 102, 16 - hgt * 0.2f, 3, Color{ 0, 0, 0, 90 });
+        // rebond à l'atterrissage
+        if (m.cerT > FLIP && m.cerT < FLIP + 0.35f) cy -= (int)(std::sin((m.cerT - FLIP) / 0.35f * 3.14159f) * 5);
+        DrawEllipse(cx, py + 102, std::max(4.f, 18 - hgt * 0.25f), 3, Color{ 0, 0, 0, (unsigned char)std::max(30, 110 - (int)hgt) });
+        if (ft < FLIP) for (int k = 1; k <= 3; k++) {    // traînée
+            float t2 = std::max(0.f, ft - k * 0.04f);
+            float h2 = std::sin(t2 / FLIP * 3.14159f) * 46.f;
+            DrawEllipse(cx, py + 78 - (int)h2, 20.f * std::fabs(std::cos(t2 * (22.f - t2 * 6.f))) + 1, 22, Color{ 240, 200, 70, (unsigned char)(50 - k * 12) });
+        }
         drawCoin(cx, cy, 24, ft < FLIP ? std::fabs(w) : 1.f, face);
+        if (m.cerT > FLIP && m.cerT < FLIP + 0.6f) {   // éclat
+            float e = (m.cerT - FLIP) / 0.6f;
+            for (int i = 0; i < 8; i++) { float a = i * 0.785f; int l = (int)(10 + e * 14); DrawLine(cx + (int)(std::cos(a) * 28), cy + (int)(std::sin(a) * 28), cx + (int)(std::cos(a) * (28 + l)), cy + (int)(std::sin(a) * (28 + l)), Color{ 255, 230, 120, (unsigned char)(200 * (1 - e)) }); }
+        }
         std::string call = std::string("Annonce : ") + (m.tossCall == 0 ? "PILE" : "FACE");
         drawTextPx(call, px + 8, py + 18, 10, Color{ 170, 185, 220, 255 });
         if (m.cerT > FLIP) {

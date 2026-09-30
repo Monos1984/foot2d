@@ -34,6 +34,7 @@ static void screenPlayer() {
     int x = 12, yy = 68;
     auto line = [&](const std::string& k, const std::string& v) { drawTextPx(k, x, yy, 10, C_DIM); drawTextPx(fitText(v, 200, 10), x + 96, yy, 10, C_TXT); yy += 12; };
     line("Âge", fmt("%d ans", p.age));
+    line("Genre", p.gender ? "Femme" : "Homme");
     line("Né le", fmt("%d %s %d", d, MONTHS_FR[std::max(1, std::min(12, m))], y));
     line("Lieu de naissance", place);
     int nat = p.nation >= 0 ? p.nation : T.nation;
@@ -120,6 +121,7 @@ static void screenPlayerEdit() {
     uint8_t posv = g_pe.pos;
     std::vector<Row> rows = {
         { "Nom", g_pe.name, 0, nullptr, 0, 0 },
+        { "Genre", g_pe.gender ? "Femme" : "Homme", 1, &g_pe.gender, 0, 1 },
         { "Poste", PN[posv & 3], 1, &g_pe.pos, 0, 3 },
         { "Numéro", fmt("%d", g_pe.num), 1, &g_pe.num, 1, 99 },
         { "Âge", fmt("%d", g_pe.age), 1, &g_pe.age, 15, 45 },
@@ -147,17 +149,17 @@ static void screenPlayerEdit() {
     int x = 12, w = 400, y = 44;
     for (int i = 0; i < n; i++) {
         bool sel = i == g_peRow;
-        if (IN.click && g_peTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 14) g_peRow = i;
-        DrawRectangle(x, y, w, 13, sel ? C_SEL : C_ITEM);
+        if (IN.click && g_peTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 13) g_peRow = i;
+        DrawRectangle(x, y, w, 12, sel ? C_SEL : C_ITEM);
         Color c = sel ? BLACK : C_TXT;
-        if (rows[i].kind == 2) drawTextCentered(rows[i].label, x + w / 2, y + 2, 10, c, false);
+        if (rows[i].kind == 2) drawTextCentered(rows[i].label, x + w / 2, y + 1, 10, c, false);
         else {
-            drawTextPx(rows[i].label, x + 6, y + 2, 10, c);
+            drawTextPx(rows[i].label, x + 6, y + 1, 10, c);
             std::string v = rows[i].value;
             if (g_peTyping == i && fmod(GetTime(), 1.0) < 0.5) v += "_";
-            drawTextPx(rows[i].kind == 0 ? fitText(v, w - 160, 10) : "< " + v + " >", x + 150, y + 2, 10, c);
+            drawTextPx(rows[i].kind == 0 ? fitText(v, w - 160, 10) : "< " + v + " >", x + 150, y + 1, 10, c);
         }
-        y += 14;
+        y += 13;
     }
     // aperçu
     Player pv = g_pe;
@@ -178,7 +180,7 @@ static void screenPlayerEdit() {
     const Row& R = rows[g_peRow];
     if (R.kind == 1 && R.v && dd) *R.v = (uint8_t)std::max(R.lo, std::min(R.hi, (int)*R.v + dd));
     if (R.kind == 3 && dd) { int k = g_pe.nation + dd; if (k < -1) k = NUM_NATIONS - 1; if (k >= NUM_NATIONS) k = -1; g_pe.nation = (int16_t)k; }
-    if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 44 && IN.mouse.y < 44 + n * 14)) {
+    if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 44 && IN.mouse.y < 44 + n * 13)) {
         if (R.kind == 0) { g_peTyping = g_peRow; g_textMode = true; while (GetCharPressed() > 0) {} }
         else if (R.kind == 2) {
             if (g_peRow == n - 2) {

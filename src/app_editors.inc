@@ -1,5 +1,6 @@
 // ------------------------------------------------------------------ messagerie, éditeurs de sponsors et de managers, à propos, mode championnat
-static const char* GAME_VERSION = "00.02.00";
+static const char* GAME_VERSION = "00.02.01";
+static const int GAME_BUILD = 4;          // incrémenté à chaque livraison
 
 // ---------------- messagerie : lire, effacer, non lus
 static int g_newsOpen = -1;           // index (dans season.news) du message ouvert
@@ -17,12 +18,63 @@ static int newsUnread() {
     return n;
 }
 static void newsCategory(const std::string& s, std::string& cat, Color& c) {
-    if (s.rfind("Presse", 0) == 0) { cat = "PRESSE"; c = Color{ 200, 200, 210, 255 }; }
+    if (s.rfind("[U19]", 0) == 0 || s.rfind("[U17]", 0) == 0 || s.rfind("[Réserve]", 0) == 0 || s.find("Gambardella") != std::string::npos) { cat = "JEUNES"; c = Color{ 150, 230, 200, 255 }; }
+    else if (s.rfind("Presse", 0) == 0) { cat = "PRESSE"; c = Color{ 200, 200, 210, 255 }; }
+    else if (s.find("Ligue des champions") != std::string::npos || s.find("Coupe UEFA") != std::string::npos || s.find("Intertoto") != std::string::npos) { cat = "EUROPE"; c = Color{ 120, 150, 255, 255 }; }
     else if (s.rfind("Prime", 0) == 0 || s.find("Budget") != std::string::npos || s.find("EUR") != std::string::npos) { cat = "FINANCES"; c = Color{ 110, 230, 120, 255 }; }
     else if (s.find("Objectif") != std::string::npos || s.find("président") != std::string::npos || s.find("Président") != std::string::npos) { cat = "PRÉSIDENT"; c = Color{ 255, 210, 90, 255 }; }
     else if (s.find("transf") != std::string::npos || s.find("rejoint") != std::string::npos || s.find("quitte") != std::string::npos || s.find("recrut") != std::string::npos) { cat = "MERCATO"; c = Color{ 120, 190, 255, 255 }; }
     else if (s.find("bless") != std::string::npos || s.find("retraite") != std::string::npos || s.find("formation") != std::string::npos) { cat = "EFFECTIF"; c = Color{ 255, 150, 120, 255 }; }
     else { cat = "INFO"; c = Color{ 170, 180, 220, 255 }; }
+}
+static int g_newsFilter = 0;
+static const char* NEWS_FILTERS[] = { "Tout", "Mon club", "Europe", "Jeunes", "Mercato", "Finances", "Président", "Infos" };
+static bool newsMatch(const std::string& m, int f) {
+    if (f == 0) return true;
+    std::string cat; Color cc; newsCategory(m, cat, cc);
+    if (f == 1) { const Team& U = g_world.teams[std::max(0, g_career.userTeam)]; return m.rfind("[Votre club]", 0) == 0 || m.find(U.name) != std::string::npos || m.find(U.shortName) != std::string::npos || cat == "PRÉSIDENT" || cat == "FINANCES"; }
+    static const char* C[] = { "", "", "EUROPE", "JEUNES", "MERCATO", "FINANCES", "PRÉSIDENT", "" };
+    if (f == 7) return cat == "INFO" || cat == "PRESSE" || cat == "EFFECTIF";
+    return cat == C[f];
+}
+// page de journal : bandeau, titre (première phrase), corps
+static void drawNewsPaper(int x, int y, int w, int h, const std::string& m) {
+    std::string cat; Color cc; newsCategory(m, cat, cc);
+    DrawRectangle(x + 3, y + 3, w, h, Color{ 0, 0, 0, 90 });
+    DrawRectangle(x, y, w, h, Color{ 238, 232, 214, 255 });
+    DrawRectangle(x, y, w, 24, Color{ 28, 28, 34, 255 });
+    drawTextCentered("LE FIL DU CLUB", x + w / 2, y + 2, 20, Color{ 238, 232, 214, 255 }, false);
+    DrawRectangle(x + 6, y + 27, w - 12, 1, Color{ 60, 60, 60, 255 });
+    drawTextPx(fmt("Saison %d-%d", g_career.year, g_career.year + 1), x + 8, y + 29, 10, Color{ 60, 60, 60, 255 });
+    std::string ed = std::string("Édition ") + (g_career.userTeam >= 0 ? g_world.teams[g_career.userTeam].shortName : std::string(""));
+    drawTextPx(ed, x + w - 8 - textWidth(ed, 10), y + 29, 10, Color{ 60, 60, 60, 255 });
+    DrawRectangle(x + 6, y + 40, w - 12, 1, Color{ 60, 60, 60, 255 });
+    DrawRectangle(x + 8, y + 45, textWidth(cat, 10) + 10, 12, cc);
+    drawTextPx(cat, x + 13, y + 46, 10, BLACK);
+    // titre : jusqu'au premier « : » ou « . », sinon début du texte
+    std::string body = m;
+    if (body.rfind("[Votre club] ", 0) == 0) body = body.substr(13);
+    std::string head = body; size_t cut = body.find(" : ");
+    if (cut != std::string::npos && cut < 60) { head = body.substr(0, cut); body = body.substr(cut + 3); }
+    else { size_t d = body.find(". "); if (d != std::string::npos && d < 70) { head = body.substr(0, d + 1); body = body.substr(d + 2); } else { head = body; body.clear(); } }
+    int yy = y + 62;
+    {
+        int fs = 20; auto hl = wrapTextSz(head, w - 20, 20);
+        if (hl.size() > 2) { fs = 10; hl = wrapText(head, w - 20); }
+        for (auto& l : hl) { drawTextPx(l, x + 10, yy, fs, Color{ 10, 10, 10, 255 }); yy += fs == 20 ? 22 : 13; }
+    }
+    DrawRectangle(x + 10, yy + 1, 40, 2, cc); yy += 8;
+    if (body.size() < 50) {
+        for (auto& l : wrapText(body, w - 20)) { if (yy >= y + h - 14) break; drawTextPx(l, x + 10, yy, 10, Color{ 35, 35, 35, 255 }); yy += 13; }
+    } else {
+        // capitale décorée
+        std::string first = body.substr(0, 1);
+        if ((unsigned char)body[0] < 0x80) { drawTextPx(first, x + 10, yy, 20, Color{ 120, 30, 30, 255 }); }
+        int lx = (unsigned char)body[0] < 0x80 ? x + 26 : x + 10;
+        std::string rest = (unsigned char)body[0] < 0x80 ? body.substr(1) : body;
+        auto ls = wrapText(rest, x + w - 10 - lx);
+        for (size_t i = 0; i < ls.size() && yy < y + h - 14; i++) { drawTextPx(ls[i], i < 2 ? lx : x + 10, yy, 10, Color{ 35, 35, 35, 255 }); yy += 13; }
+    }
 }
 static void screenNews() {
     auto& n = g_career.season.news;
@@ -33,12 +85,9 @@ static void screenNews() {
         const std::string& m = n[g_newsOpen];
         newsMarkRead(m);
         std::string cat; Color cc; newsCategory(m, cat, cc);
-        DrawRectangle(30, 40, VW - 60, VH - 80, Color{ 236, 232, 220, 255 });
-        DrawRectangle(30, 40, VW - 60, 18, cc);
-        drawTextPx("De : " + (cat == "PRESSE" ? std::string("Revue de presse") : cat == "PRÉSIDENT" ? std::string("Le président du club") : cat == "FINANCES" ? std::string("Direction financière") : cat == "MERCATO" ? std::string("Cellule de recrutement") : cat == "EFFECTIF" ? std::string("Staff médical et sportif") : std::string("Secrétariat du club")), 38, 44, 10, BLACK);
-        drawTextPx(cat, VW - 38 - textWidth(cat, 10), 44, 10, BLACK);
-        int y = 66;
-        for (auto& l : wrapText(m, VW - 90)) { drawTextPx(l, 42, y, 10, Color{ 30, 30, 30, 255 }); y += 13; }
+        drawNewsPaper(60, 36, VW - 120, VH - 106, m);
+        DrawRectangle(60, VH - 72, VW - 120, 1, cc);
+        drawTextPx("De : " + (cat == "PRESSE" ? std::string("Revue de presse") : cat == "PRÉSIDENT" ? std::string("Le président du club") : cat == "FINANCES" ? std::string("Direction financière") : cat == "MERCATO" ? std::string("Cellule de recrutement") : cat == "EFFECTIF" ? std::string("Staff médical et sportif") : std::string("Secrétariat du club")), 62, VH - 68, 10, C_DIM);
         bool del = button(VW / 2 - 160, VH - 60, 150, 16, "Effacer ce message");
         bool back = button(VW / 2 + 10, VH - 60, 150, 16, "Retour à la liste");
         drawFooter("Suppr : effacer   Gauche/Droite : message précédent/suivant   Retour");
@@ -49,25 +98,50 @@ static void screenNews() {
         return;
     }
     drawBackground(fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""));
-    int sel = listRun(g_newsLW, (int)n.size(), 12, 50, VW - 24, 22, 12, [&](int i, int x, int y, bool s) {
-        const std::string& m = n[n.size() - 1 - i];
+    // onglets de filtre
+    {
+        int x = 8;
+        for (int f = 0; f < 8; f++) {
+            int w = textWidth(NEWS_FILTERS[f], 10) + 12;
+            if (button(x, 30, w, 14, NEWS_FILTERS[f], g_newsFilter == f)) { g_newsFilter = f; g_newsLW = ListW(); }
+            x += w + 3;
+        }
+        if (IsKeyPressed(KEY_TAB) || IN.right) { g_newsFilter = (g_newsFilter + 1) % 8; g_newsLW = ListW(); }
+        if (IN.left) { g_newsFilter = (g_newsFilter + 7) % 8; g_newsLW = ListW(); }
+    }
+    std::vector<int> idx;                       // messages filtrés (du plus récent au plus ancien)
+    for (int i = (int)n.size() - 1; i >= 0; i--) if (newsMatch(n[i], g_newsFilter)) idx.push_back(i);
+    int lw = 330;
+    int sel = listRun(g_newsLW, (int)idx.size(), 8, 50, lw, 12, 23, [&](int i, int x, int y, bool s) {
+        const std::string& m = n[idx[i]];
         bool rd = newsIsRead(m);
         std::string cat; Color cc; newsCategory(m, cat, cc);
-        DrawRectangle(x + 2, y + 2, 6, 7, rd ? Color{ 90, 100, 130, 255 } : cc);      // enveloppe
-        if (!rd) DrawRectangle(x + 3, y + 3, 4, 1, BLACK);
-        drawTextPx(cat, x + 12, y + 1, 10, s ? BLACK : cc);
-        drawTextPx(fitText(m, VW - 130, 10), x + 82, y + 1, 10, s ? BLACK : rd ? C_DIM : C_TXT);
+        DrawRectangle(x, y, 4, 22, cc);
+        // enveloppe
+        int ex = x + 8, ey = y + 4;
+        DrawRectangle(ex, ey, 12, 9, rd ? Color{ 90, 100, 130, 255 } : Color{ 240, 236, 220, 255 });
+        DrawLine(ex, ey, ex + 6, ey + 5, rd ? Color{ 60, 70, 100, 255 } : Color{ 120, 110, 90, 255 });
+        DrawLine(ex + 12, ey, ex + 6, ey + 5, rd ? Color{ 60, 70, 100, 255 } : Color{ 120, 110, 90, 255 });
+        if (!rd) DrawCircle(ex + 12, ey, 2, Color{ 230, 60, 50, 255 });
+        drawTextPx(cat, x + 26, y + 1, 10, s ? BLACK : cc);
+        std::string t = m; if (t.rfind("[Votre club] ", 0) == 0) t = t.substr(13);
+        auto ls = wrapText(t, lw - 34);
+        drawTextPx(ls.empty() ? "" : fitText(ls[0], lw - 34, 10), x + 26, y + 11, 10, s ? BLACK : rd ? C_DIM : C_TXT);
+        if (ls.size() > 1) drawTextPx("...", x + lw - 22, y + 1, 10, s ? BLACK : C_DIM);
     });
-    if (n.empty()) drawTextCentered("Aucun message", VW / 2, 80, 10, C_DIM);
-    if (button(12, 32, 150, 14, "Tout marquer comme lu")) for (auto& m : n) newsMarkRead(m);
-    if (button(166, 32, 150, 14, "Effacer les messages lus")) {
+    if (idx.empty()) drawTextCentered("Aucun message", 8 + lw / 2, 80, 10, C_DIM);
+    // aperçu du message sélectionné
+    if (!idx.empty() && g_newsLW.cur >= 0 && g_newsLW.cur < (int)idx.size()) drawNewsPaper(348, 50, VW - 356, VH - 92, n[idx[g_newsLW.cur]]);
+    else { DrawRectangle(348, 50, VW - 356, VH - 92, Color{ 20, 30, 56, 200 }); drawTextCentered("Le fil du club", 348 + (VW - 356) / 2, 150, 20, C_DIM, false); }
+    if (button(348, VH - 38, 96, 14, "Tout lu")) for (auto& m : n) newsMarkRead(m);
+    if (button(448, VH - 38, 96, 14, "Effacer lus")) {
         n.erase(std::remove_if(n.begin(), n.end(), [](const std::string& m) { return newsIsRead(m); }), n.end());
         g_newsLW = ListW();
     }
-    if (button(320, 32, 120, 14, "Tout effacer")) { askConfirm("Effacer tous les messages ?", []() { g_career.season.news.clear(); g_newsLW = ListW(); }); }
-    if (IsKeyPressed(KEY_DELETE) && !n.empty() && g_newsLW.cur < (int)n.size()) { n.erase(n.begin() + (n.size() - 1 - g_newsLW.cur)); return; }
-    drawFooter("OK / clic : lire   Suppr : effacer   Retour");
-    if (sel >= 0) { g_newsOpen = (int)n.size() - 1 - sel; return; }
+    if (button(548, VH - 38, 84, 14, "Tout effacer")) { askConfirm("Effacer tous les messages ?", []() { g_career.season.news.clear(); g_newsLW = ListW(); }); }
+    if (IsKeyPressed(KEY_DELETE) && !idx.empty() && g_newsLW.cur < (int)idx.size()) { n.erase(n.begin() + idx[g_newsLW.cur]); return; }
+    drawFooter("Gauche/Droite ou Tab : rubrique   OK / clic : lire   Suppr : effacer   Retour");
+    if (sel >= 0) { g_newsOpen = idx[sel]; newsMarkRead(n[idx[sel]]); return; }
     if (IN.back) openHub();
 }
 
@@ -148,7 +222,7 @@ static void screenSponsors() {
         if (IN.up || IN.down) g_spField ^= 1;
         if (b1 || (IN.ok && g_spField == 0)) { g_spField = 0; g_spTyping = true; g_textMode = true; while (GetCharPressed() > 0) {} }
         if (b2 || (IN.ok && g_spField == 1)) { g_spField = 1; g_spTyping = true; g_textMode = true; while (GetCharPressed() > 0) {} }
-        if (b3) { g_world.teams[g_career.userTeam].sponsor = S.name; if (g_career.mgr.sponsorIncome == 0) g_career.mgr.sponsorIncome = std::max<int64_t>(2, g_career.mgr.incomeBase / 12); toast("Nouveau sponsor maillot : " + S.name); }
+        if (b3) { g_world.teams[g_career.userTeam].sponsor = S.name; if (g_career.mgr.sponsorIncome == 0) g_career.mgr.sponsorIncome = std::max<int64_t>(2, g_career.mgr.incomeBase / 12); if (g_career.mgr.sponsorYears == 0) g_career.mgr.sponsorYears = 3; toast("Nouveau sponsor maillot : " + S.name); }
         if (b4) { g_sponsors.erase(g_sponsors.begin() + g_spEdit); g_spEdit = -1; saveSponsors(); return; }
         drawTextPx("Le logo s'affiche sur la fiche du club, dans l'accueil de la carrière et sur les panneaux du stade.", 40, 184, 10, C_DIM);
         drawFooter("Haut/Bas : champ   OK : modifier   Retour");
@@ -171,7 +245,7 @@ static void screenSponsors() {
 
 // ---------------- managers (managers.txt : nom|code pays|peau|cheveux|âge)
 static const char* MONTHS_FR2[] = { "", "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre" };
-struct ManagerDef { std::string name; std::string nation = "FRA"; int skin = 0, hair = 0, age = 45; int bday = 1, bmonth = 1; std::string place; int diploma = 0; };
+struct ManagerDef { std::string name; std::string nation = "FRA"; int skin = 0, hair = 0, age = 45; int bday = 1, bmonth = 1; std::string place; int diploma = 0; int gender = 0; };
 static const char* DIPLOMAS[] = { "UEFA Pro", "UEFA A (DES)", "UEFA B (BEF)", "Sans diplôme" };
 static std::vector<ManagerDef> g_managers;
 static bool g_managersLoaded = false;
@@ -193,6 +267,7 @@ static void loadManagers() {
         if (p.size() > 3) m.hair = atoi(p[3].c_str()) % 5;
         if (p.size() > 4) m.age = std::max(25, std::min(85, atoi(p[4].c_str())));
         if (p.size() > 8) { m.bday = std::max(1, std::min(31, atoi(p[5].c_str()))); m.bmonth = std::max(1, std::min(12, atoi(p[6].c_str()))); m.place = p[7]; m.diploma = atoi(p[8].c_str()) & 3; }
+        if (p.size() > 9) m.gender = atoi(p[9].c_str()) ? 1 : 0;
         if (!m.name.empty()) g_managers.push_back(m);
     }
     fclose(f);
@@ -200,8 +275,8 @@ static void loadManagers() {
 static void saveManagers() {
     FILE* f = fopen("managers.txt", "w");
     if (!f) return;
-    fprintf(f, "# managers : nom|pays (code)|peau (0-3)|cheveux (0-4)|âge|jour|mois|lieu de naissance|diplôme (0 Pro, 1 A, 2 B, 3 aucun)\n");
-    for (auto& m : g_managers) fprintf(f, "%s|%s|%d|%d|%d|%d|%d|%s|%d\n", m.name.c_str(), m.nation.c_str(), m.skin, m.hair, m.age, m.bday, m.bmonth, m.place.c_str(), m.diploma);
+    fprintf(f, "# managers : nom|pays (code)|peau (0-3)|cheveux (0-4)|âge|jour|mois|lieu de naissance|diplôme (0 Pro, 1 A, 2 B, 3 aucun)|genre (0 homme, 1 femme)\n");
+    for (auto& m : g_managers) fprintf(f, "%s|%s|%d|%d|%d|%d|%d|%s|%d|%d\n", m.name.c_str(), m.nation.c_str(), m.skin, m.hair, m.age, m.bday, m.bmonth, m.place.c_str(), m.diploma, m.gender);
     fclose(f);
 }
 static void applyManager(int i) {
@@ -210,7 +285,7 @@ static void applyManager(int i) {
     const ManagerDef& m = g_managers[i];
     g_career.managerName = m.name; g_career.managerNation = g_world.nationIndex(m.nation.c_str());
     g_career.managerSkin = (uint8_t)m.skin; g_career.managerHair = (uint8_t)m.hair; g_career.managerAge = m.age;
-    g_career.managerBday = (uint8_t)m.bday; g_career.managerBmonth = (uint8_t)m.bmonth; g_career.managerPlace = m.place;
+    g_career.managerBday = (uint8_t)m.bday; g_career.managerBmonth = (uint8_t)m.bmonth; g_career.managerPlace = m.place; g_career.managerGender = (uint8_t)m.gender;
 }
 static ListW g_mgLW;
 static int g_mgEdit = -1; static bool g_mgTyping = false; static int g_mgField = 0;
@@ -227,6 +302,7 @@ static void screenManagers() {
             fmt("Jour de naissance : %d", M.bday), std::string("Mois de naissance : ") + MONTHS_FR2[std::max(1, std::min(12, M.bmonth))],
             "Lieu de naissance : " + (M.place.empty() && !(g_mgTyping && g_mgField == 7) ? std::string("(non renseigné)") : M.place) + (g_mgTyping && g_mgField == 7 && ((int)(GetTime() * 2)) % 2 ? "_" : ""),
             std::string("Diplôme d'entraîneur : ") + DIPLOMAS[M.diploma & 3],
+            std::string("Genre : ") + (M.gender ? "Femme" : "Homme"),
             g_mgEdit == g_managerSel ? "Manager choisi pour la carrière (OK pour retirer)" : "Choisir ce manager pour la carrière",
             "Supprimer ce manager", "Terminé" };
         // portrait
@@ -254,14 +330,16 @@ static void screenManagers() {
             case 5: M.bday = (M.bday - 1 + d + 31) % 31 + 1; break;
             case 6: M.bmonth = (M.bmonth - 1 + d + 12) % 12 + 1; break;
             case 8: M.diploma = (M.diploma + d + 4) % 4; break;
+            case 9: M.gender = !M.gender; break;
             }
             saveManagers();
         }
         if (s == 0 || s == 7) { g_mgField = s; g_mgTyping = true; g_textMode = true; while (GetCharPressed() > 0) {} }
-        if (s == 9) { g_managerSel = g_managerSel == g_mgEdit ? -1 : g_mgEdit; }
-        if (s == 10) { g_managers.erase(g_managers.begin() + g_mgEdit); if (g_managerSel == g_mgEdit) g_managerSel = -1; g_mgEdit = -1; saveManagers(); return; }
+        if (s == 9) { M.gender = !M.gender; saveManagers(); }
+        if (s == 10) { g_managerSel = g_managerSel == g_mgEdit ? -1 : g_mgEdit; }
+        if (s == 11) { g_managers.erase(g_managers.begin() + g_mgEdit); if (g_managerSel == g_mgEdit) g_managerSel = -1; g_mgEdit = -1; saveManagers(); return; }
         drawFooter("Gauche/Droite : modifier   OK : valider   Retour");
-        if (s == 11 || IN.back) { saveManagers(); g_mgEdit = -1; g_mgLW = ListW(); }
+        if (s == 12 || IN.back) { saveManagers(); g_mgEdit = -1; g_mgLW = ListW(); }
         return;
     }
     int n = (int)g_managers.size();
@@ -284,7 +362,7 @@ static void screenAbout() {
     drawBackground("À propos");
     int y = 50;
     drawTextCentered("FRANCE FOOT 2D", VW / 2, y, 20, C_HI); y += 26;
-    drawTextCentered(std::string("Version ") + GAME_VERSION, VW / 2, y, 10, C_DIM); y += 20;
+    drawTextCentered(std::string("Version ") + GAME_VERSION + fmt("  -  build %d", GAME_BUILD), VW / 2, y, 10, C_DIM); y += 20;
     const char* L[] = { "Jeu gratuit réalisé par l'IA Claude,", "piloté par Jean Monos pour Offgame.", "",
                         "Jeu non licencié : fan jeu, sans lien avec les ligues, fédérations et clubs cités.",
                         "Musiques et sons originaux synthétisés par le jeu.", "",

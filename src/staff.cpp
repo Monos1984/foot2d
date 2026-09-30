@@ -131,7 +131,7 @@ int Career::createReserve(std::string& err) {
     static const char* SFX_AMA[] = { " 2", " 3", " 4" };
     t.name = U.name + (pro ? SFX_PRO[n] : SFX_AMA[n]);
     t.shortName = U.shortName.substr(0, std::min<size_t>(8, U.shortName.size())) + (pro ? SFX_PRO[n] : SFX_AMA[n]);
-    t.stadium = U.stadium + " (annexe)"; t.town = U.town; t.dept = U.dept; t.region = U.region;
+    t.stadium = U.stadium + " (annexe)"; t.town = U.town; t.dept = U.dept; t.region = U.region; t.district = U.district;   // dernière division du district de l'équipe fanion
     t.kind = TK_CLUB; t.nation = U.nation; t.culture = U.culture; t.home = U.home; t.away = U.away;
     t.rating = std::max(8.f, U.rating - 12.f - 4.f * n);
     t.parent = userTeam; t.resLevel = n + 1; t.status = CS_AMATEUR; t.founded = year;

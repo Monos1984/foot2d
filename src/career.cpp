@@ -9,7 +9,8 @@ Career g_career;
 float frTierBase(int tier);                                  // pyramid.cpp
 
 const char* INTL_NAMES[NUM_INTL] = { "Coupe du Monde", "Euro", "Coupe d'Afrique des Nations", "Copa América",
-                                     "Coupe d'Asie", "Gold Cup", "Coupe d'Océanie" };
+                                     "Coupe d'Asie", "Gold Cup", "Coupe d'Océanie",
+                                     "Tournoi olympique", "Euro Espoirs", "Euro U19", "Euro U17" };
 
 bool nationEligible(int n) { return strcmp(NATIONS[n].code, "RUS") != 0; }
 
@@ -50,6 +51,16 @@ static int addComp(Season& S, Competition c) {
     S.comps.push_back(std::move(c));
     return (int)S.comps.size() - 1;
 }
+
+int addCompPublic(Season& S, Competition c) { return addComp(S, std::move(c)); }
+void coachOnCompDone(Career& K, int comp);                   // coach.cpp
+bool cwcYear(int seasonYear);                                // cwc.cpp
+void youthQualify(Career& K, int comp);                      // youthintl.cpp
+int cwcCreate(Career& K);
+void coachSave(Writer& w, const Career& K);
+void coachLoad(Reader& r, Career& K);
+void archiveSave(Writer& w, const Career& K);             // archive.cpp
+void archiveLoad(Reader& r, Career& K);
 
 static std::string seasonLabel(int y) { return fmt("%d-%02d", y, (y + 1) % 100); }
 
@@ -178,7 +189,9 @@ static CountryRes countryResult(const Career& K, const std::string& code, bool u
     return r;
 }
 
+static void computeEuroNew(Career& K, bool useSeason);
 static void computeEuro(Career& K, bool useSeason) {
+    if (K.opts.euroFormat) { computeEuroNew(K, useSeason); return; }
     EuroSpots E;
     std::set<int> used;
     std::vector<std::pair<int, std::string>> ranked;
@@ -203,15 +216,16 @@ static void computeEuro(Career& K, bool useSeason) {
         if (r >= 10 && r <= 15) take(E.uclQ2, place(c, 2));
         if (r >= 17 && r <= 28) take(E.uclQ2, place(c, 1));
         if (r > 28) take(E.uclQ1, place(c, 1)); }
-    // ---- Coupe UEFA : associations 1 à 18 -> 1er tour (2 clubs : vainqueur de coupe + championnat) ;
-    // associations 16 à 52 -> tour de qualification ; 3 invitations au titre du fair-play
+    // ---- Coupe UEFA (liste d'accès 2002-03) : associations 1 à 6 -> 3 clubs au 1er tour (vainqueur de coupe + championnat ;
+    // en France : Coupe de France, Coupe de la Ligue et championnat) ; 7-8 -> 3 au 1er tour + 1 au tour de qualification ;
+    // 9-15 -> 1 au 1er tour + 1 au tour de qualification ; 16-18 -> 1 au 1er tour + 2 au tour de qualification ;
+    // 19-49 -> 2 au tour de qualification ; au-delà -> 1 ; + 3 invitations fair-play
     auto nextFree = [&](const std::string& c, int from) {
         auto& st = res[c].standings;
         for (int i = from - 1; i < (int)st.size(); i++) if (!used.count(st[i])) return st[i];
         return -1;
     };
     if (K.prevUefaWinner >= 0) take(E.uefaR1, K.prevUefaWinner);
-    // tour de qualification par priorité : 1re place de chaque association (dont le Liechtenstein), puis 2e, puis 3e...
     std::vector<int> qrP[4];
     auto takeQ = [&](int pri, int t) { if (t >= 0 && !used.count(t)) { qrP[pri].push_back(t); used.insert(t); } };
     for (auto& rk : ranked) {
@@ -220,17 +234,22 @@ static void computeEuro(Career& K, bool useSeason) {
         // vainqueur de la coupe déjà qualifié pour la Ligue des champions : la place revient au finaliste
         if (cup >= 0 && used.count(cup)) { int rn = res[c].cupRunner; cup = rn >= 0 && !used.count(rn) ? rn : -1; }
         if (c == "LIE") { takeQ(0, cup); continue; }          // Liechtenstein : pas de championnat, le vainqueur de la coupe (1 place)
-        bool r1 = r <= 18;
+        int nR1 = r <= 8 ? 3 : r <= 18 ? 1 : 0;
+        int nQ = r <= 6 ? 0 : r <= 15 ? 1 : r <= 18 ? 2 : r <= 49 ? 2 : 1;
+        std::vector<int> ent;                              // clubs de l'association par ordre de priorité
         int first = cup >= 0 ? cup : nextFree(c, 2);
-        if (r1) take(E.uefaR1, first); else takeQ(0, first);
-        int n = r <= 18 ? 1 : r <= 23 ? 2 : 1;
-        // France : le vainqueur de la Coupe de la Ligue prend une place en Coupe UEFA
+        if (first >= 0) { ent.push_back(first); used.insert(first); }
+        // France : le vainqueur de la Coupe de la Ligue prend une des places
         if (c == "FRA" && useSeason && K.cdl >= 0 && K.cdl < (int)K.season.comps.size()) {
             int w = K.season.comps[K.cdl].winner;
-            if (w >= 0 && !used.count(w) && g_world.teams[w].parent < 0) { take(E.uefaR1, w); n = std::max(0, n - 1); }
+            if (w >= 0 && !used.count(w) && g_world.teams[w].parent < 0) { ent.push_back(w); used.insert(w); }
         }
-        for (int k = 0; k < n; k++) { if (r1) take(E.uefaR1, nextFree(c, 2)); else takeQ(k == 0 ? 1 : 2, nextFree(c, 2)); }
-        if (r >= 16 && r <= 18) takeQ(1, nextFree(c, 2));          // places supplémentaires au tour de qualification
+        while ((int)ent.size() < nR1 + nQ) { int t = nextFree(c, 2); if (t < 0) break; ent.push_back(t); used.insert(t); }
+        for (int t : ent) used.erase(t);
+        for (int k = 0; k < (int)ent.size(); k++) {
+            if (k < nR1) take(E.uefaR1, ent[k]);
+            else takeQ(std::min(2, k - nR1), ent[k]);
+        }
     }
     {   // 3 invitations fair-play (associations tirées au sort parmi les 30 premières)
         std::vector<std::string> fp;
@@ -288,9 +307,158 @@ static void computeEuro(Career& K, bool useSeason) {
     K.nextEuro = E;
 }
 
+
+// ------------------------------------------------------------------ nouvelle formule (2024-25) : listes d'accès simplifiées
+static void computeEuroNew(Career& K, bool useSeason) {
+    NewEuroSpots N;
+    std::set<int> used;
+    std::vector<std::pair<int, std::string>> ranked;
+    for (auto& u : K.uefa) ranked.push_back({ K.uefaRank(u.code), u.code });
+    std::sort(ranked.begin(), ranked.end());
+    std::map<std::string, CountryRes> res;
+    for (auto& rk : ranked) res[rk.second] = countryResult(K, rk.second, useSeason);
+    auto take = [&](int li, int t) { if (t >= 0 && !used.count(t) && g_world.teams[t].parent < 0) { N.l[li].push_back(t); used.insert(t); } };
+    auto nextFree = [&](const std::string& c) {
+        auto& st = res[c].standings;
+        for (int t : st) if (!used.count(t) && g_world.teams[t].parent < 0) return t;
+        return -1;
+    };
+    auto cupOf = [&](const std::string& c) {
+        int cup = res[c].cup;
+        if (cup >= 0 && used.count(cup)) { int rn = res[c].cupRunner; cup = rn >= 0 && !used.count(rn) ? rn : -1; }
+        return cup >= 0 ? cup : nextFree(c);
+    };
+    // ---- Ligue des champions
+    if (K.prevUclWinner >= 0) take(4, K.prevUclWinner);
+    if (K.prevUefaWinner >= 0) take(4, K.prevUefaWinner);
+    for (auto& rk : ranked) {
+        int r = rk.first; const std::string& c = rk.second;
+        if (c == "LIE") continue;
+        int ch = res[c].standings.empty() ? -1 : res[c].standings[0];
+        if (ch >= 0 && g_world.teams[ch].parent < 0) N.l[5].push_back(ch);
+        int li = r <= 10 ? 4 : r <= 12 ? 3 : r <= 15 ? 2 : r <= 28 ? 1 : 0;
+        take(li, ch >= 0 && !used.count(ch) ? ch : nextFree(c));
+        int extra = (r <= 6) + (r <= 5) + (r <= 4);
+        for (int k = 0; k < extra; k++) take(4, nextFree(c));
+    }
+    {   // deux places « performance européenne » : les deux meilleures associations de la saison écoulée
+        std::vector<std::pair<float, std::string>> last;
+        for (auto& u : K.uefa) if (u.code != "LIE") last.push_back({ -u.pts[4], u.code });
+        std::sort(last.begin(), last.end());
+        for (int k = 0; k < 2 && k < (int)last.size(); k++) take(4, nextFree(last[k].second));
+    }
+    for (auto& rk : ranked) {           // voie de la ligue
+        int r = rk.first; const std::string& c = rk.second;
+        if (c == "LIE") continue;
+        if (r >= 5 && r <= 9) take(2, nextFree(c));
+        else if (r >= 10 && r <= 15) take(1, nextFree(c));
+    }
+    // ---- Ligue Europa
+    for (auto& rk : ranked) {
+        int r = rk.first; const std::string& c = rk.second;
+        if (c == "LIE") continue;
+        if (r <= 12) take(9, cupOf(c)); else if (r <= 16) take(7, cupOf(c));
+    }
+    if (K.prevUeclWinner >= 0) take(9, K.prevUeclWinner);
+    for (auto& rk : ranked) if (rk.first <= 5) take(9, nextFree(rk.second));
+    // ---- Ligue Conférence
+    for (auto& rk : ranked) {
+        int r = rk.first; const std::string& c = rk.second;
+        if (c == "LIE") { take(11, res[c].cup); continue; }
+        if (r <= 6) take(15, nextFree(c));
+        else if (r <= 9) { take(14, nextFree(c)); take(14, nextFree(c)); }
+        else if (r <= 12) { take(13, nextFree(c)); take(13, nextFree(c)); }
+        else if (r <= 16) take(12, nextFree(c));
+        else if (r <= 33) { take(12, cupOf(c)); take(12, nextFree(c)); if (r <= 20) take(12, nextFree(c)); }
+        else { take(11, cupOf(c)); take(11, nextFree(c)); }
+    }
+    // réserves (complètent une phase de ligue incomplète) : clubs suivants des meilleures associations
+    for (int li : { 6, 10, 16 }) {
+        for (auto& rk : ranked) {
+            if (rk.second == "LIE" || (int)N.l[li].size() >= 12) continue;
+            for (int t : res[rk.second].standings) if (!used.count(t) && g_world.teams[t].parent < 0 && std::find(N.l[li].begin(), N.l[li].end(), t) == N.l[li].end()) { N.l[li].push_back(t); break; }
+        }
+    }
+    K.newEuro = N;
+    // équivalent « ancienne formule » pour les écrans de synthèse (C1 / C3 / C4)
+    EuroSpots E;
+    E.uclGS = N.l[4]; E.uclQ3 = N.l[2]; for (int t : N.l[3]) E.uclQ3.push_back(t); E.uclQ2 = N.l[1]; E.uclQ1 = N.l[0];
+    E.uefaR1 = N.l[9]; E.uefaQR = N.l[7];
+    for (int li = 11; li <= 15; li++) for (int t : N.l[li]) E.itR1.push_back(t);
+    K.nextEuro = E;
+}
+
+void Career::addNewEuroCups() {
+    Season& S = season;
+    NewEuroSpots& N = newEuro;
+    bool ag = opts.awayGoals != 0;
+    {
+        Competition c;
+        c.format = FMT_NEWEURO; c.name = "Ligue des champions"; c.shortName = "C1"; c.kind = 3; c.tb = TB_GD; c.neutralFinal = true; c.awayGoals = ag;
+        c.host = prevUclWinner;
+        c.regionalRounds = 4; c.swissRounds = 8; c.qualSpots = 4;
+        c.koNames = { "1er tour de qualification", "2e tour de qualification", "3e tour de qualification", "Tour de barrage" };
+        c.koTimes = { -2.6, -0.6, 1.2, 3.0, 7.0, 9.2, 12.0, 14.2, 18.0, 19.2, 24.0, 25.2, 28.2, 31.2, 35.0, 38.5, 43.0 };
+        c.entrants = { N.l[0], N.l[1], N.l[2], N.l[3], N.l[4], N.l[6] };
+        c.extra2 = N.l[5];
+        ucl = addComp(S, std::move(c));
+        newEuroStart(S.comps[ucl], 0, {});
+    }
+    {
+        Competition c;
+        c.format = FMT_NEWEURO; c.name = "Ligue Europa"; c.shortName = "C3"; c.kind = 8; c.tb = TB_GD; c.neutralFinal = true; c.awayGoals = ag;
+        c.host = prevUefaWinner;
+        c.regionalRounds = 2; c.swissRounds = 8; c.qualSpots = 4;
+        c.koNames = { "3e tour de qualification", "Tour de barrage" };
+        c.koTimes = { 1.4, 3.2, 7.4, 9.4, 12.4, 14.4, 18.4, 19.4, 24.4, 25.4, 28.4, 31.4, 35.2, 38.7, 42.0 };
+        c.entrants = { N.l[7], N.l[8], N.l[9], N.l[10] };
+        c.qualPlayoff = 1 | 2 | 4;           // perdants des 2e et 3e tours et des barrages de la C1
+        uel = addComp(S, std::move(c));
+        newEuroStart(S.comps[uel], 0, {});
+    }
+    {
+        Competition c;
+        c.format = FMT_NEWEURO; c.name = "Ligue Conférence"; c.shortName = "C4"; c.kind = 9; c.tb = TB_GD; c.neutralFinal = true; c.awayGoals = ag;
+        c.host = prevUeclWinner;
+        c.regionalRounds = 4; c.swissRounds = 6; c.qualSpots = 6;
+        c.koNames = { "1er tour de qualification", "2e tour de qualification", "3e tour de qualification", "Tour de barrage" };
+        c.koTimes = { -2.4, -0.4, 1.6, 3.4, 7.6, 9.6, 12.6, 14.6, 18.6, 19.6, 28.6, 31.6, 35.4, 38.9, 41.6 };
+        c.entrants = { N.l[11], N.l[12], N.l[13], N.l[14], N.l[15], N.l[16] };
+        c.qualPlayoff = 2 | 8 | 16;          // perdants du 1er tour de C1, du 3e tour et des barrages de C3
+        uecl = addComp(S, std::move(c));
+        newEuroStart(S.comps[uecl], 0, {});
+    }
+    routeNewEuro();
+}
+
+// perdants reversés dans la compétition inférieure
+void Career::routeNewEuro() {
+    Season& S = season;
+    if (ucl < 0 || uel < 0 || uecl < 0) return;
+    if (S.comps[ucl].format != FMT_NEWEURO) return;
+    struct Rt { int src, sk, dst, dk; };
+    const Rt R[] = { { ucl, 0, uecl, 1 }, { ucl, 1, uel, 0 }, { ucl, 2, uel, 1 }, { ucl, 3, uel, 2 }, { uel, 0, uecl, 3 }, { uel, 1, uecl, 4 } };
+    bool changed = true;
+    for (int guard = 0; changed && guard < 20; guard++) {
+        changed = false;
+        for (auto& r : R) {
+            Competition& A = S.comps[r.src];
+            Competition& B = S.comps[r.dst];
+            if (!newEuroRoundDone(A, r.sk) || ((B.extReadyMask >> r.dk) & 1)) continue;
+            if ((int)B.entrants.size() <= r.dk) B.entrants.resize(r.dk + 1);
+            auto L = newEuroLosers(A, r.sk);
+            for (int t : L) B.entrants[r.dk].push_back(t);
+            B.extReadyMask |= 1 << r.dk;
+            if (B.awaiting == r.dk) B.resume();
+            changed = true;
+        }
+    }
+}
+
 // ------------------------------------------------------------------ nouvelle carrière club
 void placeInBottomPool(Pyramid& P, int team) {
-    const Team& t = g_world.teams[team];
+    Team& t = g_world.teams[team];
+    if (t.district < 0 && t.parent >= 0) t.district = g_world.teams[t.parent].district;     // réserve : district de l'équipe fanion
     int best = -1, bt = -1;
     for (int q = 0; q < (int)P.pools.size(); q++) {
         const Pool& pl = P.pools[q];
@@ -314,6 +482,7 @@ void Career::addClubToPyramid(int team) {
 }
 
 void Career::newClubCareer(int team, int yr) {
+    coach = false;
     kind = CK_CLUB;
     { std::string mn = managerName; int mnat = managerNation; uint8_t ms = managerSkin, mh = managerHair; int ma = managerAge;
       resetV7(); managerName = mn; managerNation = mnat; managerSkin = ms; managerHair = mh; managerAge = ma; }
@@ -354,6 +523,7 @@ void Career::newClubCareer(int team, int yr) {
     mgr = ManagerState();
     startSeason();
     mgrInit();
+    refreshFreeAgents(40);
     initStaff();
 }
 
@@ -489,7 +659,7 @@ static std::vector<int16_t> g_levelCache;
 static void rebuildLevelCache(const Career& K) {
     g_levelCache.assign(g_world.teams.size(), 99);
     for (auto& P : K.pyramids) for (auto& pl : P.pools) {
-        int lv = P.dom >= 0 || P.country == "U19" || P.country == "U17" ? pl.tier + 5 : pl.tier;
+        int lv = P.dom >= 0 || P.country == "U19" || P.country == "U17" || P.country == "U15" ? pl.tier + 5 : pl.tier;
         for (int t : pl.clubs) if (t < (int)g_levelCache.size()) g_levelCache[t] = (int16_t)lv;
     }
     // représentants d'outre-mer : niveau régional
@@ -525,7 +695,7 @@ void Career::startSeason() {
                 c.yellowLimit = P.country == "FRA" ? 3 : 5;
                 int n = (int)pl.groups[g].size();
                 double t0 = 1.0, t1 = 40.0;
-                bool yth = P.country == "U19" || P.country == "U17";
+                bool yth = P.country == "U19" || P.country == "U17" || P.country == "U15";
                 bool pro = (P.country != "FRA" && !yth) || (P.country == "FRA" && pl.tier <= 2);
                 if (!pro) { t0 = 2; t1 = n <= 10 ? 36 : 38; }
                 if (yth) { t0 = 3; t1 = pl.tier == 0 ? 35 : 36; c.yellowLimit = 3; }
@@ -636,7 +806,9 @@ void Career::startSeason() {
         };
         for (int r = 0; r < 13; r++) {
             std::vector<int> cand;
-            for (auto& pl : P.pools) if (pl.tier >= 4 && pl.tier <= 8) for (int t : pl.clubs) if (g_world.teams[t].region == r) cand.push_back(t);
+            // réservée aux équipes de Régional 1, 2 et 3 ; une seule équipe par club : la plus haute (l'équipe fanion si elle
+            // y joue, sinon sa meilleure réserve)
+            for (auto& pl : P.pools) if (pl.tier >= 5 && pl.tier <= 7) for (int t : pl.clubs) if (g_world.teams[t].region == r && !g_world.teams[t].youth) cand.push_back(t);
             cand = oneTeamPerClub(cand);
             if (cand.size() < 4) continue;
             Competition c;
@@ -763,34 +935,32 @@ void Career::startSeason() {
         if (kind == CK_CLUB && euroOnly) S.news.push_back("Finale de la Ligue des champions : " + uclFinalVenue + ". Finale de la Coupe UEFA : " + uefaFinalVenue + ".");
         else if (kind == CK_CLUB) S.news.push_back("Le Trophée des Champions se jouera au " + tdcVenue + ". Finale de la Ligue des champions : " + uclFinalVenue + ". Finale de la Coupe UEFA : " + uefaFinalVenue + ".");
     }
-    // Supercoupe des Régions : vainqueurs des coupes régionales de la saison précédente (1re saison : meilleur club de R1)
-    superRegions = -1;
+    // Supercoupes de région : champion de Régional 1 contre vainqueur de la coupe régionale (saison précédente) ;
+    // leurs vainqueurs disputent ensuite la Méga Coupe des Régions (tirs au but directs, même en finale)
+    superRegions = -1; regSuperCups.clear();
     {
         int fr = pyramidOf(pyramids, "FRA");
         if (kind == CK_CLUB && fr >= 0 && !euroOnly) {
             const Pyramid& P = pyramids[fr];
-            std::vector<int> t;
-            std::set<int> used;
             for (int r = 0; r < 13; r++) {
-                int w = -1;
+                std::vector<int> r1;
+                for (auto& pl : P.pools) if (pl.tier == 5 && pl.key == r) for (int x : pl.clubs) if (g_world.teams[x].parent < 0) r1.push_back(x);
+                sortByRating(r1);
+                int a = -1, b = -1;
+                auto ic = prevR1Champ.find(r);
+                if (ic != prevR1Champ.end() && ic->second >= 0 && ic->second < (int)g_world.teams.size()) a = ic->second;
                 auto it = prevRegCupWinner.find(r);
-                if (it != prevRegCupWinner.end() && it->second >= 0 && it->second < (int)g_world.teams.size() && g_world.teams[it->second].parent < 0) w = it->second;
-                if (w < 0) {
-                    float br = -1;
-                    for (auto& pl : P.pools) if (pl.tier == 5 && pl.key == r) for (int x : pl.clubs) if (g_world.teams[x].parent < 0 && g_world.teams[x].rating > br) { br = g_world.teams[x].rating; w = x; }
-                }
-                if (w >= 0 && !used.count(w)) { t.push_back(w); used.insert(w); }
-            }
-            if (t.size() >= 4) {
+                if (it != prevRegCupWinner.end() && it->second >= 0 && it->second < (int)g_world.teams.size() && g_world.teams[it->second].parent < 0) b = it->second;
+                if (a < 0 && !r1.empty()) a = r1[0];
+                if (b < 0 || b == a) { for (int x : r1) if (x != a) { b = x; break; } }
+                if (a < 0 || b < 0 || a == b) continue;
                 Competition c;
-                c.name = fmt("Supercoupe des Régions %d", year); c.shortName = "Supercoupe rég.";
-                simpleCup(c, t, 0.05, 0.9);
-                c.kind = 13; c.homeRule = 1; c.neutralFinal = true; c.noReserves = true;
-                c.koNames.clear();
-                for (int x : c.koTargets) c.koNames.push_back(x == 1 ? "Finale" : x == 2 ? "Demi-finales" : x == 4 ? "Quarts de finale" : "Tour préliminaire");
+                c.format = FMT_SINGLE; c.kind = 26; c.tag = r; c.neutralFinal = false;
+                c.name = fmt("Supercoupe de %s %d", sanitize(REGIONS[r].name).c_str(), year); c.shortName = "Supercoupe rég.";
+                c.addKOStage({ { a, b } }, 1, 0.05, "Finale", false);
+                c.matches[0].noET = 1;
                 int idx = addComp(S, std::move(c));
-                S.comps[idx].cupRound(0, S.comps[idx].entrants[0]);
-                superRegions = idx;
+                regSuperCups.push_back(idx);
             }
         }
     }
@@ -802,12 +972,15 @@ void Career::startSeason() {
         uefaSuper = addComp(S, std::move(c));
         S.comps[uefaSuper].matches[0].noET = 0;
     }
+    uecl = -1; intertoto = -1;
+    if (opts.euroFormat) addNewEuroCups();
+    else {
     // ---------------- Ligue des champions (format 2003-04)
     // semaines depuis le 1er août : Q1 mi-juillet, Q2 fin juillet, Q3 mi-août, groupes de mi-septembre à début décembre,
     // 8es fin février, quarts fin mars, demies fin avril, finale fin mai (lieu annoncé en début de saison)
     {
         Competition c;
-        c.format = FMT_UCL2000; c.name = "Ligue des Champions"; c.shortName = "C1"; c.kind = 3; c.tb = TB_H2H; c.neutralFinal = true; c.awayGoals = true;
+        c.format = FMT_UCL2000; c.name = "Ligue des Champions"; c.shortName = "C1"; c.kind = 3; c.tb = TB_H2H; c.neutralFinal = true; c.awayGoals = opts.awayGoals != 0;
         c.host = prevUclWinner;       // tenant du titre : chapeau 1
         c.entrants = { nextEuro.uclQ1, nextEuro.uclQ2, nextEuro.uclQ3, nextEuro.uclGS };
         c.koNames = { "1er tour de qualification", "2e tour de qualification", "3e tour de qualification" };
@@ -822,7 +995,7 @@ void Career::startSeason() {
     // ---------------- Coupe UEFA (format 2003-04)
     {
         Competition c;
-        c.format = FMT_UEFA2000; c.name = "Coupe UEFA"; c.shortName = "C3"; c.kind = 8; c.neutralFinal = true; c.awayGoals = true;
+        c.format = FMT_UEFA2000; c.name = "Coupe UEFA"; c.shortName = "C3"; c.kind = 8; c.neutralFinal = true; c.awayGoals = opts.awayGoals != 0;
         c.entrants = { nextEuro.uefaQR, nextEuro.uefaR1, {}, {} };
         c.koNames = { "Tour de qualification", "1er tour", "2e tour", "16es de finale", "8es de finale", "Quarts de finale", "Demi-finales", "Finale" };
         c.koTimes = { 2.2, 7.5, 13.0, 29.2, 32.0, 35.2, 38.7, 41.8 };
@@ -836,7 +1009,7 @@ void Career::startSeason() {
     intertoto = -1;
     if (!euroOnly && nextEuro.itR1.size() >= 4) {
         Competition c;
-        c.format = FMT_INTERTOTO; c.name = "Coupe Intertoto"; c.shortName = "Intertoto"; c.kind = 14; c.awayGoals = true; c.neutralFinal = false;
+        c.format = FMT_INTERTOTO; c.name = "Coupe Intertoto"; c.shortName = "Intertoto"; c.kind = 14; c.awayGoals = opts.awayGoals != 0; c.neutralFinal = false;
         c.entrants = { nextEuro.itR1, nextEuro.itR2, nextEuro.itR3, {}, {} };
         c.koNames = { "1er tour", "2e tour", "3e tour", "Demi-finales", "Finales" };
         c.koTimes = { -6.0, -4.6, -3.2, -1.8, 0.2 };
@@ -844,10 +1017,10 @@ void Career::startSeason() {
         S.comps[idx].koRound(S.comps[idx].entrants[0], 2, S.comps[idx].koTimes[0], "1er tour", false);
         intertoto = idx;
     }
-    uecl = -1;
+    }
     // ---------------- Coupe de la Ligue (L1, L2, L3)
     cdl = -1;
-    if (fr >= 0 && !euroOnly) {
+    if (fr >= 0 && !euroOnly && opts.cdl) {
         Pyramid& P = pyramids[fr];
         Competition c;
         c.format = FMT_CUP; c.name = "Coupe de la Ligue"; c.shortName = "CdL"; c.kind = 11; c.noReserves = true; c.neutralFinal = true;
@@ -947,9 +1120,47 @@ void onStageDoneHook(int comp, int stage) { g_career.onStageDone(comp, stage); }
 
 static void qualifyIntl(Career& K, int comp);
 
+// petit journal européen : qualification, repêchage en Coupe UEFA ou élimination des clubs français (et du club du joueur)
+static void euroStageNews(Career& K, int comp, int stage) {
+    Season& S = K.season;
+    const Competition& C = S.comps[comp];
+    if (stage < 0 || stage >= (int)C.stages.size()) return;
+    const Stage& st = C.stages[stage];
+    std::set<int> in, later;
+    for (auto& g : st.groups) for (int t : g) in.insert(t);
+    for (auto& t : st.ties) { if (t.a >= 0) in.insert(t.a); if (t.b >= 0) in.insert(t.b); }
+    for (auto& R : st.rounds) for (int mi : R.m) { in.insert(C.matches[mi].home); in.insert(C.matches[mi].away); }
+    bool last = stage == (int)C.stages.size() - 1;
+    if (last && C.done) return;           // finale : palmarès
+    for (int s2 = stage + 1; s2 < (int)C.stages.size(); s2++) {
+        for (auto& g : C.stages[s2].groups) for (int t : g) later.insert(t);
+        for (auto& t : C.stages[s2].ties) { later.insert(t.a); later.insert(t.b); }
+    }
+    for (int t : C.carry) later.insert(t);
+    std::string nextName = stage + 1 < (int)C.stages.size() ? C.stages[stage + 1].name : std::string("le tour suivant");
+    bool isUcl = comp == K.ucl;
+    std::string cn = isUcl ? "Ligue des champions" : C.name;
+    for (int t : in) {
+        if (t < 0) continue;
+        const Team& T = g_world.teams[t];
+        bool fr = T.nation >= 0 && std::string(NATIONS[T.nation].code) == "FRA";
+        bool user = t == K.userTeam;
+        if (!fr && !user) continue;
+        std::string pre = user ? "[Votre club] " : "";
+        if (later.count(t)) S.news.push_back(pre + cn + " (" + st.name + ") : " + T.name + " se qualifie pour " + (nextName == "le tour suivant" ? nextName : "le tour suivant : " + nextName) + " !");
+        else if (C.format == FMT_NEWEURO && st.type == ST_KO && [&]() { for (int oc : { K.uel, K.uecl }) if (oc >= 0 && oc != comp) for (auto& e : S.comps[oc].entrants) for (int x : e) if (x == t) return true; return false; }())
+            S.news.push_back(pre + cn + " (" + st.name + ") : " + T.name + " est éliminé mais reversé en " + (comp == K.ucl ? "Ligue Europa." : "Ligue Conférence."));
+        else if (C.format != FMT_NEWEURO && isUcl && (std::find(C.extra.begin(), C.extra.end(), t) != C.extra.end() || std::find(C.extra2.begin(), C.extra2.end(), t) != C.extra2.end()))
+            S.news.push_back(pre + cn + " (" + st.name + ") : " + T.name + " est éliminé mais reversé en Coupe UEFA.");
+        else if (!last || !C.done) S.news.push_back(pre + cn + " (" + st.name + ") : " + T.name + " est éliminé.");
+    }
+}
+
 void Career::onStageDone(int comp, int stage) {
     if (kind != CK_CLUB) return;
     Season& S = season;
+    if ((comp == ucl || comp == uel || comp == uecl) && comp >= 0) euroStageNews(*this, comp, stage);
+    if (opts.euroFormat) { routeNewEuro(); return; }
     if (comp != ucl || uel < 0) return;
     Competition& U = S.comps[ucl];
     Competition& E = S.comps[uel];
@@ -1010,8 +1221,31 @@ void Career::onCompetitionDone(int comp) {
         for (int t : C.result) E.entrants[1].push_back(t);
         for (int t : C.result) season.news.push_back(g_world.teams[t].name + " remporte une finale de la Coupe Intertoto et se qualifie pour la Coupe UEFA.");
     }
-    if (kind == CK_INTL) { qualifyIntl(*this, comp); return; }
+    if (kind == CK_INTL) { nlOnCompDone(*this, comp); if (coach) coachOnCompDone(*this, comp); if (C.kind >= 30 && C.kind <= 33) return; if (intlType >= IT_OLYMPICS) youthQualify(*this, comp); else qualifyIntl(*this, comp); return; }
     if (kind == CK_CUSTOM) { if (C.winner >= 0) history.push_back(C.name + " : " + g_world.teams[C.winner].name); return; }
+    if (kind == CK_CLUB && comp == ucl && cwcYear(year)) cwcCreate(*this);
+    if (C.kind == 28 && C.winner >= 0) {
+        addHonour(C.winner, fmt("Vainqueur de la Coupe du monde des clubs de la FIFA (%d)", year + 1));
+        history.push_back(seasonLabel(year) + " " + C.name + " : " + g_world.teams[C.winner].name);
+        season.news.push_back(C.name + " : " + g_world.teams[C.winner].name + " est champion du monde des clubs !");
+        return;
+    }
+    if (C.kind == 26 && superRegions < 0) {
+        bool all = true; std::vector<int> w;
+        for (int c : regSuperCups) { if (!season.comps[c].done) all = false; else if (season.comps[c].winner >= 0) w.push_back(season.comps[c].winner); }
+        if (all && w.size() >= 4) {
+            Competition m;
+            m.name = fmt("Méga Coupe des Régions %d", year); m.shortName = "Méga Coupe";
+            simpleCup(m, w, 3.0, 9.0);
+            m.kind = 27; m.homeRule = 1; m.neutralFinal = true; m.noReserves = true;
+            m.koNames.clear();
+            for (int x : m.koTargets) m.koNames.push_back(x == 1 ? "Finale" : x == 2 ? "Demi-finales" : x == 4 ? "Quarts de finale" : "Tour préliminaire");
+            int idx = addComp(season, std::move(m));
+            season.comps[idx].cupRound(0, season.comps[idx].entrants[0]);
+            superRegions = idx;
+            season.news.push_back(season.comps[idx].name + " : les vainqueurs des supercoupes de région s'affrontent (tirs au but directs, même en finale).");
+        }
+    }
     onU19CompDone(comp);
     std::string y = seasonLabel(year);
     if (C.format != FMT_LEAGUE && C.winner >= 0 && C.kind != 10 && C.kind != 12 && C.kind != 20 && C.name.find("tours régionaux") == std::string::npos)
@@ -1208,7 +1442,7 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
             guard = 0;
             while ((int)pl.clubs.size() < target && guard++ < 500) {
                 int bestc = -1; float bv = 1e9; int bq = -1;
-                for (int t2 = t + 1; t2 < T && bestc < 0; t2++) {
+                for (int t2 = t + 1; t2 < T && t2 <= t + 1 && bestc < 0; t2++) {     // jamais deux niveaux d'un coup
                     for (int q2 = 0; q2 < (int)P.pools.size(); q2++) {
                         Pool& lo = P.pools[q2];
                         if (lo.tier != t2) continue;
@@ -1258,6 +1492,7 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
                 if (lo.tier != cur + 1) continue;
                 for (int c : lo.clubs) {
                     if (c == r) continue;
+                    if (oldTier.count(c) && oldTier[c] != cur + 1) continue;       // un promu de l'étage inférieur ne saute pas un niveau
                     if (P.tiers[cur].scope != SC_NATIONAL && P.keyFor(cur, c) != P.pools[qa].key) continue;
                     if (!eligible(c, cur)) continue;
                     float v = rank[c].ratio * 10 - rank[c].ppg;
@@ -1306,12 +1541,21 @@ static void computeUefaPoints(Career& K) {
     std::map<int, float> cp;                   // points des clubs
     std::map<std::string, std::set<int>> clubs;
     auto code = [](int t) { int n = g_world.teams[t].nation; return n >= 0 ? std::string(NATIONS[n].code) : std::string(); };
-    for (int ci : { K.ucl, K.uel }) {
-        if (ci < 0) continue;
+    for (int ci : { K.ucl, K.uel, K.uecl }) {
+        if (ci < 0 || ci >= (int)K.season.comps.size()) continue;
         const Competition& C = K.season.comps[ci];
         for (int s = 0; s < (int)C.stages.size(); s++) {
             const Stage& st = C.stages[s];
             bool qual = (C.format == FMT_UCL2000 && s < 3) || (C.format == FMT_UEFA2000 && s == 0);
+            if (C.format == FMT_NEWEURO) {
+                for (int k = 0; k < C.regionalRounds && k < (int)C.koNames.size(); k++) if (st.name == C.koNames[k]) qual = true;
+                if (st.type == ST_SWISS && !st.groups.empty()) {
+                    // phase de ligue : bonus de participation, bonus des 8 premiers (qualifiés directs pour les 8es)
+                    float part = C.kind == 3 ? 6.f : C.kind == 8 ? 4.f : 2.5f, top = C.kind == 3 ? 4.f : C.kind == 8 ? 2.f : 1.f;
+                    for (int t : st.groups[0]) { pts[code(t)] += part; cp[t] += part; }
+                    for (int i = 0; i < 8 && i < (int)C.extra.size(); i++) { pts[code(C.extra[i])] += top; cp[C.extra[i]] += top; }
+                }
+            }
             float k = qual ? 0.5f : 1.f;
             for (auto& g : st.groups) for (int t : g) clubs[code(t)].insert(t);
             for (auto& t : st.ties) { if (t.a >= 0) clubs[code(t.a)].insert(t.a); if (t.b >= 0) clubs[code(t.b)].insert(t.b); }
@@ -1324,7 +1568,7 @@ static void computeUefaPoints(Career& K) {
             }
             // bonus
             if (C.format == FMT_UCL2000 && st.type == ST_LEAGUE && s == 3) for (auto& g : st.groups) for (int t : g) { pts[code(t)] += 1; cp[t] += 1; }
-            if (st.type == ST_KO && !qual && (st.name.find("Quarts") != std::string::npos || st.name.find("Demi") != std::string::npos || st.name == "Finale"))
+            if (st.type == ST_KO && !qual && (st.name.find("Quarts") != std::string::npos || st.name.find("Demi") != std::string::npos || st.name == "Finale" || (C.format == FMT_NEWEURO && st.name == "8es de finale")))
                 for (auto& t : st.ties) { if (t.a >= 0) { pts[code(t.a)] += 1; cp[t.a] += 1; } if (t.b >= 0) { pts[code(t.b)] += 1; cp[t.b] += 1; } }
         }
     }
@@ -1381,7 +1625,8 @@ void Career::endSeason() {
     if (u17Final >= 0) history.push_back(y + " Champion de France U17 : " + champ(u17Final));
     if (gambNational >= 0) history.push_back(y + " Coupe Gambardella : " + champ(gambNational));
     history.push_back(y + " Ligue des Champions : " + champ(ucl));
-    history.push_back(y + " Coupe UEFA : " + champ(uel));
+    history.push_back(y + (opts.euroFormat ? " Ligue Europa : " : " Coupe UEFA : ") + champ(uel));
+    if (uecl >= 0) history.push_back(y + " Ligue Conférence : " + champ(uecl));
     {
         int p, q, g;
         if (tierOfTeam(userTeam, &p, &q, &g) >= 0) {
@@ -1393,8 +1638,28 @@ void Career::endSeason() {
     }
     // tenants pour les supercoupes
     for (int c : regionalCups) if (S.comps[c].done && S.comps[c].winner >= 0) prevRegCupWinner[S.comps[c].tag] = S.comps[c].winner;
+    {   // champions de Régional 1 (meilleur premier des poules de la région)
+        int fr = pyramidOf(pyramids, "FRA");
+        prevR1Champ.clear();
+        if (fr >= 0) {
+            std::map<int, float> best;
+            for (auto& pl : pyramids[fr].pools) {
+                if (pl.tier != 5) continue;
+                for (int ci : pl.comps) {
+                    const Competition& C = S.comps[ci];
+                    if (C.result.empty()) continue;
+                    auto tb = C.table(0, 0);
+                    float v = tb.empty() || !tb[0].p ? 0.f : (float)tb[0].pts / tb[0].p;
+                    int ch = C.result[0];
+                    if (g_world.teams[ch].parent >= 0) continue;
+                    if (!best.count(pl.key) || v > best[pl.key]) { best[pl.key] = v; prevR1Champ[pl.key] = ch; }
+                }
+            }
+        }
+    }
     prevUclWinner = ucl >= 0 ? S.comps[ucl].winner : -1;
     prevUefaWinner = uel >= 0 ? S.comps[uel].winner : -1;
+    prevUeclWinner = uecl >= 0 ? S.comps[uecl].winner : -1;
     for (int p = 0; p < (int)pyramids.size(); p++) {
         if (pyramids[p].dom >= 0) continue;
         CountryRes r = countryResult(*this, pyramids[p].country, true);
@@ -1406,7 +1671,58 @@ void Career::endSeason() {
     computeUefaPoints(*this);
     computeEuro(*this, true);
     std::map<int, RankInfo> rank;
+    // journal : montées et descentes (club du joueur et ses équipes, clubs de L1 à National 2)
+    std::map<int, int> tierBefore;
+    {
+        int frp = pyramidOf(pyramids, "FRA");
+        if (frp >= 0) for (auto& pl : pyramids[frp].pools) if (pl.tier <= 3) for (int c : pl.clubs) if (g_world.teams[c].parent < 0) tierBefore[c] = pl.tier;
+        if (kind == CK_CLUB) for (int i = 0; i < (int)g_world.teams.size(); i++) if (i == userTeam || g_world.teams[i].parent == userTeam) { int tb = tierOfTeam(i); if (tb >= 0) tierBefore[i] = tb; }
+    }
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) movePyramid(*this, p, rank);
+    for (auto& kv : tierBefore) {
+        int ta = tierOfTeam(kv.first);
+        if (ta < 0 || ta == kv.second) continue;
+        const Team& t = g_world.teams[kv.first];
+        bool mine = kv.first == userTeam || t.parent == userTeam;
+        std::string lvl = teamLevelName(kv.first);
+        std::string cut = lvl.substr(0, lvl.find(" - "));
+        if (ta < kv.second) msgs.push_back(std::string(mine ? "[Votre club] " : "") + "PROMOTION : " + t.name + " monte en " + cut + " !");
+        else msgs.push_back(std::string(mine ? "[Votre club] " : "") + "RELÉGATION : " + t.name + " descend en " + cut + ".");
+        addReputation(kv.first, ta < kv.second ? 4 : -5);
+    }
+    // dépôt de bilan : rétrogradation administrative (au moins deux divisions, jusqu'au Régional 1)
+    if (kind == CK_CLUB && mgr.managerMode && mgr.bankrupt && userTeam >= 0) {
+        mgr.bankrupt = 0;
+        int p, q, g;
+        int cur = tierOfTeam(userTeam, &p, &q, &g);
+        if (cur >= 0) {
+            Pyramid& P = pyramids[p];
+            int target = std::min((int)P.tiers.size() - 1, std::max(cur + 2, 5));
+            int tq = -1;
+            for (int t2 = target; t2 < (int)P.tiers.size() && tq < 0; t2++) tq = P.poolIndex(t2, P.keyFor(t2, userTeam));
+            if (tq >= 0) {
+                Pool& A = P.pools[q];
+                A.clubs.erase(std::remove(A.clubs.begin(), A.clubs.end(), userTeam), A.clubs.end());
+                for (auto& gr : A.groups) gr.erase(std::remove(gr.begin(), gr.end(), userTeam), gr.end());
+                Pool& B = P.pools[tq];
+                B.clubs.push_back(userTeam);
+                if (B.groups.empty()) B.groups.push_back({});
+                int gi = 0; for (int k = 1; k < (int)B.groups.size(); k++) if (B.groups[k].size() < B.groups[gi].size()) gi = k;
+                B.groups[gi].push_back(userTeam);
+                msgs.push_back("[Votre club] DÉPÔT DE BILAN : le club repart en " + P.tiers[B.tier].name + " (rétrogradation administrative).");
+            }
+        }
+        Team& U = g_world.teams[userTeam];
+        // les contrats professionnels sont rompus : les joueurs les mieux payés s'en vont
+        std::vector<std::pair<int, int>> w; for (auto& pl : U.squad) w.push_back({ -playerWage(pl), pl.id });
+        std::sort(w.begin(), w.end());
+        for (size_t k = 0; k < w.size() && U.squad.size() > 18 && k < 10; k++) {
+            int idx; if (g_world.findPlayer(w[k].second, &idx) == userTeam) { Player pl = U.squad[idx]; U.squad.erase(U.squad.begin() + idx); pl.wageK = 0; pl.years = 1; int fa = freeAgentsTeam(); g_world.teams[fa].squad.push_back(pl); }
+        }
+        U.xi.clear();
+        addReputation(userTeam, -25);
+        mgr.budget = std::max<int64_t>(10, mgr.incomeBase / 20); mgr.dncg = 0; mgr.confidence = 50;
+    }
     // clubs créés en cours de saison
     int fr = pyramidOf(pyramids, "FRA");
     int ypy = u19Pyramid();
@@ -1417,7 +1733,9 @@ void Career::endSeason() {
     if (fr >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[fr]);
     if (ypy >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[ypy]);
     { int p17 = u17Pyramid(); if (p17 >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[p17]); }
+    { int p15 = u15Pyramid(); if (p15 >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[p15]); }
     pendingNewClubs.clear();
+    archiveSeason();                  // avant l'historique des joueurs (qui remet les compteurs à zéro)
     recordSeasonHistory();
     ageSquads(userTeam, msgs);
     for (auto& t : g_world.teams) if (t.squadGen) for (auto& pl : t.squad) { pl.suspended = 0; pl.yellows = 0; pl.goals = 0; pl.apps = 0; pl.assists = 0; pl.injured = 0; }
@@ -1425,7 +1743,7 @@ void Career::endSeason() {
     mgr.boardRequests = 0;
     year++;
     startSeason();
-    if (kind == CK_CLUB && !euroOnly) { mgrInit(); aiTransfers(120); }
+    if (kind == CK_CLUB && !euroOnly) { mgrInit(); aiTransfers(120); refreshFreeAgents(40); }
     else if (euroOnly) aiTransfers(60);
     for (auto& n : msgs) season.news.push_back(n);
 }
@@ -1433,7 +1751,8 @@ void Career::endSeason() {
 // ------------------------------------------------------------------ jeunes (U19)
 int Career::u19Pyramid() const { for (int i = 0; i < (int)pyramids.size(); i++) if (pyramids[i].country == "U19") return i; return -1; }
 int Career::u17Pyramid() const { for (int i = 0; i < (int)pyramids.size(); i++) if (pyramids[i].country == "U17") return i; return -1; }
-int Career::youthPyramid(int team) const { return g_world.teams[team].youth == 2 ? u17Pyramid() : u19Pyramid(); }
+int Career::u15Pyramid() const { for (int i = 0; i < (int)pyramids.size(); i++) if (pyramids[i].country == "U15") return i; return -1; }
+int Career::youthPyramid(int team) const { int y = g_world.teams[team].youth; return y == 3 ? u15Pyramid() : y == 2 ? u17Pyramid() : u19Pyramid(); }
 
 void Career::onU19CompDone(int comp) {
     Season& S = season;
@@ -1594,19 +1913,19 @@ void Career::startYouthGroups(const std::vector<int>& teams0) {
 
 int Career::createU19(int club, std::string& err) { return createYouth(club, 1, err); }
 int Career::createYouth(int club, int ykind, std::string& err) {
-    const char* A = ykind == 2 ? "U17" : "U19";
+    const char* A = ykind == 3 ? "U15" : ykind == 2 ? "U17" : "U19";
     for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == club && g_world.teams[i].youth == ykind) { err = std::string("Le club a déjà une équipe ") + A + "."; return -1; }
     for (int t : pendingNewClubs) if (g_world.teams[t].parent == club && g_world.teams[t].youth == ykind) { err = std::string("L'équipe ") + A + " est déjà créée."; return -1; }
     int idx = makeYouthTeam(g_world, club, ykind);
     Team& t = g_world.teams[idx];
-    t.rating = std::max(12.f, g_world.teams[club].rating * (ykind == 2 ? 0.4f : 0.45f) + 8.f);   // section naissante
+    t.rating = std::max(10.f, g_world.teams[club].rating * (ykind == 3 ? 0.35f : ykind == 2 ? 0.4f : 0.45f) + 8.f);   // section naissante
     t.founded = year;
     initStadium(t, 8, -1);
     if (kind == CK_CLUB && !season.comps.empty()) {
         pendingNewClubs.push_back(idx);
         season.news.push_back(t.name + " est créée : elle débutera la saison prochaine en District " + A + ".");
     } else {
-        int yp = ykind == 2 ? u17Pyramid() : u19Pyramid();
+        int yp = ykind == 3 ? u15Pyramid() : ykind == 2 ? u17Pyramid() : u19Pyramid();
         if (yp >= 0) { placeInBottomPool(pyramids[yp], idx); }
     }
     return idx;
@@ -1628,6 +1947,7 @@ std::vector<int> Career::euroCandidates() {
 }
 
 void Career::newEuroCareer(const std::vector<int>& ctrl, int yr) {
+    coach = false;
     newClubCareer(ctrl.empty() ? 0 : ctrl[0], yr);      // base commune (coefficients, tenants, manager)
     // on repart d'une saison vide avec uniquement les coupes d'Europe
     euroOnly = true;
@@ -1657,11 +1977,17 @@ void ageSquads(int userTeam, std::vector<std::string>& news) {
             else d = r.range(-5, -1);
             auto adj = [&](uint8_t& v) { v = (uint8_t)std::max(5, std::min(99, (int)v + d)); };
             if (d) { adj(p.speed); adj(p.shoot); adj(p.pass); adj(p.tackle); adj(p.stamina); if (p.pos == POS_GK) adj(p.keep); }
-            if (t.youth && t.parent >= 0 && p.age >= (t.youth == 2 ? 17 : 20)) {
+            if (t.youth && t.parent >= 0 && p.age >= (t.youth == 3 ? 15 : t.youth == 2 ? 17 : 20)) {
                 // trop âgé : U17 -> U19 du club ; U19 -> réserve (ou équipe première) ; un jeune arrive à sa place
                 int dest = t.parent;
                 for (int k = 0; k < (int)g_world.teams.size(); k++) if (g_world.teams[k].parent == t.parent && !g_world.teams[k].youth && g_world.teams[k].resLevel == 1) dest = k;
                 if (t.youth == 2) for (int k = 0; k < (int)g_world.teams.size(); k++) if (g_world.teams[k].parent == t.parent && g_world.teams[k].youth == 1) dest = k;
+                if (t.youth == 3) {   // U15 -> U17 du club (sinon U19, sinon réserve)
+                    int d17 = -1, d19 = -1;
+                    for (int k = 0; k < (int)g_world.teams.size(); k++) if (g_world.teams[k].parent == t.parent) { if (g_world.teams[k].youth == 2) d17 = k; if (g_world.teams[k].youth == 1) d19 = k; }
+                    if (d19 >= 0) dest = d19;
+                    if (d17 >= 0) dest = d17;
+                }
                 Team& D = g_world.teams[dest];
                 bool isUser = t.parent == userTeam;
                 if (D.squadGen) {
@@ -1675,11 +2001,11 @@ void ageSquads(int userTeam, std::vector<std::string>& news) {
                         for (int k = 0; k < (int)D.squad.size(); k++) { int v = D.squad[k].overall() - (D.squad[k].age > 28 ? 5 : 0); if (v < wv) { wv = v; worst = k; } }
                         if (worst >= 0) { D.xi.clear(); D.squad.erase(D.squad.begin() + worst); }
                     }
-                    if (isUser) news.push_back(p.name + fmt(" (%d ans) quitte les %s et rejoint %s.", p.age, t.youth == 2 ? "U17" : "U19", D.name.c_str()));
+                    if (isUser) news.push_back(p.name + fmt(" (%d ans) quitte les %s et rejoint %s.", p.age, t.youth == 3 ? "U15" : t.youth == 2 ? "U17" : "U19", D.name.c_str()));
                 }
                 int pos = p.pos;
                 Player y = g_world.makeYouth(ti, pos, t.rating - 4);
-                y.age = (uint8_t)((t.youth == 2 ? 15 : 16) + r.range(0, 1));
+                y.age = (uint8_t)((t.youth == 3 ? 13 : t.youth == 2 ? 15 : 16) + r.range(0, 1));
                 t.squad[i] = y;
                 t.xi.clear();
                 continue;
@@ -1716,88 +2042,272 @@ void ageSquads(int userTeam, std::vector<std::string>& news) {
     }
 }
 
-// ------------------------------------------------------------------ règles d'une division (texte)
+// ------------------------------------------------------------------ règles d'une compétition (texte structuré)
+// Format : « # » titre, « ## » sous-titre, « - » puce, sinon paragraphe.
+static void tbLines(int tb, std::string& s) {
+    switch (tb) {
+    case TB_LFP:
+        s += "- 1. Différence de buts générale\n- 2. Points obtenus dans les matchs entre les équipes à égalité\n- 3. Différence de buts dans ces matchs\n- 4. Buts marqués (général)\n- 5. Nombre de victoires, puis victoires à l'extérieur\n";
+        break;
+    case TB_FFF:
+        s += "- 1. Points obtenus dans les matchs entre les équipes à égalité (classement particulier)\n- 2. Différence de buts particulière\n- 3. Différence de buts générale\n- 4. Buts marqués (général)\n";
+        break;
+    case TB_H2H:
+        s += "- 1. Points dans les confrontations directes\n- 2. Différence de buts dans les confrontations directes\n- 3. Différence de buts générale\n- 4. Buts marqués\n";
+        break;
+    case TB_ENG: case TB_FIFA:
+        s += "- 1. Différence de buts générale\n- 2. Buts marqués\n- 3. Points dans les confrontations directes\n";
+        break;
+    default:
+        s += "- 1. Différence de buts\n- 2. Buts marqués\n";
+        break;
+    }
+}
+
 std::string Career::divisionRules(int comp) const {
     const Competition& C = season.comps[comp];
-    std::string s;
-    if (C.format == FMT_LEAGUE && C.kind == 1 && C.tag >= 0 && kind == CK_CLUB) {
+    std::string s = "# " + C.name + "\n";
+    auto H = [&](const std::string& t) { s += "## " + t + "\n"; };
+    auto P = [&](const std::string& t) { s += t + "\n"; };
+    auto B = [&](const std::string& t) { s += "- " + t + "\n"; };
+    auto koDraw = [&](bool etOk, bool finalET) {
+        H("En cas d'égalité");
+        if (!etOk) { B("Pas de prolongation : tirs au but directement (5 tirs chacun, puis mort subite)."); if (finalET) B("Finale : prolongation (2 x 15 min) puis tirs au but."); }
+        else B("Prolongation (2 x 15 min), puis tirs au but (5 tirs chacun, puis mort subite).");
+    };
+    auto twoLegs = [&](bool ag) {
+        H("Matchs aller-retour");
+        B("L'équipe qui marque le plus de buts sur les deux matchs est qualifiée.");
+        if (ag) B("À égalité : les buts marqués à l'extérieur comptent double (y compris pendant la prolongation).");
+        else B("Pas de règle des buts à l'extérieur : à égalité, prolongation au match retour.");
+        B("Puis tirs au but.");
+    };
+    bool club = kind == CK_CLUB;
+    if (C.format == FMT_LEAGUE && C.kind == 1 && C.tag >= 0 && club) {
         int p = C.tag / 100000, q = (C.tag / 100) % 1000;
-        const Pyramid& P = pyramids[p];
-        const Pool& pl = P.pools[q];
-        const TierConf& T = P.tiers[pl.tier];
-        s += fmt("Points : victoire %d, nul 1, défaite 0. ", C.ptsWin);
-        s += tieBreakText(C.tb);
-        s += "\n";
+        const Pyramid& PY = pyramids[p];
+        const Pool& pl = PY.pools[q];
+        const TierConf& T = PY.tiers[pl.tier];
+        int n = C.stages.empty() || C.stages[0].groups.empty() ? 0 : (int)C.stages[0].groups[0].size();
+        H("Format");
+        B(fmt("%d équipes, matchs aller-retour (%d journées).", n, n > 1 ? 2 * (n - 1) : 0));
+        H("Points");
+        B(fmt("Victoire : %d points, nul : 1 point, défaite : 0 point.", C.ptsWin));
+        H("Départage en cas d'égalité de points");
+        tbLines(C.tb, s);
+        if (PY.country == "FRA" || PY.country == "U19" || PY.country == "U17" || PY.country == "U15") H("Montées et descentes");
+        else H("Montées et descentes");
         if (pl.tier > 0 && T.up > 0) {
-            s += fmt("Montée : %d premier%s", T.up, T.up > 1 ? "s" : "");
-            if (pl.upCap >= 0) s += fmt(" (au total %d montée%s pour la ligue, meilleurs premiers)", pl.upCap, pl.upCap > 1 ? "s" : "");
-            s += " en " + P.tiers[pl.tier - 1].name + ". ";
+            std::string m = fmt("Montée en %s : %d premier%s", PY.tiers[pl.tier - 1].name.c_str(), T.up, T.up > 1 ? "s" : "");
+            if (pl.upCap >= 0) m += fmt(" (au total %d montée%s pour la ligue : les meilleurs premiers)", pl.upCap, pl.upCap > 1 ? "s" : "");
+            B(m + ".");
         }
-        if (T.barrageUp == 1) s += "Le 3e dispute un barrage aller-retour contre le 16e de la division supérieure. ";
-        if (T.barrageUp == 2) s += fmt("Play-offs pour une montée supplémentaire (du %de au %de). ", T.up + 1, T.up + 4);
-        if (T.barrageUp == 3) s += "Barrages : 5e contre 4e, le vainqueur chez le 3e, puis barrage aller-retour contre le 16e de L1. ";
-        if (!T.flexible && !pl.terminal && T.down > 0) s += fmt("Descente : %d dernier%s (plus éventuellement les descentes en cascade). ", T.down, T.down > 1 ? "s" : "");
-        if (pl.terminal || T.flexible) s += "Dernier niveau du district : pas de relégation ; deux équipes d'un même club y sont placées dans des poules différentes. ";
-        s += "\n";
-        if (T.noReserves) s += "Division interdite aux équipes réserves. ";
-        else if (P.country == "FRA") s += "Équipes réserves autorisées, mais jamais au même niveau (ou au-dessus) de l'équipe supérieure du club ; une réserve ne peut pas accéder à la Ligue 3. ";
-        if (P.country == "FRA" && pl.tier >= 3) s += "Montées/descentes selon la zone géographique (région, district).";
-        if (P.country == "U17") {
-            s += "Championnat réservé aux joueurs de moins de 17 ans (U17). À la fin de la saison, les joueurs trop âgés rejoignent l'équipe U19 du club (ou la réserve). ";
-            if (pl.tier == 0) s += "National U17 : 4 poules de 14 ; les deux premiers de chaque poule disputent la phase finale (quarts, demi-finales et finale en matchs secs) pour le titre de champion de France U17. ";
-            if (pl.tier == 1) s += "Le meilleur premier de chaque ligue accède au National U17. ";
-            s += "Montées/descentes à l'intérieur de sa ligue et de son district.";
+        if (pl.tier == 0 && PY.country == "FRA" && PY.dom < 0) B("Le champion est sacré champion de France. Les places européennes dépendent du coefficient UEFA de la France.");
+        if (T.barrageUp == 1) B("Le 3e dispute un barrage aller-retour contre le 16e de la division supérieure.");
+        if (T.barrageUp == 2) B(fmt("Play-offs pour une montée supplémentaire (du %de au %de).", T.up + 1, T.up + 4));
+        if (T.barrageUp == 3) B("Barrages : le 5e reçoit le 4e, le vainqueur va chez le 3e, puis barrage aller-retour contre le 16e de Ligue 1.");
+        if (!T.flexible && !pl.terminal && T.down > 0) B(fmt("Descente : %d dernier%s (plus d'éventuelles descentes en cascade, rétrogradations administratives de la DNCG).", T.down, T.down > 1 ? "s" : ""));
+        if (pl.terminal || T.flexible) B("Dernier niveau du district : pas de relégation ; deux équipes d'un même club sont placées dans des poules différentes.");
+        if (PY.country == "FRA" && pl.tier >= 3) B("Montées et descentes selon la zone géographique (région, district).");
+        H("Équipes réserves");
+        if (T.noReserves) B("Division interdite aux équipes réserves.");
+        else if (PY.country == "FRA") { B("Autorisées, mais jamais au même niveau ou au-dessus de l'équipe supérieure du club."); B("Une réserve ne peut pas accéder à la Ligue 3."); }
+        else B("Selon le règlement du pays.");
+        if (PY.country == "U15" || PY.country == "U17" || PY.country == "U19") {
+            H("Catégorie de jeunes");
+            if (PY.country == "U15") { B("Joueurs de moins de 15 ans (U15). Championnats de ligue et de district uniquement : pas de championnat national."); B("En fin de saison, les joueurs trop âgés rejoignent l'équipe U17 (ou U19) du club."); }
+            if (PY.country == "U17") { B("Joueurs de moins de 17 ans (U17). En fin de saison, les joueurs trop âgés rejoignent l'équipe U19 du club."); if (pl.tier == 0) B("National U17 : 4 poules de 14 ; les deux premiers de chaque poule disputent la phase finale (quarts, demies, finale en matchs secs)."); if (pl.tier == 1) B("Le meilleur premier de chaque ligue accède au National U17."); }
+            if (PY.country == "U19") { B("Joueurs de moins de 20 ans (U19). En fin de saison, les joueurs trop âgés rejoignent la réserve ou l'équipe première."); if (pl.tier == 0) B("National U19 : 4 poules de 14 ; les deux premiers de chaque poule disputent la phase finale (quarts, demies, finale en matchs secs)."); if (pl.tier == 1) B("Le meilleur premier de chaque ligue accède au National U19."); }
         }
-        if (P.country == "U19") {
-            s += "Championnat réservé aux joueurs de moins de 20 ans (U19). À la fin de la saison, les joueurs trop âgés rejoignent la réserve ou l'équipe première du club. ";
-            if (pl.tier == 0) s += "National U19 : 4 poules de 14 ; les deux premiers de chaque poule disputent la phase finale (quarts, demi-finales et finale en matchs secs) pour le titre de champion de France U19. ";
-            if (pl.tier == 1) s += "Le meilleur premier de chaque ligue accède au National U19. ";
-            s += "Montées/descentes à l'intérieur de sa ligue et de son district.";
-        }
-    } else if (C.format == FMT_CUP && C.penaltiesOnly()) {
-        s = "Coupe à élimination directe, match unique. En cas d'égalité : pas de prolongation, tirs au but directement (5 tirs chacun, puis mort subite). Finale : prolongation puis tirs au but.\n";
-        if (C.rollingSubs()) s += "Feuille de match de 14 joueurs (11 titulaires + 3 remplaçants) ; remplacements illimités, un joueur remplacé peut revenir en jeu.\n";
-        auto cv = cupVenue.find(comp);
-        if (cv != cupVenue.end() && !cv->second.empty()) s += "Finale sur terrain neutre, désigné en début de saison : " + cv->second + ".\n";
-        if (C.kind == 15) s += "Coupe Gambardella (U19) : phase nationale à partir du 1er tour fédéral avec l'entrée des clubs du National U19 ; finale au Stade de France. ";
-        if (C.kind == 16) s += "Coupe Gambardella (U19) : tours régionaux organisés par la ligue ; les qualifiés rejoignent la phase nationale. ";
+    } else if (C.format == FMT_LEAGUE) {
+        H("Format"); B("Championnat en matchs aller-retour.");
+        H("Points"); B(fmt("Victoire : %d points, nul : 1 point.", C.ptsWin));
+        H("Départage en cas d'égalité de points"); tbLines(C.tb, s);
+    } else if (C.kind == 26) {
+        H("Format"); B("Match unique chez le champion de Régional 1 de la saison précédente, contre le vainqueur de la coupe régionale (ou le 2e de Régional 1).");
+        koDraw(false, false);
+        H("Qualification"); B("Le vainqueur est qualifié pour la Méga Coupe des Régions.");
+    } else if (C.kind == 27) {
+        H("Format"); B("Les vainqueurs de toutes les supercoupes de région."); B("Élimination directe en match unique, finale sur terrain neutre.");
+        koDraw(false, false); B("Aucune prolongation, même en finale.");
+    } else if (C.kind == 28) {
+        H("Format"); B("32 clubs, tous les quatre ans, en juin et juillet, dans le pays organisateur.");
+        B("8 groupes de 4 (victoire 3 points, nul 1) : les deux premiers en 8es de finale.");
+        B("Élimination directe en matchs secs (8es, quarts, demies, finale), pas de match pour la 3e place.");
+        H("Départage en groupe"); tbLines(C.tb, s);
+        H("Qualification");
+        B("UEFA : 12 clubs (vainqueurs de la Ligue des champions des quatre dernières saisons, puis classement des clubs sur quatre saisons).");
+        B("CONMEBOL 6, AFC 4, CAF 4, CONCACAF 4, OFC 1, pays hôte 1.");
+        B("Deux clubs au plus par pays, sauf vainqueurs continentaux.");
+        koDraw(true, false);
     } else if (C.format == FMT_CUP) {
-        s = "Coupe à élimination directe, match unique. En cas d'égalité à la fin du temps réglementaire : prolongation (2 x 15 min), puis tirs au but (5 tirs chacun, puis mort subite).\n";
-        if (C.homeRule == 1) s += "Tirage au sort : le premier club tiré reçoit, mais si deux divisions (ou plus) séparent les deux clubs, le club de la plus petite division reçoit. ";
-        else s += "Tirage au sort intégral : le premier club tiré reçoit, sans protection du club de division inférieure. ";
-        if (C.regionalDraw) s += "Tirage régionalisé (clubs géographiquement proches) dans les premiers tours. ";
-        if (C.neutralFinal) s += "Finale sur terrain neutre. ";
-        if (C.kind == 11) s += "Coupe de la Ligue : tirage au sort des tours préliminaires et des 16es ; tirage des 8es qui fixe le tableau jusqu'à la finale (vainqueur du match 1 contre vainqueur du match 2...). Finale au Stade de France. ";
-        if (C.kind == 6) s += "Trophée des Champions : match unique sur terrain neutre, dans un grand stade français différent chaque saison. ";
-        if (C.kind == 16) s += "Coupe Gambardella (U19) : tours régionaux organisés par la ligue ; les qualifiés rejoignent la phase nationale. ";
-        if (C.kind == 15) s += "Coupe Gambardella (U19) : phase nationale à partir du 1er tour fédéral avec l'entrée des clubs du National U19 ; finale au Stade de France. ";
-        s += "\n";
-        if (C.noReserves) s += "Les équipes réserves ne participent pas. ";
-        if (C.kind == 4 || C.kind == 5) s += "Une seule équipe par club : les réserves jouent si aucune équipe supérieure du club n'est engagée.";
-        if (C.name.find("tours régionaux") != std::string::npos) s += C.tag >= 0 && C.tag < 13 ? cdfEntryText(C.tag) : std::string("Deux qualifiés par territoire pour le 7e tour.");
-        if (comp == cdfNational) s += "Phase nationale : qualifiés des ligues et Ligue 2 au 7e tour, Ligue 1 en 32es de finale (9e tour). Le tenant du titre, s'il n'est pas en Ligue 1, entre aussi en 32es. Tirage régionalisé pour les 7e et 8e tours.";
-        if (C.kind == 11) s += "Coupe de la Ligue : clubs de Ligue 1, Ligue 2 et Ligue 3 (statut professionnel). Entrée échelonnée : Ligue 3 au 1er tour, Ligue 2 au 2e tour, Ligue 1 en 16es de finale. Match unique, finale sur terrain neutre.";
+        bool pens = C.penaltiesOnly();
+        bool cdfNoET = C.kind == 2 && club && !opts.cdfET;
+        H("Format");
+        B("Coupe à élimination directe en match unique.");
+        if (C.kind == 11) B("Clubs de Ligue 1, Ligue 2 et Ligue 3 : entrée échelonnée (L3 au 1er tour, L2 au 2e tour, L1 en 16es).");
+        if (comp == cdfNational) B("Phase nationale : qualifiés des ligues et Ligue 2 au 7e tour, Ligue 1 en 32es (9e tour). Le tenant du titre hors Ligue 1 entre aussi en 32es.");
+        if (C.name.find("tours régionaux") != std::string::npos) B(C.tag >= 0 && C.tag < 13 ? cdfEntryText(C.tag) : std::string("Deux qualifiés par territoire pour le 7e tour."));
+        if (C.kind == 4) B("Réservée aux équipes de Régional 1, 2 et 3 : une seule équipe par club (l'équipe fanion si elle joue en Régional, sinon sa réserve la mieux classée).");
+        if (C.kind == 5) B("Une seule équipe par club : une réserve ne joue que si aucune équipe supérieure du club n'est engagée.");
+        if (C.kind == 15) B("Coupe Gambardella (U19) : phase nationale à partir du 1er tour fédéral avec l'entrée des clubs du National U19 ; finale au Stade de France.");
+        if (C.kind == 16) B("Coupe Gambardella (U19) : tours régionaux organisés par la ligue ; les qualifiés rejoignent la phase nationale.");
+        if (C.kind == 6) B("Trophée des Champions : match unique entre le champion et le vainqueur de la coupe, dans un grand stade différent chaque saison.");
+        if (C.noReserves) B("Les équipes réserves ne participent pas.");
+        H("Tirage au sort");
+        if (C.kind == 11) B("Tirage des tours préliminaires et des 16es ; le tirage des 8es fixe le tableau jusqu'à la finale.");
+        if (C.homeRule == 1) B("Le premier club tiré reçoit ; si deux divisions (ou plus) séparent les clubs, le club de la plus petite division reçoit.");
+        else B("Le premier club tiré reçoit, sans protection du club de division inférieure.");
+        if (C.regionalDraw) B("Tirage régionalisé (clubs géographiquement proches) dans les premiers tours.");
+        koDraw(!(pens || cdfNoET), true);
+        if (cdfNoET) B("Option de la carrière : prolongation supprimée avant la finale.");
+        H("Finale");
+        auto cv = cupVenue.find(comp);
+        if (cv != cupVenue.end() && !cv->second.empty()) B("Sur terrain neutre, désigné en début de saison : " + cv->second + ".");
+        else if (C.neutralFinal) B("Sur terrain neutre (Stade de France pour les coupes nationales).");
+        else B("Chez le club tiré en premier.");
+        if (club && comp == cdfNational) { H("Europe"); B(opts.euroFormat ? "Le vainqueur est qualifié pour la phase de ligue de la Ligue Europa." : "Le vainqueur est qualifié pour la Coupe UEFA (le finaliste si le vainqueur joue déjà la Ligue des champions)."); }
+        if (club && C.kind == 11 && !opts.euroFormat) { H("Europe"); B("Le vainqueur prend une des places françaises en Coupe UEFA."); }
     } else if (C.format == FMT_UCL2000) {
-        s = "Format 2000-01 : 3 tours de qualification, 1re phase (8 groupes de 4 : 2 premiers qualifiés, 3e reversé en Coupe UEFA), 2e phase (4 groupes de 4), quarts et demies aller-retour, finale sur terrain neutre.\n";
-        s += std::string("Groupes : victoire 3 pts, nul 1. ") + tieBreakText(C.tb) + "\n";
-        s += "Matchs aller-retour : l'équipe qui marque le plus de buts sur les deux matchs est qualifiée ; à égalité, règle des buts marqués à l'extérieur, puis prolongation (les buts à l'extérieur comptent double aussi) et tirs au but. Tirage avec têtes de série, pas deux clubs du même pays dans un groupe.";
+        H("Format (2003-04)");
+        B("Trois tours de qualification aller-retour, puis phase de groupes : 8 groupes de 4 (victoire 3 points, nul 1).");
+        B("Les deux premiers en 8es de finale ; le 3e est reversé au 3e tour de la Coupe UEFA.");
+        B("8es, quarts et demi-finales aller-retour, finale sur terrain neutre.");
+        H("Tirage au sort");
+        B("Chapeaux selon le coefficient des clubs, tenant du titre tête de série.");
+        B("Pas deux clubs d'un même pays dans un groupe ; deux clubs d'un même pays sont répartis entre les groupes A-D et E-H.");
+        B("8es : un premier contre un deuxième d'un autre groupe et d'un autre pays ; le premier reçoit au retour.");
+        H("Départage en groupe"); tbLines(C.tb, s);
+        twoLegs(C.awayGoals);
     } else if (C.format == FMT_UEFA2000) {
-        s = "Format 2000-01 : tours aller-retour, éliminés du 3e tour qualificatif de la C1 au 1er tour, 3es de 1re phase de C1 au 3e tour, finale sur un match.\n";
-        s += "À égalité sur les deux matchs : buts à l'extérieur, puis prolongation et tirs au but. Finale : prolongation puis tirs au but. Places : vainqueurs de coupe nationale, clubs classés selon le coefficient du pays, vainqueur de la Coupe de la Ligue pour la France.";
+        H("Format (2003-04)");
+        B("Tour de qualification, 1er et 2e tours aller-retour, puis 16es (avec les 3es de la Ligue des champions), 8es, quarts, demies ; finale sur un match.");
+        B("Les éliminés du 3e tour de qualification de la Ligue des champions entrent au 1er tour.");
+        H("Places");
+        B("Vainqueurs des coupes nationales, clubs classés selon le coefficient du pays ; en France, le vainqueur de la Coupe de la Ligue aussi.");
+        B("Trois vainqueurs de la Coupe Intertoto entrent au 1er tour.");
+        twoLegs(C.awayGoals);
+    } else if (C.format == FMT_NEWEURO) {
+        bool c1 = C.kind == 3, c4 = C.kind == 9;
+        H("Format (depuis 2024-25)");
+        B(c1 ? "Tours de qualification (voie des champions et voie de la ligue), puis phase de ligue à 36 clubs." :
+                c4 ? "Quatre tours de qualification, puis phase de ligue à 36 clubs." : "3e tour de qualification et tour de barrage, puis phase de ligue à 36 clubs.");
+        B(c4 ? "Phase de ligue : 6 chapeaux de 6, chaque club joue 6 matchs (un adversaire par chapeau, 3 à domicile et 3 à l'extérieur)."
+             : "Phase de ligue : 4 chapeaux de 9, chaque club joue 8 matchs contre 8 adversaires différents (2 par chapeau, un à domicile et un à l'extérieur).");
+        B("Pas d'adversaire du même pays, au plus deux adversaires d'un même pays.");
+        B("Classement unique : les 8 premiers sont qualifiés pour les 8es de finale, du 9e au 24e : barrages aller-retour, du 25e au 36e : éliminés.");
+        B("Barrages : 9e/10e contre 23e/24e, ..., 15e/16e contre 17e/18e (le mieux classé reçoit au retour).");
+        B("8es : tableau fixé par le classement (1er et 2e contre les qualifiés des barrages 15e à 18e, ..., 7e et 8e contre ceux des barrages 9e/10e-23e/24e).");
+        B("Quarts et demi-finales aller-retour, finale sur terrain neutre.");
+        H("Points et départage de la phase de ligue");
+        B("Victoire 3 points, nul 1.");
+        tbLines(C.tb, s);
+        H("Accès");
+        if (c1) { B("Phase de ligue directe : tenants de la C1 et de la Ligue Europa, champions des associations 1 à 10, 2es des 1 à 6, 3es des 1 à 5, 4es des 1 à 4, et deux places « performance européenne »."); B("Voie des champions : champions des associations 11 et suivantes (barrage, 3e, 2e ou 1er tour selon le rang)."); B("Voie de la ligue : 2es des associations 7 à 15, 3e de la 6e, 4e de la 5e."); B("Les éliminés sont reversés en Ligue Europa (ou en Ligue Conférence après le 1er tour)."); }
+        else if (!c4) { B("Phase de ligue directe : tenant de la Ligue Conférence, vainqueurs de coupe des associations 1 à 12, 5es des associations 1 à 5."); B("Qualifications : vainqueurs de coupe des associations 13 à 16 et éliminés des 2e et 3e tours de la Ligue des champions ; les éliminés des barrages de la C1 entrent en phase de ligue."); B("Les éliminés sont reversés en Ligue Conférence."); }
+        else { B("Phase de ligue directe : 6es des associations 1 à 5, 4e de la 6e, et les éliminés des barrages de la Ligue Europa."); B("Qualifications : vainqueurs de coupe et clubs classés des autres associations, éliminés du 1er tour de la C1 et du 3e tour de la Ligue Europa."); }
+        H("Coefficient UEFA");
+        B("Victoire 2 points, nul 1 (tours de qualification : moitié, pour le pays uniquement).");
+        B(fmt("Bonus : participation à la phase de ligue (%s), 8 premiers (%s), puis +1 par tour atteint à partir des 8es.", c1 ? "6" : c4 ? "2,5" : "4", c1 ? "4" : c4 ? "1" : "2"));
+        twoLegs(C.awayGoals);
     } else if (C.format == FMT_SINGLE) {
-        s = "Match unique sur terrain neutre entre le champion et le vainqueur de la coupe (ou le 2e du championnat). En cas d'égalité : tirs au but directs, sans prolongation.";
+        H("Format"); B("Match unique sur terrain neutre entre le champion et le vainqueur de la coupe (ou le 2e du championnat).");
+        koDraw(C.kind == 7, false);
     } else if (C.kind == 21 || C.kind == 20) {
-        s = "Ligue des champions U19 : réservée aux champions nationaux U19 de chaque pays. Les pays les mieux classés au coefficient UEFA entrent directement en phase de groupes, les autres disputent un tour préliminaire (match sec).\n";
-        s += "Phase de groupes : 32 équipes, 8 groupes de 4, matchs aller-retour (victoire 3 pts, nul 1). " + std::string(tieBreakText(C.tb)) + "\n";
-        s += "Les deux premiers de chaque groupe se qualifient. Phase finale en matchs secs (prolongation puis tirs au but), finale sur terrain neutre. Les matchs des jeunes ne rapportent aucun point au coefficient UEFA.";
+        H("Format");
+        B("Réservée aux champions nationaux U19. Les pays les mieux classés au coefficient UEFA entrent en phase de groupes, les autres jouent un tour préliminaire (match sec).");
+        B("Phase de groupes : 8 groupes de 4, aller-retour (victoire 3 points, nul 1), les deux premiers qualifiés.");
+        B("Phase finale en matchs secs, finale sur terrain neutre.");
+        H("Départage en groupe"); tbLines(C.tb, s);
+        koDraw(true, false);
+        H("Coefficient"); B("Les matchs des jeunes ne rapportent aucun point au coefficient UEFA.");
+    } else if (C.kind == 30 || C.kind == 31 || C.kind == 32 || C.kind == 33) {
+        bool uefa = C.name.find("UEFA") != std::string::npos;
+        H("Ligue des nations");
+        if (uefa) {
+            B("Édition 2026-27 : ligues A, B et C de 16 sélections (4 groupes de 4), ligue D de 6 (2 groupes de 3). À partir de 2028-29 : trois ligues de 18.");
+            B("Phase de ligue en matchs aller-retour de septembre à novembre (victoire 3 points, nul 1).");
+            B("Ligue A : quarts de finale aller-retour en mars (premiers contre deuxièmes d'un autre groupe, retour chez le premier), puis Final Four en juin chez l'un des qualifiés (demies et finale en matchs secs).");
+            H("Promotions et relégations");
+            B("Ligue A : les deux plus mauvais derniers descendent ; les deux meilleurs derniers et les deux plus mauvais troisièmes affrontent les deuxièmes de la ligue B (barrages aller-retour en mars).");
+            B("Ligue B : les premiers montent ; les derniers affrontent les deuxièmes de la ligue C en barrages.");
+            B("Ligue C : les premiers montent ; ligue D : les premiers montent (la ligue D disparaît en 2028-29).");
+            H("Lien avec l'Euro et la Coupe du monde");
+            B("Euro 2028 : les meilleurs vainqueurs de groupe de la Ligue des nations non qualifiés disputent les barrages de mars 2028 avec les deuxièmes de groupe.");
+            B("Coupe du monde : les 4 meilleurs vainqueurs de groupe de la Ligue des nations non classés dans les deux premiers de leur groupe de qualification complètent les 16 barragistes.");
+        } else {
+            B("Ligues A et B, groupes aller-retour ; Final Four des meilleurs de la ligue A (demies et finale en matchs secs).");
+        }
+        H("Départage en groupe"); tbLines(C.tb, s);
+        if (C.kind != 30) koDraw(true, false);
+    } else if (C.format == FMT_QUAL_GROUPS || C.kind > 100) {
+        H("Éliminatoires");
+        B("Groupes en matchs aller-retour (sauf mini-tournois des jeunes en match unique), victoire 3 points, nul 1.");
+        H("Départage en groupe"); tbLines(C.tb, s);
+        H("Qualification");
+        switch (C.kind) {
+        case 101:
+            if (intlFormat == 1) { B("Coupe du monde, zone Europe : 12 groupes ; les premiers sont qualifiés."); B("Barrages (mars) : les 12 deuxièmes et les 4 meilleurs vainqueurs de groupe de la Ligue des nations non qualifiés ; 4 voies de 4 (demi-finale et finale en matchs secs)."); }
+            else B("Coupe du monde, zone Europe : les premiers de groupe sont qualifiés ; les meilleurs deuxièmes disputent des barrages aller-retour.");
+            break;
+        case 102: B("Barrages UEFA : élimination directe pour les dernières places européennes."); break;
+        case 103: B("Amérique du Sud : poule unique de toutes les sélections en aller-retour ; les premiers sont qualifiés, le suivant dispute le barrage intercontinental."); break;
+        case 104: B("CONCACAF, 1er tour : les premiers de groupe accèdent au tour final."); break;
+        case 105: B("CONCACAF, tour final : les premiers sont qualifiés, le suivant dispute le barrage intercontinental."); break;
+        case 106: B("Afrique, 1er tour : les deux premiers de chaque groupe accèdent au tour final."); break;
+        case 107: B("Afrique, tour final : les premiers de groupe sont qualifiés."); break;
+        case 108: B("Asie, 2e tour : les premiers et les meilleurs deuxièmes accèdent au 3e tour."); break;
+        case 109: B("Asie, 3e tour : les meilleurs sont qualifiés ; les troisièmes disputent un barrage."); break;
+        case 110: B("Barrage Asie entre les troisièmes : le vainqueur dispute le barrage intercontinental."); break;
+        case 111: B("Océanie : groupes puis phase finale ; le vainqueur est qualifié (ou barragiste)."); break;
+        case 112: B("Océanie, phase finale : demi-finales et finale."); break;
+        case 113: B("Barrages intercontinentaux : matchs aller-retour entre zones."); break;
+        case 114:
+            if (intlFormat == 1) { B("Euro à 24 : 12 groupes ; les 12 premiers et les 8 meilleurs deuxièmes sont qualifiés."); B("Pays organisateurs : ils disputent les éliminatoires, deux places leur sont garanties."); B("Barrages en mars : les autres deuxièmes et les vainqueurs de groupe de la Ligue des nations non qualifiés (voies de 4, matchs secs)."); }
+            else B("Qualifications de l'Euro : les premiers sont qualifiés, barrages entre les meilleurs deuxièmes ; l'organisateur est qualifié d'office.");
+            break;
+        case 115: B("Barrages de l'Euro : demi-finales et finales en matchs secs, un qualifié par voie."); break;
+        case 116: B("Coupe d'Afrique : les meilleurs de chaque groupe rejoignent l'organisateur."); break;
+        case 117: B("Coupe d'Asie : les meilleurs de chaque groupe rejoignent l'organisateur."); break;
+        case 118: B("Gold Cup : les meilleurs de chaque groupe rejoignent l'organisateur."); break;
+        case 119: B("Océanie : les meilleurs rejoignent la phase finale."); break;
+        case 120: B("Euro Espoirs : 9 groupes ; les premiers et le meilleur deuxième sont qualifiés, les 8 autres deuxièmes jouent des barrages aller-retour ; les organisateurs sont qualifiés d'office."); break;
+        case 121: B("Barrages de l'Euro Espoirs : matchs aller-retour."); break;
+        case 122: B("Tour de qualification : mini-tournois de 4 en match unique ; les deux premiers et le meilleur troisième accèdent au tour Élite (les meilleures nations en sont exemptées)."); break;
+        case 123: B("Tour Élite : mini-tournois de 4 ; les premiers rejoignent l'organisateur en phase finale (8 équipes)."); break;
+        case 127: B("Tournoi préolympique sud-américain : les deux premiers sont qualifiés pour les Jeux."); break;
+        case 129: B("Océanie : le premier est qualifié pour les Jeux."); break;
+        default: break;
+        }
     } else if (C.format == FMT_TOURNAMENT) {
-        s = "Phase de groupes (victoire 3 pts, nul 1) puis élimination directe. " + std::string(tieBreakText(C.tb)) + "\nPhase finale : en cas d'égalité, prolongation puis tirs au but.";
+        bool oly = C.kind == 124 || C.kind == 125 || C.kind == 126 || C.kind == 128;
+        H("Format");
+        B("Phase de groupes (victoire 3 points, nul 1), puis élimination directe en matchs secs.");
+        if (C.bestThirds) B(fmt("Les deux premiers de chaque groupe et les %d meilleurs troisièmes sont qualifiés.", C.bestThirds));
+        else B("Les deux premiers de chaque groupe sont qualifiés.");
+        if (C.thirdPlace) B("Match pour la 3e place.");
+        if (C.kind == 124) B("Qualificatif olympique : les trois premiers (finalistes et vainqueur du match pour la 3e place) vont aux Jeux.");
+        if (C.kind == 125 || C.kind == 126) B("Qualificatif olympique : les deux finalistes vont aux Jeux.");
+        if (C.kind == 128) B("Qualificatif olympique : le vainqueur va aux Jeux.");
+        if (!oly && kind == CK_INTL && intlType == IT_OLYMPICS) { B("Tournoi olympique : sélections de moins de 23 ans, trois joueurs plus âgés autorisés."); B("12 équipes : pays hôte, 3 européennes, 2 africaines, 2 asiatiques, 2 sud-américaines, 1 CONCACAF, 1 océanienne."); }
+        H("Départage en groupe"); tbLines(C.tb, s);
+        koDraw(true, false);
     } else if (C.format == FMT_KO_ONLY) {
-        s = "Matchs à élimination directe. Aller-retour : l'équipe qui marque le plus sur les deux matchs est qualifiée, sinon prolongation puis tirs au but. Match unique : prolongation puis tirs au but.";
+        H("Format"); B("Matchs à élimination directe.");
+        B("Aller-retour : l'équipe qui marque le plus sur les deux matchs est qualifiée, sinon prolongation puis tirs au but.");
+        B("Match unique : prolongation puis tirs au but.");
     }
-    { int sh, sb; bool rl; sheetRules(comp, sh, sb, rl);
-      if (!s.empty()) s += fmt("\nFeuille de match : %d joueurs (11 titulaires + %d remplaçants) ; ", sh, sh - 11) + (rl ? std::string("remplacements illimités, un joueur remplacé peut revenir.") : fmt("%d remplacements autorisés.", sb)); }
-    if (!s.empty() && C.kind != 12) s += fmt("\nDiscipline : %d avertissements = 1 match de suspension ; carton rouge direct : 1 à 3 matchs, deux jaunes dans un match : 1 match.", C.yellowLimit);
+    {
+        int sh, sb; bool rl; sheetRules(comp, sh, sb, rl);
+        H("Feuille de match");
+        B(fmt("%d joueurs : 11 titulaires et %d remplaçants.", sh, sh - 11));
+        B(rl ? std::string("Remplacements illimités : un joueur remplacé peut revenir en jeu.") : fmt("%d remplacements autorisés.", sb));
+    }
+    if (C.kind != 12) {
+        H("Discipline");
+        B(fmt("%d avertissements : 1 match de suspension.", C.yellowLimit));
+        B("Carton rouge direct : 1 à 3 matchs ; deux avertissements dans un match : 1 match.");
+    }
     return s;
 }
 
@@ -1814,10 +2324,16 @@ struct IntlState {
     int finalTeams = 32;
 };
 static IntlState g_intl;
+std::vector<int>& intlQualifiedRef() { return g_intl.qualified; }
+std::vector<int>& intlHostsRef() { return g_intl.hosts; }
+int& intlFinalTeamsRef() { return g_intl.finalTeams; }
+void youthNewIntl(Career& K, int type, bool withQual, const std::vector<int>& ctrl, int yr, const std::vector<int>& hosts);   // youthintl.cpp
+void youthQualify(Career& K, int comp);
 
 int intlYear(int type) {
     switch (type) { case IT_WORLDCUP: return 2030; case IT_EURO: return 2028; case IT_CAN: return 2027; case IT_COPA: return 2028;
-                    case IT_ASIA: return 2027; case IT_GOLD: return 2027; default: return 2028; }
+                    case IT_ASIA: return 2027; case IT_GOLD: return 2027; case IT_OLYMPICS: return 2028;
+                    case IT_EURO21: case IT_EURO19: case IT_EURO17: return 2027; default: return 2028; }
 }
 
 std::vector<int> defaultHosts(int type) {
@@ -1829,6 +2345,10 @@ std::vector<int> defaultHosts(int type) {
     case IT_COPA: return { N("ARG") };
     case IT_ASIA: return { N("KSA") };
     case IT_GOLD: return { N("USA") };
+    case IT_OLYMPICS: return { N("USA") };                    // Los Angeles 2028
+    case IT_EURO21: return { N("ALB"), N("SRB") };            // Euro Espoirs 2027 : Albanie et Serbie
+    case IT_EURO19: return { N("SVK") };
+    case IT_EURO17: return { N("CRO") };
     default: return { N("NZL") };
     }
 }
@@ -1842,6 +2362,18 @@ static int makeGroupComp(Season& S, const std::string& name, const std::vector<s
     std::vector<double> times;
     for (int r = 0; r < std::max(1, maxR); r++) times.push_back(maxR > 1 ? t0 + (t1 - t0) * r / (maxR - 1) : t0);
     c.addGroupStage(groups, legs, times, "Groupes");
+    return addComp(S, std::move(c));
+}
+
+static int makeGroupCompT(Season& S, const std::string& name, const std::vector<std::vector<int>>& groups, const std::vector<double>& windows, int kind) {
+    Competition c;
+    c.format = FMT_QUAL_GROUPS; c.name = name; c.shortName = name; c.kind = kind; c.legs = 2; c.tb = TB_H2H;
+    int maxR = 0;
+    for (auto& g : groups) maxR = std::max(maxR, (int)g.size() - (g.size() % 2 == 0 ? 1 : 0));
+    maxR *= 2;
+    std::vector<double> times;
+    for (int r = 0; r < maxR; r++) times.push_back(r < (int)windows.size() ? windows[r] : windows.back() + 0.3 * (r - (int)windows.size() + 1));
+    c.addGroupStage(groups, 2, times, "Groupes");
     return addComp(S, std::move(c));
 }
 
@@ -1895,6 +2427,12 @@ static int hostsIn(int conf, bool skipFirst) {
     return n;
 }
 
+// Euro co-organisé (2028, 2032) : les pays hôtes disputent les éliminatoires, deux places leur sont garanties
+static bool hostsPlay(const Career& K) { return K.intlType == IT_EURO && g_intl.finalTeams == 24 && g_intl.hosts.size() >= 2 && K.intlWithQual; }
+static bool isHost(int t) { return std::find(g_intl.hosts.begin(), g_intl.hosts.end(), t) != g_intl.hosts.end(); }
+// semaine de la phase finale (juin de l'année de la compétition)
+static double finalsWeek(const Career& K) { return (K.year - K.season.year - 1) * 52.0 + 45.0; }
+
 // places directes en Coupe du monde à 32 : UEFA 13, CAF 5, AFC 4 (+1 barrage), CONMEBOL 4 (+1), CONCACAF 3 (+1), OFC 0 (+1), 1 pays hôte
 // Coupe du monde à 48 (format 2026) : UEFA 16, CAF 9, AFC 8, CONMEBOL 6, CONCACAF 6, OFC 1 (+2 barragistes)
 static int wcSlots(int conf) {
@@ -1916,6 +2454,32 @@ static void qualifyIntl(Career& K, int comp) {
     }
     case QK_UEFA_G: {
         auto pos = byPosition(C);
+        if (I.finalTeams == 48 && nlActive(K)) {
+            // format 2026 : premiers qualifiés ; barrages à 16 (deuxièmes + meilleurs vainqueurs de groupe de la Ligue des nations)
+            for (auto& s : pos[0]) Q(s.team);
+            int spots = wcSlots(UEFA) - (int)pos[0].size();
+            if (spots > 0 && pos.size() > 1) {
+                std::set<int> top2; for (auto& s : pos[0]) top2.insert(s.team); for (auto& s : pos[1]) top2.insert(s.team);
+                std::vector<int> ru; for (auto& s : pos[1]) if ((int)ru.size() < 3 * spots) ru.push_back(s.team);
+                std::vector<int> pool = ru;
+                auto add = [&](int t) { if ((int)pool.size() < 4 * spots && !top2.count(t) && std::find(pool.begin(), pool.end(), t) == pool.end() && std::find(I.qualified.begin(), I.qualified.end(), t) == I.qualified.end() && !isHost(t) && NATIONS[t].conf == UEFA) pool.push_back(t); };
+                for (int t : nlGroupWinners(K)) add(t);
+                for (int t : nlRanking(K)) add(t);
+                for (int t : flatten(pos)) add(t);
+                spots = (int)pool.size() / 4;
+                if (spots > 0) {
+                    std::vector<int> p4(pool.begin() + 3 * spots, pool.begin() + 4 * spots), p3(pool.begin() + 2 * spots, pool.begin() + 3 * spots);
+                    g_rng.shuffle(p4); g_rng.shuffle(p3);
+                    std::vector<std::pair<int, int>> pairs;
+                    for (int k = 0; k < spots; k++) { pairs.push_back({ pool[k], p4[k] }); pairs.push_back({ pool[spots + k], p3[k] }); }
+                    double tb = std::max(S.now + 1, finalsWeek(K) - 13);
+                    { int ci = makeKO(S, "Barrages UEFA (voies A à D)", pairs, { 1, 1 }, { tb, tb + 0.5 }, spots, QK_UEFA_PO); S.comps[ci].stages[0].name = "Demi-finales des barrages"; S.comps[ci].koNames = { "Demi-finales des barrages", "Finales des barrages" }; }
+                    S.news.push_back("Coupe du monde : les barrages européens réunissent les deuxièmes de groupe et les meilleurs vainqueurs de groupe de la Ligue des nations.");
+                    return;
+                }
+            }
+            break;
+        }
         for (auto& s : pos[0]) Q(s.team);
         // 8 meilleurs deuxièmes : barrages aller-retour
         std::vector<int> po;
@@ -1990,6 +2554,40 @@ static void qualifyIntl(Career& K, int comp) {
     case QK_ICPO: for (int t : C.result) Q(t); break;
     case QK_EURO_G: {
         auto pos = byPosition(C);
+        if (I.finalTeams == 24 && nlActive(K)) {
+            // Euro 2028 : 12 premiers + 8 meilleurs deuxièmes ; places garanties aux pays hôtes ; barrages avec la Ligue des nations
+            for (auto& s : pos[0]) Q(s.team);
+            for (int i = 0; i < 8 && pos.size() > 1 && i < (int)pos[1].size(); i++) Q(pos[1][i].team);
+            if (hostsPlay(K)) {
+                int g = std::min<int>(2, (int)I.hosts.size()), n = 0;
+                for (int h : I.hosts) if (std::find(I.qualified.begin(), I.qualified.end(), h) != I.qualified.end()) n++;
+                for (int t : flatten(pos)) if (n < g && isHost(t) && std::find(I.qualified.begin(), I.qualified.end(), t) == I.qualified.end()) {
+                    Q(t); n++; S.news.push_back(g_world.teams[t].name + " utilise sa place garantie de pays organisateur.");
+                }
+            }
+            int P = I.finalTeams - (hostsPlay(K) ? 0 : (int)I.hosts.size()) - (int)I.qualified.size();
+            if (P > 0) {
+                std::vector<int> pool;
+                auto add = [&](int t) { if ((int)pool.size() < 4 * P && std::find(pool.begin(), pool.end(), t) == pool.end() && std::find(I.qualified.begin(), I.qualified.end(), t) == I.qualified.end() && (hostsPlay(K) || !isHost(t)) && NATIONS[t].conf == UEFA) pool.push_back(t); };
+                if (pos.size() > 1) for (auto& s : pos[1]) add(s.team);
+                for (int t : nlGroupWinners(K)) add(t);
+                for (int t : nlRanking(K)) add(t);
+                for (int t : flatten(pos)) add(t);
+                auto rk = nlRanking(K);
+                auto rkOf = [&](int t) { auto it = std::find(rk.begin(), rk.end(), t); return (int)(it - rk.begin()); };
+                std::stable_sort(pool.begin(), pool.end(), [&](int a, int b) { return rkOf(a) < rkOf(b); });
+                P = (int)pool.size() / 4;
+                if (P > 0) {
+                    std::vector<std::pair<int, int>> pairs;
+                    for (int k = 0; k < P; k++) { pairs.push_back({ pool[k], pool[3 * P + k] }); pairs.push_back({ pool[P + k], pool[2 * P + k] }); }
+                    double tb = std::max(S.now + 1, finalsWeek(K) - 13);
+                    { int ci = makeKO(S, "Barrages de l'Euro", pairs, { 1, 1 }, { tb, tb + 0.5 }, P, QK_EURO_PO); S.comps[ci].stages[0].name = "Demi-finales des barrages"; S.comps[ci].koNames = { "Demi-finales des barrages", "Finales des barrages" }; }
+                    S.news.push_back(fmt("Euro : %d places en jeu lors des barrages (deuxièmes de groupe et vainqueurs de groupe de la Ligue des nations).", P));
+                    return;
+                }
+            }
+            break;
+        }
         for (auto& s : pos[0]) Q(s.team);
         if (I.finalTeams == 24) {
             // Euro à 24 : les 2 premiers de chaque groupe, puis barrages entre les meilleurs 3es
@@ -2070,7 +2668,9 @@ static std::vector<std::vector<int>> worldCupGroups(std::vector<int> teams, int 
 static void createFinals(Career& K) {
     IntlState& I = g_intl;
     Season& S = K.season;
-    std::vector<int> teams = I.hosts;
+    std::vector<int> teams;
+    if (!hostsPlay(K)) teams = I.hosts;
+    else for (int h : I.hosts) if (std::find(I.qualified.begin(), I.qualified.end(), h) != I.qualified.end()) teams.push_back(h);
     for (int t : I.qualified) if (std::find(teams.begin(), teams.end(), t) == teams.end()) teams.push_back(t);
     std::vector<int> pool;
     int conf = -1;
@@ -2085,17 +2685,18 @@ static void createFinals(Career& K) {
     c.format = FMT_TOURNAMENT; c.kind = QK_FINAL;
     c.name = fmt("%s %d", INTL_NAMES[K.intlType], K.year);
     c.shortName = INTL_NAMES[K.intlType];
-    c.host = I.hosts.empty() ? -1 : I.hosts[0];
+    c.host = teams.empty() || I.hosts.empty() || !isHost(teams[0]) ? -1 : teams[0];
     c.tb = K.intlType == IT_WORLDCUP ? TB_FIFA : TB_H2H;
     auto groups = K.intlType == IT_WORLDCUP ? worldCupGroups(teams, ng, I.hosts) : potGroups(teams, ng, c.host);
     for (size_t h = 1; K.intlType != IT_WORLDCUP && h < I.hosts.size() && h < groups.size(); h++) {
         int ht = I.hosts[h];
+        if (std::find(teams.begin(), teams.end(), ht) == teams.end()) continue;
         for (auto& g : groups) {
             auto it = std::find(g.begin(), g.end(), ht);
             if (it != g.end()) { std::swap(*it, groups[h][0]); break; }
         }
     }
-    double t0 = std::max(S.now + 3, 70.0);
+    double t0 = std::max(S.now + 3, finalsWeek(K));
     c.bestThirds = I.finalTeams == 24 ? 4 : I.finalTeams == 48 ? 8 : 0;
     c.thirdPlace = (K.intlType == IT_WORLDCUP || K.intlType == IT_CAN || K.intlType == IT_COPA);
     c.legs = 1;                   // phase finale : matchs secs, tableau fixé à l'avance
@@ -2105,6 +2706,7 @@ static void createFinals(Career& K) {
 }
 
 void Career::newInternational(int type, bool withQual, const std::vector<int>& ctrl, int yr, const std::vector<int>& hosts, int format) {
+    if (type >= IT_OLYMPICS) { youthNewIntl(*this, type, withQual, ctrl, yr, hosts); return; }
     kind = CK_INTL;
     resetV7();
     intlType = type; intlWithQual = withQual; intlFormat = format;
@@ -2126,7 +2728,8 @@ void Career::newInternational(int type, bool withQual, const std::vector<int>& c
     default: I.finalTeams = 8; break;
     }
     year = yr > 0 ? yr : intlYear(type);
-    season.year = year;
+    // calendrier : les éliminatoires commencent deux ans avant la phase finale (la Ligue des nations à l'automne)
+    season.year = withQual ? year - 2 : year - 1;
     auto without = [&](std::vector<int> v) {
         v.erase(std::remove_if(v.begin(), v.end(), [&](int t) { return std::find(I.hosts.begin(), I.hosts.end(), t) != I.hosts.end(); }), v.end());
         return v;
@@ -2170,11 +2773,14 @@ void Career::newInternational(int type, bool withQual, const std::vector<int>& c
         return;
     }
     double T0 = 1, T1 = 40;
+    // fenêtres internationales de l'année précédant la phase finale (mars, juin, septembre, octobre, novembre)
+    const std::vector<double> WIN = { 33, 34, 40, 41, 57, 58, 61, 62, 66, 67 };
+    if (type == IT_WORLDCUP || type == IT_EURO) nlSetup(*this, season.year);
     switch (type) {
     case IT_WORLDCUP: {
         auto u = without(nationsOfConf(UEFA));
-        int ng = std::max(1, wcSlots(UEFA) - 4);
-        makeGroupComp(S, "Qualifications UEFA", potGroups(u, ng), 2, T0, T1, QK_UEFA_G);
+        if (format) makeGroupCompT(S, "Qualifications UEFA", potGroups(u, 12), WIN, QK_UEFA_G);
+        else makeGroupCompT(S, "Qualifications UEFA", potGroups(u, std::max(1, wcSlots(UEFA) - 4)), WIN, QK_UEFA_G);
         makeGroupComp(S, "Qualifications CONMEBOL", { without(nationsOfConf(CONMEBOL)) }, 2, T0, T1 + 10, QK_CSA);
         makeGroupComp(S, "Qualifications CONCACAF - 1er tour", potGroups(without(nationsOfConf(CONCACAF)), 6), 2, T0, 22, QK_CCF_1);
         makeGroupComp(S, "Qualifications CAF - 1er tour", potGroups(without(nationsOfConf(CAF)), 10), 2, T0, 24, QK_CAF_G);
@@ -2182,7 +2788,10 @@ void Career::newInternational(int type, bool withQual, const std::vector<int>& c
         makeGroupComp(S, "Qualifications OFC", potGroups(without(nationsOfConf(OFC)), 2), 1, 30, 36, QK_OFC_G);
         break;
     }
-    case IT_EURO: makeGroupComp(S, "Qualifications Euro", potGroups(without(nationsOfConf(UEFA)), 10), 2, T0, T1, QK_EURO_G); break;
+    case IT_EURO:
+        if (format) makeGroupCompT(S, "Qualifications Euro", potGroups(hostsPlay(*this) ? nationsOfConf(UEFA) : without(nationsOfConf(UEFA)), 12), WIN, QK_EURO_G);
+        else makeGroupCompT(S, "Qualifications Euro", potGroups(without(nationsOfConf(UEFA)), 10), WIN, QK_EURO_G);
+        break;
     case IT_CAN: makeGroupComp(S, "Qualifications CAN", potGroups(without(nationsOfConf(CAF)), 12), 2, T0, T1, QK_CAN_G); break;
     case IT_ASIA: makeGroupComp(S, "Qualifications Coupe d'Asie", potGroups(without(nationsOfConf(AFC)), 9), 2, T0, T1, QK_ASIA_G); break;
     case IT_GOLD: makeGroupComp(S, "Qualifications Gold Cup", potGroups(without(nationsOfConf(CONCACAF)), 7), 2, T0, T1, QK_GOLD_G); break;
@@ -2254,7 +2863,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 12;
+static const unsigned SAVE_VERSION = 15;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -2354,6 +2963,9 @@ bool Career::save(const char* path) const {
     w.vpod(mgr.offers);           // version 10
     saveV11(w);                   // version 11
     saveV12(w);                   // version 12
+    saveV13(w);                   // version 13
+    saveV14(w);                   // version 14
+    saveV15(w);                   // version 15
     fclose(f);
     return true;
 }
@@ -2381,7 +2993,9 @@ bool Career::load(const char* path) {
             r.pod(p.stamina); r.pod(p.skin); r.pod(p.hair); r.pod(p.suspended); r.pod(p.yellows); r.pod(p.injured); r.pod(p.goals); r.pod(p.apps); r.pod(p.nation);
             r.pod(p.id); r.pod(p.age); r.pod(p.pot); r.pod(p.assists); r.pod(p.contract);
             if (ver >= 6) { r.pod(p.cond); r.pod(p.morale); r.pod(p.dribble); r.pod(p.heading); }
+            p.gender = 0; p.years = 0; p.wageK = 0;          // données version 14 (relues plus loin)
         }
+        t.reputation = 0; t.academy = 0; t.freeAgents = t.name == "Joueurs libres (sans club)" && t.nation < 0; t.presGender = 0;
         r.vpod(t.xi); r.pod(t.status); r.pod(t.sta); r.str(t.sponsor);
         if (ver >= 6) { for (float& c : t.coefs) r.pod(c); r.pod(t.condT); }
     }
@@ -2405,7 +3019,10 @@ bool Career::load(const char* path) {
     r.pod(g_world.nextPid); r.pod(cdfHolderDirect);
     r.pod(mgr.budget); r.pod(mgr.seasonIncome); r.pod(mgr.seasonWages); r.pod(mgr.seasonTransfers); r.pod(mgr.objective); r.pod(mgr.objTarget);
     r.pod(mgr.confidence); r.pod(mgr.lastMonth); r.pod(mgr.sacked); r.vpod(mgr.transfers); r.pod(mgr.incomeBase);
-    r.pod(mgr.managerMode); r.pod(mgr.sponsorIncome); r.vpod(mgr.staff); r.vpod(mgr.ctrlReserves); r.pod(mgr.noSack); r.pod(mgr.statusChoice); r.pod(mgr.needStatus); r.vpod(mgr.projects); r.pod(mgr.seasonGate); r.pod(mgr.seasonShop); r.pod(mgr.seasonStadiumCost); r.pod(cdl);
+    r.pod(mgr.managerMode); r.pod(mgr.sponsorIncome);
+    if (ver >= 14) r.vpod(mgr.staff);
+    else { std::vector<StaffMemberV13> old; r.vpod(old); mgr.staff.clear(); for (auto& o : old) { StaffMember m; memcpy(m.name, o.name, 32); m.role = o.role; m.level = o.level; m.wage = o.wage; m.age = o.age; mgr.staff.push_back(m); } }
+    r.vpod(mgr.ctrlReserves); r.pod(mgr.noSack); r.pod(mgr.statusChoice); r.pod(mgr.needStatus); r.vpod(mgr.projects); r.pod(mgr.seasonGate); r.pod(mgr.seasonShop); r.pod(mgr.seasonStadiumCost); r.pod(cdl);
     unsigned np = 0; r.pod(np); if (!r.ok || np > 1000) { fclose(f); return false; }
     pyramids.assign(np, Pyramid());
     for (auto& P : pyramids) {
@@ -2444,6 +3061,13 @@ bool Career::load(const char* path) {
     assignDistricts(g_world);
     cupVenue.clear(); cdfAskYear = -1; u17Final = -1; lastU17Champ = -1;
     if (ver >= 12) loadV12(r);
+    for (auto& t : g_world.teams) t.merch = Merch();
+    if (ver >= 13) loadV13(r);
+    coach = false; coachNation = -1; coachCalls.clear(); coachLog.clear(); coachNextHosts.clear(); coachCamp = 0;
+    regSuperCups.clear(); prevR1Champ.clear(); archive.clear(); archScorers.clear();
+    if (ver >= 14) loadV14(r);
+    nlLeague.clear(); nlYear = -1; opts = Opts(); newEuro = NewEuroSpots(); prevUeclWinner = -1; coachCat = 0; coachU21Podium.clear(); mgr.sponsorYears = mgr.namingYears = 0;
+    if (ver >= 15) loadV15(r);
     g_world.rebuildCountryClubs(pyramids);
     fclose(f);
     return r.ok;
@@ -2499,6 +3123,91 @@ void Career::loadV12(Reader& r) {
     if (u17Final >= (int)season.comps.size()) u17Final = -1;
 }
 
+// ------------------------------------------------------------------ version 13 : produits dérivés
+void Career::saveV13(Writer& w) const {
+    unsigned n = 0; for (auto& t : g_world.teams) if (t.merch.init) n++;
+    w.pod(n);
+    for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].merch.init) { w.pod(i); w.pod(g_world.teams[i].merch); }
+}
+void Career::loadV13(Reader& r) {
+    unsigned n = 0; r.pod(n);
+    for (unsigned k = 0; k < n && r.ok && k < 1000000; k++) {
+        int i = -1; Merch m; r.pod(i); r.pod(m);
+        if (r.ok && i >= 0 && i < (int)g_world.teams.size()) g_world.teams[i].merch = m;
+    }
+}
+
+// ------------------------------------------------------------------ version 14 : sélectionneur, genre, réputation...
+void Career::saveV14(Writer& w) const {
+    coachSave(w, *this);
+    w.vpod(regSuperCups);
+    { std::vector<std::pair<int, int>> v(prevR1Champ.begin(), prevR1Champ.end()); w.vpod(v); }
+    archiveSave(w, *this);
+    {   // genre des personnes (femmes uniquement : tout le monde est un homme par défaut)
+        std::vector<int32_t> pw; for (auto& t : g_world.teams) for (auto& p : t.squad) if (p.gender) pw.push_back(p.id);
+        w.vpod(pw);
+        std::vector<int32_t> pr; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].presGender) pr.push_back(i);
+        w.vpod(pr);
+        w.pod(managerGender);
+    }
+    // économie : réputation et centre de formation des clubs, contrats des joueurs, politique des recettes
+    {
+        std::vector<uint8_t> rep, aca;
+        for (auto& t : g_world.teams) { rep.push_back(t.reputation); aca.push_back(t.academy); }
+        w.vpod(rep); w.vpod(aca);
+        struct PC { int32_t pid; int32_t wage; uint8_t years, pad[3]; };
+        std::vector<PC> pc;
+        for (auto& t : g_world.teams) for (auto& p : t.squad) if (p.years || p.wageK) { PC x; x.pid = p.id; x.wage = p.wageK; x.years = p.years; x.pad[0] = x.pad[1] = x.pad[2] = 0; pc.push_back(x); }
+        w.vpod(pc);
+        w.pod(mgr.cdfGiveAll); w.pod(mgr.tvShare); w.pod(mgr.dncg); w.pod(mgr.bankrupt);
+    }
+}
+void Career::loadV14(Reader& r) {
+    coachLoad(r, *this);
+    r.vpod(regSuperCups);
+    { std::vector<std::pair<int, int>> v; r.vpod(v); prevR1Champ.clear(); for (auto& kv : v) prevR1Champ[kv.first] = kv.second; }
+    regSuperCups.erase(std::remove_if(regSuperCups.begin(), regSuperCups.end(), [&](int c) { return c < 0 || c >= (int)season.comps.size(); }), regSuperCups.end());
+    archiveLoad(r, *this);
+    {
+        std::vector<int32_t> pw; r.vpod(pw);
+        std::set<int32_t> ws(pw.begin(), pw.end());
+        if (!ws.empty()) for (auto& t : g_world.teams) for (auto& p : t.squad) if (ws.count(p.id)) p.gender = 1;
+        std::vector<int32_t> pr; r.vpod(pr);
+        for (int i : pr) if (i >= 0 && i < (int)g_world.teams.size()) g_world.teams[i].presGender = 1;
+        r.pod(managerGender);
+    }
+    {
+        std::vector<uint8_t> rep, aca; r.vpod(rep); r.vpod(aca);
+        for (size_t i = 0; i < g_world.teams.size(); i++) { if (i < rep.size()) g_world.teams[i].reputation = rep[i]; if (i < aca.size()) g_world.teams[i].academy = aca[i]; }
+        struct PC { int32_t pid; int32_t wage; uint8_t years, pad[3]; };
+        std::vector<PC> pc; r.vpod(pc);
+        if (!pc.empty()) {
+            std::map<int32_t, PC> m; for (auto& x : pc) m[x.pid] = x;
+            for (auto& t : g_world.teams) for (auto& p : t.squad) { auto it = m.find(p.id); if (it != m.end()) { p.wageK = it->second.wage; p.years = it->second.years; } }
+        }
+        r.pod(mgr.cdfGiveAll); r.pod(mgr.tvShare); r.pod(mgr.dncg); r.pod(mgr.bankrupt);
+    }
+}
+
+// ------------------------------------------------------------------ version 15 : Ligue des nations, options de carrière
+void Career::saveV15(Writer& w) const {
+    w.vpod(nlLeague); w.pod(nlYear); w.pod(opts);
+    for (auto& l : newEuro.l) w.vpod(l);
+    w.pod(prevUeclWinner);
+    w.pod(coachCat); w.vpod(coachU21Podium);
+    w.pod(mgr.sponsorYears); w.pod(mgr.namingYears);
+}
+void Career::loadV15(Reader& r) {
+    r.vpod(nlLeague); r.pod(nlYear); r.pod(opts);
+    for (auto& l : newEuro.l) r.vpod(l);
+    r.pod(prevUeclWinner);
+    if (prevUeclWinner >= (int)g_world.teams.size()) prevUeclWinner = -1;
+    r.pod(coachCat); r.vpod(coachU21Podium);
+    if (coachCat < 0 || coachCat > 3) coachCat = 0;
+    r.pod(mgr.sponsorYears); r.pod(mgr.namingYears);
+    if (!nlLeague.empty() && (int)nlLeague.size() != NUM_NATIONS) nlLeague.clear();
+}
+
 // feuille de match et remplacements selon la compétition (anciennes règles en pro et en National)
 void Career::sheetRules(int comp, int& sheet, int& subs, bool& rolling) const {
     sheet = 18; subs = 3; rolling = false;
@@ -2511,12 +3220,16 @@ void Career::sheetRules(int comp, int& sheet, int& subs, bool& rolling) const {
         int p = C.tag / 100000, q = (C.tag / 100) % 1000;
         if (p < (int)pyramids.size() && q < (int)pyramids[p].pools.size()) {
             const Pyramid& P = pyramids[p]; int tier = pyramids[p].pools[q].tier;
+            if (P.country == "U15") { sheet = 14; subs = 99; rolling = true; return; }                                   // U15 : remplacements libres
             if (P.country == "U19" || P.country == "U17") { sheet = tier == 0 ? 16 : 14; subs = 3; return; }
-            if (P.country == "FRA" && (P.dom >= 0 || tier >= 5)) { sheet = 14; subs = 3; return; }   // Régional et District
+            if (P.country == "FRA" && P.dom < 0 && (tier == 3 || tier == 4)) { sheet = 16; subs = 3; return; }             // National 2 et National 3
+            if (P.country == "FRA" && P.dom < 0 && tier >= 5 && tier <= 7) { sheet = 14; subs = 3; return; }             // Régional 1 à 3
+            if (P.country == "FRA" && (P.dom >= 0 || tier >= 8)) { sheet = 14; subs = 99; rolling = true; return; }     // District : remplacements libres
         }
         return;
     }
     if (C.kind == 2 && C.name.find("tours régionaux") != std::string::npos) { sheet = 14; subs = 3; return; }
+    if (C.kind == 26 || C.kind == 27 || C.kind == 13) { sheet = 14; subs = 3; return; }
 }
 
 // Coupe de France : tours régionaux où joue le club du joueur, s'il évolue en district (inscription facultative)

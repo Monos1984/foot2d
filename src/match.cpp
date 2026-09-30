@@ -264,6 +264,14 @@ void Match::init(const MatchSetup& setup) {
         trainTries = 0; trainGoals = 0;
         trainingNext();
     }
+    if (S.pensOnly && !S.training) {
+        // séance de tirs au but seule : pas de cérémonie ni de jeu, tirage au sort puis tirs
+        S.decisive = true; ceremony = false; cerPhase = 99;
+        for (int t = 0; t < 2; t++) for (int s2 = 0; s2 < 11; s2++) { V2 tg; formationTarget(t * 11 + s2, tg); pl[t * 11 + s2].pos = tg; pl[t * 11 + s2].vel = V2(); }
+        period = 1; state = MS_BREAK; stateT = 0; nextSp = 4;
+        msg = "SÉANCE DE TIRS AU BUT"; msg2 = team(0).shortName + " - " + team(1).shortName; msgT = 3;
+        say("Place à une séance de tirs au but entre " + team(0).name + " et " + team(1).name + " !", 3.5f, true);
+    }
 }
 
 // ------------------------------------------------------------------ entraînement
@@ -707,7 +715,14 @@ void Match::formationTarget(int i, V2& out) const {
     }
     // consigne : hauteur de la ligne défensive (bloc bas / haut)
     u = clampf(u + (S.tac[t][1] - 1) * (p.role == 1 ? 0.045f : 0.035f), 0.04f, 0.95f);
-    if (p.role == 1) u = std::min(u, (mentality[t] >= 4 ? 0.74f : 0.68f) + (S.tac[t][1] - 1) * 0.04f);
+    if (p.role == 1) {
+        // même en tout-attaque, la défense reste proche de sa zone : axiaux vers la ligne médiane au plus, latéraux un peu plus haut
+        bool central = std::fabs(v0 - 0.5f) < 0.2f;
+        float cap = (central ? 0.50f : 0.62f) + (mentality[t] >= 3 ? 0.03f : 0.f) + (S.tac[t][1] - 1) * 0.04f;
+        u = std::min(u, cap);
+        // sans le ballon : toujours entre le ballon et le but
+        if (!attacking) u = std::min(u, std::max(0.05f, bu - (central ? 0.07f : 0.04f)));
+    }
     // en phase défensive près de son but : les défenseurs restent entre le ballon et le but
     if (!attacking && p.role == 1 && bu < 0.4f) u = std::min(u, std::max(0.05f, bu - 0.02f + (u0 - 0.2f) * 0.1f));
     if (!attacking && p.role == 2 && bu < 0.25f) u = std::min(u, bu + 0.2f);
@@ -843,7 +858,7 @@ void Match::passTo(int i, int target, bool lob) {
     // pression adverse : passe moins précise (sang-froid)
     float press = 1e9; for (int k = (1 - p.team) * 11; k < (1 - p.team) * 11 + 11; k++) if (pl[k].onPitch) press = std::min(press, (pl[k].pos - p.pos).len());
     if (press < 2.5f) acc += (100 - p.compo) / 300.f;
-    float err = R.frange(-1, 1) * acc * 0.12f;
+    float err = R.frange(-1, 1) * (acc * 0.10f + acc * acc * 0.12f);     // les mauvais passeurs manquent nettement plus
     V2 dir = rot(d.norm(), err);
     // une-deux : après une passe courte vers l'avant, le passeur file dans l'espace ; le receveur peut remettre en une touche
     if (!p.gk && !lob && dist < 18.f && progress(p.team, p.pos) > 0.5f && R.chance(0.35f)) {
@@ -1037,6 +1052,7 @@ void Match::updateBall(float dt) {
         float d = (p.pos - b.pos).len();
         bool gkCatch = p.gk && inOwnBox(p.team, p.pos) && !(b.backpass && b.lastTeam == p.team);
         float reach = p.state == PS_DIVE ? 1.25f + p.keep / 220.f : (p.gk ? 0.85f + p.keep / 400.f : 0.7f);   // allonge du gardien selon son niveau
+        if (i == penGk && p.gk) reach = p.state == PS_DIVE ? 0.7f + p.keep / 330.f : 0.55f + p.keep / 500.f;    // penalty : réflexe à 11 m
         float zmax = gkCatch ? (p.state == PS_DIVE ? 2.2f : 2.6f) : 0.95f;
         if (p.state == PS_SLIDE) { reach = 1.0f; zmax = 0.6f; }
         bool inField = b.pos.y > -BALL_R * 0.5f && b.pos.y < PITCH_L + BALL_R * 0.5f;
@@ -1506,6 +1522,7 @@ void Match::autoSubs(int t) {
 
 // ------------------------------------------------------------------ coups de pied arrêtés
 void Match::beginSetPiece(int type, int t, V2 spot) {
+    penGk = -1;
     state = MS_SETPIECE; stateT = 0; autoSubDone = false;
     sp = type; spTeam = t; spPos = spot; spT = 0; spReady = false;
     ball = Ball();
@@ -1793,18 +1810,34 @@ void Match::updateSetPiece(float dt) {
         float sp2 = 18 + power * 14;
         float vz = 0.6f + power * 3.2f;
         V2 g = goalCenter(p.team);
-        if (penalty) vz = 0.3f + power * 2.4f;
+        if (penalty) {
+            // hauteur visée à la ligne de but : plus on frappe fort, plus le ballon monte... et peut passer au-dessus
+            float dist = std::max(6.f, (g - ball.pos).len());
+            float skill = (p.shoot * 0.6f + p.compo * 0.4f) / 100.f;
+            float press = sp == SP_SHOOTOUT ? 0.25f + 0.1f * std::min(10, penTaken[0] + penTaken[1]) / 10.f : 0.15f;   // pression (séance de tirs au but)
+            float h = 0.1f + power * 1.5f + R.frange(-0.35f, 0.35f) * (1.2f - skill);
+            if (power > 0.75f) h += (power - 0.75f) * R.frange(3.f, 12.f) * (1.3f - skill);            // frappe en force : risque au-dessus
+            h += R.frange(0.f, 1.2f) * press * (1.f - skill);
+            h = std::max(0.05f, h);
+            // précision latérale : sang-froid et pression
+            aim = rot(aim, R.frange(-1.f, 1.f) * (0.02f + press * 0.05f) * (1.3f - skill));
+            sp2 = 17 + power * 13;
+            float tt = dist / sp2;
+            vz = (h + 0.5f * GRAV * tt * tt) / tt;
+        }
         kickBall(k, aim, sp2, vz, human >= 0);
         if (penalty) {
             // plongeon du gardien
             MPlayer& G = pl[gkDef];
+            penGk = gkDef;
             if (G.onPitch) {
                 float side;
                 if (defHuman >= 0) side = ctl[defHuman].dir.x;
                 else { float r = R.f(); side = r < 0.4f ? -1.f : r < 0.8f ? 1.f : 0.f; }
                 if (std::fabs(side) > 0.2f) {
-                    G.state = PS_DIVE; G.st = 0;
-                    G.vel = V2(side > 0 ? 1.f : -1.f, 0) * (4.2f + G.keep / 45.f);
+                    // plongeon au moment de la frappe : le gardien part sur un côté, un tir bien placé reste imparable
+                    G.state = PS_DIVE; G.st = 0; G.smother = false;
+                    G.vel = V2(side > 0 ? 1.f : -1.f, 0) * (3.1f + G.keep / 70.f);
                 }
             }
             (void)g;
@@ -1860,7 +1893,10 @@ void Match::updateSetPiece(float dt) {
         if (R.chance(0.15f)) side = 0;
         float acc = (100 - p.shoot) / 100.f;
         float tx = PITCH_W / 2 + side * R.frange(1.8f, 3.3f) + R.frange(-1, 1) * acc * 2.5f;
-        doShot((V2(tx, g.y) - spPos).norm(), R.frange(0.45f, 0.85f));
+        // l'ordinateur dose sa frappe : les meilleurs tireurs placent, les autres frappent parfois en force
+        float pw = p.shoot > 75 ? R.frange(0.45f, 0.85f) : R.frange(0.45f, 1.0f);
+        if (side == 0) pw = R.frange(0.55f, 0.9f);
+        doShot((V2(tx, g.y) - spPos).norm(), pw);
         break;
     }
     case SP_FREEKICK: case SP_INDIRECT:
@@ -2202,9 +2238,9 @@ void Match::aiCarrier(int i, float dt) {
                 if (R.chance(0.25f)) side = -side;
                 float acc = (100 - p.shoot) / 100.f;
                 if (press < 2.f) acc += (100 - p.compo) / 450.f;       // sang-froid sous la pression
-                float tx = PITCH_W / 2 + side * R.frange(2.2f, 3.4f) + R.frange(-1, 1) * (acc * 4.5f + dist * 0.05f);
+                float tx = PITCH_W / 2 + side * R.frange(2.2f, 3.4f) + R.frange(-1, 1) * (acc * 3.5f + acc * acc * 5.f + dist * 0.05f);
                 V2 aim = (V2(tx, g.y) - p.pos).norm();
-                float pw = clampf(21 + p.shoot / 9.f + R.frange(-2, 4), 18, 32);
+                float pw = clampf(18 + p.shoot / 6.f + R.frange(-2, 4), 18, 33);        // puissance selon la qualité de frappe
                 kickBall(i, aim, pw, R.frange(0.3f, 2.0f) + dist * 0.025f, false);
                 return;
             }
@@ -2366,6 +2402,9 @@ void Match::aiControl(int i, float dt) {
     } else {
         formationTarget(i, target);
         run = mateHas ? 0.8f : 0.72f;
+        // repli défensif : un défenseur trop haut à la perte du ballon rentre au sprint
+        if (!mateHas && p.role == 1 && progress(t, p.pos) > progress(t, target) + 0.04f) run = 1.0f;
+        else if (!mateHas && p.role == 2 && progress(t, p.pos) > progress(t, target) + 0.12f) run = 0.9f;
         // pressing haut : attaquants et milieux proches harcèlent la relance adverse
         if (oppHas && S.tac[t][0] == 2 && p.role >= 2 && progress(pl[owner].team, pl[owner].pos) < 0.45f) {
             float d = (pl[owner].pos - p.pos).len();
@@ -2764,6 +2803,8 @@ void Match::update(float dt) {
         break;
     case MS_PLAY: {
         if (!shootout) clock += dt * rate;
+        if (penGk >= 0 && stateT > 1.0f) penGk = -1;
+        if (shootout) { if (stateT < 0.02f) penMaxZ = 0; if (ball.pos.y > 0.3f && ball.pos.y < PITCH_L - 0.3f) {} else penMaxZ = std::max(penMaxZ, ball.z); }
         assignHumans();
         updatePlayers(dt);
         if (state != MS_PLAY) break;
@@ -2776,14 +2817,22 @@ void Match::update(float dt) {
             bool resolved = false; bool scored = false;
             if (ball.inNet) { resolved = true; scored = true; }
             else if (ball.owner >= 0 && pl[ball.owner].gk) resolved = true;
-            else if (stateT > 2.5f || ball.pos.y < -1 || ball.pos.x < 0 || ball.pos.x > PITCH_W || (ball.vel.len() < 0.5f && stateT > 0.8f)) resolved = true;
-            else if (ball.vel.y > 0 && stateT > 0.5f) resolved = true;
+            else if (stateT > 2.5f || ball.pos.y < -1 || ball.pos.y > PITCH_L + 1 || ball.pos.x < 0 || ball.pos.x > PITCH_W || (ball.vel.len() < 0.5f && stateT > 0.8f)) resolved = true;
+            else if ((shootGoal == 0 ? ball.vel.y > 0 : ball.vel.y < 0) && stateT > 0.5f) resolved = true;     // ballon repoussé
             if (resolved) {
                 int t = pl[spKicker].team;
                 penTaken[t]++;
                 if (scored) pens[t]++;
                 penLog[t].push_back(scored ? 1 : 0);
-                msg = scored ? "BUT !" : "RATÉ !"; msg2 = playerName(spKicker); msgT = 1.6f;
+                {
+                    const char* miss = "RATÉ !";
+                    float gx = std::fabs(ball.pos.x - PITCH_W / 2);
+                    if (ball.lastTouch >= 0 && pl[ball.lastTouch].gk && pl[ball.lastTouch].team != t) miss = "ARRÊT DU GARDIEN !";
+                    else if ((ball.pos.y < 0.5f || ball.pos.y > PITCH_L - 0.5f) && gx < GOAL_W / 2 + 0.3f && penMaxZ > GOAL_H - 0.1f) miss = gx > GOAL_W / 2 - 0.3f ? "SUR LE POTEAU !" : "AU-DESSUS !";
+                    else if (gx >= GOAL_W / 2) miss = "À CÔTÉ !";
+                    msg = scored ? "BUT !" : miss; msg2 = playerName(spKicker); msgT = 1.6f;
+                    lastPenMiss = scored ? 0 : miss[0] == 'A' && miss[1] == 'R' ? 1 : miss[0] == 'A' && miss[1] == 'U' ? 2 : 3;
+                }
                 if (scored) playSfx(SFX_GOAL); else playSfx(SFX_CROWD_OOH);
                 state = MS_STOP; stateT = 0; nextSp = SP_SHOOTOUT;
             }
@@ -3160,7 +3209,7 @@ bool Match::hotPhase() const {
     if (state == MS_GOAL || state == MS_REPLAY || state == MS_SHOOTOUT || state == MS_END) return true;
     if (state == MS_SETPIECE) return ball.pos.y < 30.f || ball.pos.y > PITCH_L - 30.f;
     if (state != MS_PLAY) return false;
-    if (ball.pos.y < 30.f || ball.pos.y > PITCH_L - 30.f) return true;
+    if (ball.pos.y < 36.f || ball.pos.y > PITCH_L - 36.f) return true;
     if (ball.z > 0.3f && (ball.pos.y < 40.f || ball.pos.y > PITCH_L - 40.f)) return true;
     return false;
 }

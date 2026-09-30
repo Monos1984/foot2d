@@ -372,7 +372,8 @@ static void generateFake(Team& t, int count, std::vector<Player>& out) {
     static const int POS_LIST[20] = { POS_GK, POS_GK, POS_DF, POS_DF, POS_DF, POS_DF, POS_DF, POS_DF, POS_DF,
                                       POS_MF, POS_MF, POS_MF, POS_MF, POS_MF, POS_MF, POS_FW, POS_FW, POS_FW, POS_FW, POS_FW };
     std::set<std::string> used;
-    float base = t.rating;
+    // équilibrage : le onze type d'un club généré vaut à peu près sa note (les 11 meilleurs d'un effectif de 20 sont au-dessus de la moyenne)
+    float base = t.rating - (t.kind == TK_CLUB && !t.youth ? 3.0f : 0.0f);
     for (int i = 0; i < count; i++) {
         Player p;
         p.pos = (uint8_t)POS_LIST[i % 20];
@@ -415,6 +416,8 @@ static void generateFake(Team& t, int count, std::vector<Player>& out) {
     }
 }
 
+void generateFakeSquad(Team& t, int count, std::vector<Player>& out) { generateFake(t, count, out); }
+
 static int realNumbersFix(std::vector<Player>& sq) {
     std::vector<bool> used(100, false);
     for (auto& p : sq) if (p.num > 0 && p.num < 100 && !used[p.num]) used[p.num] = true; else p.num = 0;
@@ -455,7 +458,7 @@ void World::generateSquad(Team& t) {
     if (t.kind == TK_CLUB && t.dbClub >= 0) {
         const DbClub& c = DBCLUBS[t.dbClub];
         for (int i = 0; i < c.count; i++) t.squad.push_back(fromRec(PLAYERS[c.first + i], r));
-    } else if (t.kind == TK_NATION) {
+    } else if (t.kind == TK_NATION && !t.youth) {
         auto& lst = nationPlayers()[t.nation];
         // équilibre des postes : 3 gardiens, puis les meilleurs
         int gk = 0;
@@ -474,9 +477,12 @@ void World::generateSquad(Team& t) {
         generateFake(t, 20, fake);
         for (auto& p : fake) { if (!hasGk && p.pos == POS_GK) { t.squad.push_back(p); hasGk = true; continue; } if ((int)t.squad.size() < 20) t.squad.push_back(p); }
     }
-    if (t.youth) {   // équipe U19 : joueurs de 16 à 19 ans (U17 : 15 et 16 ans), fort potentiel
+    if (t.youth) {   // équipe U19 : joueurs de 16 à 19 ans (U17 : 15 et 16 ans), fort potentiel ; sélections Espoirs (U21) et olympique (U23)
+        int k = 0;
         for (auto& p : t.squad) {
-            p.age = (uint8_t)(t.youth == 2 ? r.range(15, 16) : r.range(16, 19));
+            p.age = (uint8_t)(t.youth == 5 ? (k < 3 ? r.range(24, 31) : r.range(20, 23)) : t.youth == 4 ? r.range(18, 21) : t.youth == 3 ? r.range(13, 14) : t.youth == 2 ? r.range(15, 16) : r.range(16, 19));
+            k++;
+            if (t.kind == TK_NATION) p.nation = (int16_t)t.nation;
             p.pot = (uint8_t)std::min(99, p.overall() + r.range(2, 14) - (p.age - 16) + (r.chance(0.12f) ? r.range(6, 14) : 0));
             p.contract = 2;
         }
@@ -500,6 +506,16 @@ Player World::makeYouth(int team, int pos, float level) {
     for (auto& q : t.squad) if (q.num < 100) used[q.num] = true;
     p.num = 1; while (p.num < 99 && used[p.num]) p.num++;
     p.id = nextPid++;
+    if (t.kind == TK_CLUB && t.nation >= 0 && !t.youth) p.nation = (int16_t)t.nation;   // formé au club : nationalité du pays
+    {   // centre de formation du club : meilleurs jeunes
+        int club = t.parent >= 0 ? t.parent : team;
+        int ac = club >= 0 && club < (int)teams.size() ? teams[club].academy : 0;
+        if (ac > 0) {
+            p.pot = (uint8_t)std::min(99, p.pot + ac * 2 + r.range(0, ac));
+            auto up = [&](uint8_t& v) { v = (uint8_t)std::min(99, v + ac); };
+            up(p.speed); up(p.shoot); up(p.pass); up(p.tackle); if (p.pos == POS_GK) up(p.keep);
+        }
+    }
     p.goals = p.apps = p.assists = 0; p.suspended = p.injured = p.yellows = 0;
     return p;
 }

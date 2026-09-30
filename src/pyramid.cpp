@@ -526,15 +526,15 @@ int makeU17Team(World& w, int parent) { return makeYouthTeam(w, parent, 2); }
 int makeYouthTeam(World& w, int parent, int kind) {
     const Team& P = w.teams[parent];
     Team t = P;
-    const char* suf = kind == 2 ? " U17" : " U19";
+    const char* suf = kind == 3 ? " U15" : kind == 2 ? " U17" : " U19";
     t.squad.clear(); t.squadGen = false; t.honours.clear(); t.xi.clear();
-    t.parent = parent; t.resLevel = kind == 2 ? 10 : 9; t.youth = kind;
+    t.parent = parent; t.resLevel = kind == 3 ? 11 : kind == 2 ? 10 : 9; t.youth = kind;
     t.name = P.name + suf;
     std::string sn = P.shortName.size() > 5 ? P.shortName.substr(0, 5) : P.shortName;
     t.shortName = sn + suf;
-    t.rating = kind == 2 ? std::max(12.f, std::min(62.f, 10.f + P.rating * 0.55f)) : std::max(15.f, std::min(70.f, 14.f + P.rating * 0.6f));
+    t.rating = kind == 3 ? std::max(10.f, std::min(55.f, 8.f + P.rating * 0.5f)) : kind == 2 ? std::max(12.f, std::min(62.f, 10.f + P.rating * 0.55f)) : std::max(15.f, std::min(70.f, 14.f + P.rating * 0.6f));
     t.dbClub = -1;
-    t.seed = hashStr(t.name) ^ (kind == 2 ? 0x1717 : 0x1919);
+    t.seed = hashStr(t.name) ^ (kind == 3 ? 0x1515 : kind == 2 ? 0x1717 : 0x1919);
     t.stadium = "Stade annexe (" + (P.town.empty() ? P.name : P.town) + ")";
     t.sta = StadiumInfo();
     t.status = CS_AMATEUR;
@@ -566,28 +566,30 @@ static const U19Reg U19_REG[13] = {
 static void buildYouthPyr(World& w, int kind) {
     if (g_basePyramids.empty() || g_basePyramids[0].country != "FRA") return;
     const Pyramid& F = g_basePyramids[0];
-    Rng r(kind == 2 ? 0x1717AB : 0x1919AB);
-    const std::string A = kind == 2 ? "U17" : "U19";
+    Rng r(kind == 3 ? 0x1515AB : kind == 2 ? 0x1717AB : 0x1919AB);
+    const std::string A = kind == 3 ? "U15" : kind == 2 ? "U17" : "U19";
     Pyramid P;
     P.country = A; P.name = "France " + A; P.barrageUp = 0;
     auto T = [&](const char* n, int scope, int size, int up, int down) {
         TierConf c; c.name = sanitize(n); c.scope = scope; c.groupsPerPool = -1; c.groupSize = size; c.up = up; c.down = down; c.tb = TB_FFF;
         P.tiers.push_back(c);
     };
-    T(("National " + A).c_str(), SC_NATIONAL, 14, 0, 3);
-    T(("Régional 1 " + A).c_str(), SC_REGION, 12, 1, 2);
+    // U15 : pas de championnat national, la ligue est le plus haut niveau
+    const int R0 = kind == 3 ? 0 : 1;      // premier niveau régional
+    if (kind != 3) T(("National " + A).c_str(), SC_NATIONAL, 14, 0, 3);
+    T(("Régional 1 " + A).c_str(), SC_REGION, 12, kind == 3 ? 0 : 1, 2);
     T(("Régional 2 " + A).c_str(), SC_REGION, 12, 1, 2);
     if (kind == 1) T(("Régional 3 " + A).c_str(), SC_REGION, 12, 1, 3);
-    const int TD = kind == 1 ? 4 : 3;      // premier niveau de district
+    const int TD = kind == 1 ? 4 : kind == 2 ? 3 : 2;      // premier niveau de district
     T(("District 1 " + A).c_str(), SC_DEPT, 12, 1, 2);
     T(("District 2 " + A).c_str(), SC_DEPT, 12, 1, 0);
     auto addPool = [&](int tier, int key, int ng, int size) { Pool p; p.tier = tier; p.key = key; p.nGroups = ng; p.size = size; P.pools.push_back(p); return (int)P.pools.size() - 1; };
-    addPool(0, 0, 4, 14);
+    if (kind != 3) addPool(0, 0, 4, 14);
     for (int rg = 0; rg < NUM_METRO_REGIONS; rg++) {
         const U19Reg& R = U19_REG[rg];
-        int q = addPool(1, rg, R.r1g, rg == 12 ? 8 : 12);
-        if (rg == 12) P.pools[q].upCap = 0;      // Corse : pas d'accession directe
-        if (R.r2g) addPool(2, rg, R.r2g, 12);
+        int q = addPool(R0, rg, R.r1g, rg == 12 ? 8 : 12);
+        if (rg == 12 && kind != 3) P.pools[q].upCap = 0;      // Corse : pas d'accession directe
+        if (R.r2g) addPool(R0 + 1, rg, R.r2g, 12);
         if (R.r3g && kind == 1) addPool(3, rg, R.r3g, 12);   // U17 : deux niveaux régionaux
     }
     for (int d = 0; d < numDistricts(); d++) {
@@ -601,13 +603,13 @@ static void buildYouthPyr(World& w, int kind) {
     for (auto& pl : F.pools) for (int c : pl.clubs) {
         const Team& t = w.teams[c];
         if (t.parent >= 0 || t.region < 0 || t.region >= NUM_METRO_REGIONS) continue;
-        cand.push_back({ -(t.rating + (pl.tier <= 2 ? 30.f : 0.f) + (kind == 2 ? r.frange(-4, 4) : 0.f)), c });
+        cand.push_back({ -(t.rating + (pl.tier <= 2 ? 30.f : 0.f) + (kind >= 2 ? r.frange(-4, 4) : 0.f)), c });
     }
     std::sort(cand.begin(), cand.end());
     std::set<int> used;
     auto give = [&](int club, int q) { int id = makeYouthTeam(w, club, kind); P.pools[q].clubs.push_back(id); used.insert(club); };
-    for (auto& c : cand) { if ((int)P.pools[0].clubs.size() >= 56) break; give(c.second, 0); }
-    for (int tier = 1; tier < TD; tier++)
+    if (kind != 3) for (auto& c : cand) { if ((int)P.pools[0].clubs.size() >= 56) break; give(c.second, 0); }
+    for (int tier = R0; tier < TD; tier++)
         for (int rg = 0; rg < NUM_METRO_REGIONS; rg++) {
             int q = P.poolIndex(tier, rg);
             if (q < 0) continue;
@@ -641,6 +643,7 @@ void buildBasePyramids(World& w) {
     buildFrance(w);
     buildYouthPyr(w, 1);
     buildYouthPyr(w, 2);
+    buildYouthPyr(w, 3);          // U15 : ligues et districts uniquement
     buildForeign(w);
 }
 

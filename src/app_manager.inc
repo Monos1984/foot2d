@@ -19,7 +19,11 @@ static void autosave() {
 // ---------------- mercato
 struct MkRow { int team; int pid; int idx; };
 static int g_mkTab = 0, g_mkPos = -1;
-static bool g_mkAfford = false;
+static bool g_mkAfford = false, g_mkReal = false, g_mkFree = false;
+static int g_mkSort = 0;                // 0 note, 1 âge, 2 prix, 3 salaire, 4 potentiel
+// négociation en cours
+struct Nego { bool active = false; int team = -1, pid = -1, fee = 0, wage = 0, years = 3, ask = 0, demand = 0; int row = 0; std::string last; };
+static Nego g_nego;
 static std::vector<MkRow> g_mkList;
 static ListW g_mkLW;
 
@@ -39,6 +43,8 @@ static void buildMarket() {
         }
     }
     for (int t = 0; t < (int)g_world.teams.size(); t++) if (g_world.teams[t].parent == u) clubs.insert(t);   // réserves du club
+    clubs.insert(freeAgentsTeam());                                                                      // joueurs libres
+    if (g_mkFree) { clubs.clear(); clubs.insert(freeAgentsTeam()); }
     clubs.erase(u);
     // niveau de l'effectif
     g_world.ensureSquad(u);
@@ -51,13 +57,22 @@ static void buildMarket() {
         for (int i = 0; i < (int)T.squad.size(); i++) {
             const Player& pl = T.squad[i];
             int ov = pl.overall();
-            if (ov < ref - 10 || ov > ref + 12 + 2 * g_career.staffLevel(SR_SCOUT)) continue;
+            if (!T.freeAgents && (ov < ref - 10 || ov > ref + 12 + 2 * g_career.staffLevel(SR_SCOUT))) continue;
+            if (T.freeAgents && ov < ref - 14) continue;
             if (g_mkPos >= 0 && pl.pos != g_mkPos) continue;
             g_mkList.push_back({ t, pl.id, i });
         }
     }
     std::sort(g_mkList.begin(), g_mkList.end(), [](const MkRow& a, const MkRow& b) {
-        return g_world.teams[a.team].squad[a.idx].overall() > g_world.teams[b.team].squad[b.idx].overall(); });
+        const Player& A = g_world.teams[a.team].squad[a.idx]; const Player& B = g_world.teams[b.team].squad[b.idx];
+        switch (g_mkSort) {
+        case 1: if (A.age != B.age) return A.age < B.age; break;
+        case 2: if (A.value() != B.value()) return A.value() < B.value(); break;
+        case 3: if (A.wage() != B.wage()) return A.wage() < B.wage(); break;
+        case 4: if (A.pot != B.pot) return A.pot > B.pot; break;
+        default: break;
+        }
+        return A.overall() > B.overall(); });
     if (g_mkList.size() > 600) g_mkList.resize(600);
     g_mkLW = ListW();
 }
@@ -65,13 +80,63 @@ static void buildMarket() {
 static int askingPrice(int team, int idx) {
     const Team& T = g_world.teams[team];
     const Player& p = T.squad[idx];
-    if (T.parent == g_career.userTeam) return 0;               // joueur de la réserve : gratuit
+    if (T.parent == g_career.userTeam || T.freeAgents) return 0;   // joueur de la réserve ou libre : gratuit
     auto lu = g_world.pickLineup(team, T.formation);
     bool starter = false; for (int k = 0; k < 11 && k < (int)lu.size(); k++) if (lu[k] == idx) starter = true;
     return (int)(p.value() * (starter ? 1.3 : 1.0));
 }
 
 static void openMarket() { g_mkTab = 0; buildMarket(); g_screen = SC_MARKET; }
+
+// négociation : indemnité, salaire, durée du contrat
+static void marketNegotiation() {
+    Nego& N = g_nego;
+    int idx = -1; int t = g_world.findPlayer(N.pid, &idx);
+    if (t < 0) { N.active = false; return; }
+    const Player& p = g_world.teams[t].squad[idx];
+    const Team& U = g_world.teams[g_career.userTeam];
+    int x = 60, y = 84, w = VW - 120;
+    DrawRectangle(x, y, w, 220, Color{ 16, 28, 56, 250 });
+    DrawRectangleLines(x, y, w, 220, C_SEL);
+    drawTextPx(fmt("Négociation : %s (%s, %d ans, note %d)", p.name.c_str(), posName(p.pos), p.age, p.overall()), x + 10, y + 6, 10, C_HI);
+    drawTextPx("Club : " + g_world.teams[t].name + (g_world.teams[t].freeAgents ? " - pas d'indemnité" : fmt(" - prix demandé %s", money(N.ask).c_str())), x + 10, y + 20, 10, C_DIM);
+    drawTextPx(U.status == CS_AMATEUR ? std::string("Licence amateur : pas de salaire.") : fmt("Salaire demandé par le joueur : %s / an   (réputation du club : %d)", money(N.demand).c_str(), teamReputation(g_career.userTeam)), x + 10, y + 32, 10, C_DIM);
+    bool freeP = g_world.teams[t].freeAgents || g_world.teams[t].parent == g_career.userTeam;
+    int bonus = U.status == CS_AMATEUR ? 0 : N.wage * N.years / 10;
+    std::vector<std::string> rows = {
+        freeP ? std::string("Indemnité de transfert : aucune") : "Indemnité proposée : " + money(N.fee) + fmt("  (%d %% du prix)", N.ask ? N.fee * 100 / N.ask : 100),
+        U.status == CS_AMATEUR ? std::string("Salaire : licence amateur") : "Salaire annuel proposé : " + money(N.wage),
+        fmt("Durée du contrat : %d an%s", N.years, N.years > 1 ? "s" : ""),
+        "Prime à la signature (10 % du contrat) : " + money(bonus),
+        ">>> ENVOYER L'OFFRE <<<", "Abandonner" };
+    if (IN.up) N.row = (N.row + 5) % 6;
+    if (IN.down) N.row = (N.row + 1) % 6;
+    for (int i = 0; i < 6; i++) {
+        int yy = y + 50 + i * 18;
+        bool sel = N.row == i;
+        bool hover = IN.mouse.x >= x + 10 && IN.mouse.x < x + w - 10 && IN.mouse.y >= yy && IN.mouse.y < yy + 16;
+        if (hover && IN.click) N.row = i;
+        DrawRectangle(x + 10, yy, w - 20, 16, sel ? C_SEL : C_ITEM);
+        drawTextPx((i < 3 ? "< " : "") + rows[i] + (i < 3 ? " >" : ""), x + 16, yy + 3, 10, sel ? BLACK : C_TXT);
+    }
+    int d = IN.left ? -1 : IN.right ? 1 : 0;
+    if (d) {
+        if (N.row == 0 && !freeP) N.fee = std::max(0, N.fee + d * std::max(1, N.ask / 20));
+        if (N.row == 1 && U.status != CS_AMATEUR) N.wage = std::max(1, N.wage + d * std::max(1, N.demand / 20));
+        if (N.row == 2) N.years = std::max(1, std::min(5, N.years + d));
+    }
+    if (!N.last.empty()) drawTextPx(fitText(N.last, w - 20, 10), x + 10, y + 204, 10, C_BAD);
+    drawFooter("Haut/Bas : ligne   Gauche/Droite : modifier   OK : valider   Retour : abandonner");
+    bool go = (IN.ok || (IN.click && IN.mouse.y >= y + 50 + 4 * 18 && IN.mouse.y < y + 50 + 5 * 18)) && N.row == 4;
+    if (go) {
+        std::string msg;
+        int r = g_career.signPlayer(N.pid, freeP ? 0 : N.fee, U.status == CS_AMATEUR ? 0 : N.wage, N.years, msg);
+        if (r == 1) { toast(msg); N.active = false; buildMarket(); return; }
+        N.last = msg;
+        if (r == 0 && msg.find("demande ") != std::string::npos) {}     // le club a fait une contre-proposition
+    }
+    if ((IN.ok && N.row == 5) || IN.back) { N.active = false; IN.back = false; }
+}
 
 static void screenMarket() {
     drawBackground("Mercato");
@@ -86,9 +151,14 @@ static void screenMarket() {
     if (IN.pgDn) { g_mkTab = (g_mkTab + 1) % 3; g_mkLW = ListW(); }
     int y = 64;
     if (g_mkTab == 0) {
-        static const char* PF[] = { "Tous", "Gardiens", "Défenseurs", "Milieux", "Attaquants" };
-        for (int i = 0; i < 5; i++) if (button(12 + i * 76, y, 74, 13, PF[i], g_mkPos == i - 1)) { g_mkPos = i - 1; buildMarket(); }
-        if (button(400, y, 130, 13, g_mkAfford ? "Abordables : oui" : "Abordables : non", g_mkAfford)) g_mkAfford = !g_mkAfford;
+        if (g_nego.active) { marketNegotiation(); return; }
+        static const char* PF[] = { "Tous", "G", "D", "M", "A" };
+        for (int i = 0; i < 5; i++) if (button(12 + i * 40, y, 38, 13, PF[i], g_mkPos == i - 1)) { g_mkPos = i - 1; buildMarket(); }
+        static const char* SO[] = { "Tri : note", "Tri : âge", "Tri : prix", "Tri : salaire", "Tri : potentiel" };
+        if (button(214, y, 100, 13, SO[g_mkSort])) { g_mkSort = (g_mkSort + 1) % 5; buildMarket(); }
+        if (button(318, y, 96, 13, g_mkAfford ? "Abordables" : "Tous les prix", g_mkAfford)) g_mkAfford = !g_mkAfford;
+        if (button(418, y, 100, 13, g_mkReal ? "Réalistes" : "Tous profils", g_mkReal)) g_mkReal = !g_mkReal;
+        if (button(522, y, 106, 13, g_mkFree ? "Joueurs libres" : "Tous les clubs", g_mkFree)) { g_mkFree = !g_mkFree; buildMarket(); }
         y += 17;
         std::vector<int> rows;
         for (int i = 0; i < (int)g_mkList.size(); i++) {
@@ -96,6 +166,11 @@ static void screenMarket() {
             const Team& T = g_world.teams[r.team];
             if (r.idx >= (int)T.squad.size() || T.squad[r.idx].id != r.pid) continue;
             if (g_mkAfford && askingPrice(r.team, r.idx) > M.budget) continue;
+            if (g_mkReal) {    // transfert réaliste : le joueur peut accepter le projet, le prix reste accessible
+                const Player& pp = T.squad[r.idx];
+                if (pp.overall() > teamReputation(g_career.userTeam) + 20) continue;
+                if (askingPrice(r.team, r.idx) > std::max<int64_t>(M.budget, 0) * 3 / 2 + 5) continue;
+            }
             rows.push_back(i);
         }
         drawTextPx("P   Joueur", 16, y, 10, C_DIM); drawTextPx("Âge", 190, y, 10, C_DIM); drawTextPx("Note", 222, y, 10, C_DIM);
@@ -115,27 +190,24 @@ static void screenMarket() {
             drawKitIcon(T.home, x + 240, yy + 1, 1);
             drawTextPx(fitText(nameLvl(r.team), VW - 420, 10), x + 252, yy + 1, 10, s2 ? BLACK : C_DIM);
             drawTextPx(price ? money(price) : "gratuit", x + VW - 162, yy + 1, 10, price <= M.budget ? c : C_BAD);
-            drawTextPx(money(p.wage()), x + VW - 88, yy + 1, 10, c);
+            drawTextPx(money(wageDemand(p, g_career.userTeam)), x + VW - 88, yy + 1, 10, c);
+            if (T.freeAgents) drawTextPx("libre", x + 240, yy + 1, 10, s2 ? BLACK : C_GOOD);
         });
         if (rows.empty()) drawTextCentered("Aucun joueur ne correspond", VW / 2, y + 20, 10, C_DIM);
-        drawFooter("OK : faire une offre   LB/RB : onglet   Retour");
+        drawFooter("OK : négocier   LB/RB : onglet   Retour");
         if (sel >= 0) {
             MkRow r = g_mkList[rows[sel]];
             const Player& p = g_world.teams[r.team].squad[r.idx];
-            int price = askingPrice(r.team, r.idx);
-            askConfirm(fmt("Recruter %s (%s, %d ans, note %d) pour %s ? Salaire : %s / an", p.name.c_str(), posName(p.pos), p.age, p.overall(),
-                           price ? money(price).c_str() : "0", money(p.wage()).c_str()),
-                       [r, price]() {
-                           std::string err;
-                           if (g_career.buyPlayer(r.pid, price, err)) { toast("Transfert réalisé !"); buildMarket(); }
-                           else toast(err);
-                       }, "Faire l'offre", "Annuler");
+            g_nego = Nego(); g_nego.active = true; g_nego.team = r.team; g_nego.pid = r.pid;
+            g_nego.ask = askingPrice(r.team, r.idx); g_nego.fee = g_nego.ask;
+            g_nego.demand = g_world.teams[g_career.userTeam].status == CS_AMATEUR ? 0 : wageDemand(p, g_career.userTeam);
+            g_nego.wage = g_nego.demand; g_nego.years = p.age >= 31 ? 1 : p.age >= 28 ? 2 : 3;
         }
     } else if (g_mkTab == 1) {
         drawTextPx("P   Joueur", 16, y, 10, C_DIM); drawTextPx("Âge", 190, y, 10, C_DIM); drawTextPx("Note", 222, y, 10, C_DIM);
-        drawTextPx("Buts", 262, y, 10, C_DIM); drawTextPx("Valeur", VW - 200, y, 10, C_DIM); drawTextPx("Salaire", VW - 110, y, 10, C_DIM);
+        drawTextPx("Buts", 262, y, 10, C_DIM); drawTextPx("Contrat", 300, y, 10, C_DIM); drawTextPx("Valeur", VW - 200, y, 10, C_DIM); drawTextPx("Salaire", VW - 110, y, 10, C_DIM);
         y += 12;
-        int sel = listRun(g_mkLW, (int)U.squad.size(), 12, y, VW - 24, (VH - 36 - y) / 12, 12, [&](int i, int x, int yy, bool s2) {
+        int sel = listRun(g_mkLW, (int)U.squad.size(), 12, y, VW - 24, (VH - 38 - y) / 12, 12, [&](int i, int x, int yy, bool s2) {
             const Player& p = U.squad[i];
             Color c = s2 ? BLACK : C_TXT;
             drawTextPx(posName(p.pos), x + 4, yy + 1, 10, c);
@@ -143,10 +215,18 @@ static void screenMarket() {
             drawTextPx(fmt("%d", p.age), x + 182, yy + 1, 10, c);
             drawTextPx(fmt("%d", p.overall()), x + 214, yy + 1, 10, s2 ? BLACK : C_HI);
             drawTextPx(fmt("%d", p.goals), x + 254, yy + 1, 10, c);
+            static const char* CS[3] = { "pro", "fédéral", "amateur" };
+            drawTextPx(fmt("%s, %d an%s", CS[p.contract % 3], contractYears(p), contractYears(p) > 1 ? "s" : ""), x + 288, yy + 1, 10, contractYears(p) <= 1 && p.contract != 2 ? (s2 ? BLACK : C_BAD) : c);
             drawTextPx(money(p.value()), x + VW - 212, yy + 1, 10, c);
-            drawTextPx(money(p.wage()), x + VW - 122, yy + 1, 10, c);
+            drawTextPx(p.contract == 2 ? std::string("-") : money(playerWage(p)), x + VW - 122, yy + 1, 10, c);
         });
         int cur = g_mkLW.cur;
+        if (cur >= 0 && cur < (int)U.squad.size()) {
+            int pid = U.squad[cur].id; std::string msg;
+            if (button(12, VH - 32, 110, 14, "Salaire +10 %")) { if (g_career.changeWage(pid, 10, msg)) toast(msg); else toast(msg.empty() ? "Impossible" : msg); }
+            if (button(126, VH - 32, 110, 14, "Salaire -10 %")) { if (g_career.changeWage(pid, -10, msg)) toast(msg); else toast(msg.empty() ? "Impossible" : msg); }
+            if (button(240, VH - 32, 130, 14, "Prolonger (+1 an)")) { if (g_career.extendContract(pid, msg)) toast(msg); else toast(msg); }
+        }
         if (cur >= 0 && cur < (int)U.squad.size() && button(VW - 200, VH - 32, 188, 14, "Libérer le joueur sélectionné")) {
             int pid = U.squad[cur].id; std::string nm = U.squad[cur].name;
             if (U.squad.size() <= 16) toast("Effectif trop réduit (16 joueurs minimum)");
@@ -194,6 +274,9 @@ static void screenFinance() {
     drawSection(20, y, VW - 40, "FINANCES"); y += 14;
     line("Budget disponible", money(M.budget), M.budget >= 0 ? C_GOOD : C_BAD);
     line("Revenus annuels (TV, sponsors, subventions)", money(M.incomeBase));
+    if (M.tvShare > 0) line("   dont droits TV (part fixe)", money(M.tvShare));
+    line("Réputation du club", fmt("%d / 100 (%s)", teamReputation(g_career.userTeam), reputationLabel(teamReputation(g_career.userTeam))), C_HI);
+    if (M.dncg > 0) line("DNCG", fmt("sous surveillance (avertissement %d/2)", M.dncg), C_BAD);
     line("Masse salariale annuelle", money(g_career.wageBill(g_career.userTeam)));
     line("Revenus encaissés cette saison", money(M.seasonIncome), C_GOOD);
     line("Salaires et frais de fonctionnement versés", money(-M.seasonWages), C_BAD);

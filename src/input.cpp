@@ -1,3 +1,4 @@
+#include <cstdlib>
 // Clavier(s), manettes (configurables) et souris
 #include "input.h"
 #include "render.h"
@@ -63,6 +64,8 @@ void Settings::save() const {
 
 bool inputAvailable(int dev) {
     if (dev <= IN_KB2) return true;
+    static int fake = getenv("FOOT_PADS") ? atoi(getenv("FOOT_PADS")) : -1;    // test : manettes simulées
+    if (fake >= 0) return dev - IN_PAD1 < fake;
     return IsGamepadAvailable(dev - IN_PAD1);
 }
 
@@ -184,6 +187,7 @@ void inputPoll(MenuInput& mi, Controls ctl[NUM_INPUTS]) {
         mi.back = anyPressed({ KEY_ESCAPE, KEY_BACKSPACE });
         mi.tab = anyPressed({ KEY_TAB, k1[ACT_FIRE2], k2[ACT_FIRE2] });
         mi.start = anyPressed({ KEY_ENTER, KEY_KP_ENTER });
+        mi.btnNext = anyPressed({ KEY_F2 }); mi.btnPress = anyPressed({ KEY_F3 });
         mi.pgUp = anyRepeat({ KEY_PAGE_UP, KEY_Q });
         mi.pgDn = anyRepeat({ KEY_PAGE_DOWN, KEY_E });
         mi.devLeft[IN_KB1] = anyRepeat({ k1[ACT_LEFT] }); mi.devRight[IN_KB1] = anyRepeat({ k1[ACT_RIGHT] });
@@ -213,7 +217,8 @@ void inputPoll(MenuInput& mi, Controls ctl[NUM_INPUTS]) {
         mi.devLeft[IN_PAD1 + p] = fire[2]; mi.devRight[IN_PAD1 + p] = fire[3];
         mi.ok |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
         mi.back |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
-        mi.tab |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_FACE_LEFT) || IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_FACE_UP);
+        mi.btnPress |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_FACE_LEFT);     // X : onglet, ou bouton choisi
+        mi.btnNext |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_FACE_UP);       // Y : parcourir les boutons de l'écran
         mi.start |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_MIDDLE_RIGHT);
         mi.pgUp |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_LEFT_TRIGGER_1);
         mi.pgDn |= IsGamepadButtonPressed(p, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);

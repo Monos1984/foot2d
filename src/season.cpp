@@ -47,16 +47,15 @@ PendingMatch Season::advance(bool simulateUser) {
         Stage& ST = C.stages[bs];
         Round& R = ST.rounds[ST.nextR];
         int userMatch = -1;
-        // dernière journée d'un championnat / d'une phase de groupes : les matchs se jouent en même temps ;
-        // ceux de la poule du joueur ne sont connus qu'à la fin de son match
-        int userGroup = -2;
-        bool lastDay = ST.type == ST_LEAGUE && ST.nextR == (int)ST.rounds.size() - 1 && !simulateUser;
-        if (lastDay) for (int mi : R.m) { const MatchRes& m = C.matches[mi]; if (!m.played && (isControlled(m.home) || isControlled(m.away))) { userGroup = m.group; break; } }
+        // calendrier réel : les matchs programmés avant celui du joueur sont joués avant ; ceux joués en même temps
+        // (même heure) ou plus tard ne sont connus qu'à la fin de son match (fin de journée)
+        int userSlot = -1;
+        if (!simulateUser) for (int mi : R.m) { const MatchRes& m = C.matches[mi]; if (!m.played && (isControlled(m.home) || isControlled(m.away))) { userSlot = kickoffMinutes(bc, mi); break; } }
         for (int mi : R.m) {
             MatchRes& m = C.matches[mi];
             if (m.played) continue;
             if (!simulateUser && (isControlled(m.home) || isControlled(m.away))) { if (userMatch < 0) userMatch = mi; continue; }
-            if (userGroup != -2 && m.group == userGroup) continue;
+            if (userSlot >= 0 && kickoffMinutes(bc, mi) >= userSlot) continue;
             simulateMatch(m, &C);
             recordResult(bc, mi);
             genMatchEvents(C, mi);
@@ -87,6 +86,22 @@ void Season::finishRoundOthers(int c, int mi) {
 
 void Season::recordResult(int c, int mi) {
     MatchRes& m = comps[c].matches[mi];
+    // journal : résultats de la réserve et des équipes de jeunes du club du joueur
+    if (g_career.kind == CK_CLUB && m.played && m.home >= 0 && m.away >= 0) {
+        int u = g_career.userTeam;
+        for (int side = 0; side < 2; side++) {
+            int t = side ? m.away : m.home;
+            const Team& T = g_world.teams[t];
+            if (T.parent != u || u < 0) continue;
+            const char* lab = T.youth == 1 ? "U19" : T.youth == 2 ? "U17" : T.youth == 3 ? "U15" : "Réserve";
+            int gf = side ? m.ag : m.hg, ga = side ? m.hg : m.ag;
+            std::string res = gf > ga ? "victoire" : gf < ga ? "défaite" : "nul";
+            if (m.ph >= 0) res = ((side ? m.pa : m.ph) > (side ? m.ph : m.pa)) ? "qualifié aux tirs au but" : "éliminé aux tirs au but";
+            news.push_back(fmt("[%s] %s : %s %d - %d %s (%s)", lab, comps[c].shortName.empty() ? comps[c].name.c_str() : comps[c].shortName.c_str(),
+                g_world.teams[m.home].name.c_str(), m.hg, m.ag, g_world.teams[m.away].name.c_str(), res.c_str()));
+            break;
+        }
+    }
     for (int side = 0; side < 2; side++) {
         int t = side ? m.away : m.home;
         Team& T = g_world.teams[t];

@@ -11,8 +11,94 @@ static void drawIconTile(int kind, int x, int y, Color c) {
     case 7: DrawRectangle(x + 3, y, 16, 18, c); DrawRectangle(x + 6, y + 4, 10, 2, BLACK); DrawRectangle(x + 6, y + 8, 10, 2, BLACK); break; // fiche
     case 8: for (int i = 0; i < 3; i++) DrawTriangle(Vector2{ (float)x + 3 + i * 8, (float)y + 6 }, Vector2{ (float)x + i * 8, (float)y + 17 }, Vector2{ (float)x + 7 + i * 8, (float)y + 17 }, i == 1 ? c : Color{ 255, 140, 40, 255 }); DrawCircle(x + 11, y + 3, 3, c); break; // entraînement
     case 10: DrawCircle(x + 7, y + 4, 3, c); DrawRectangle(x + 4, y + 8, 7, 9, c); for (int k = 0; k < 5; k++) { float a = k * 1.2566f - 1.57f; DrawTriangle(Vector2{ (float)x + 17, (float)y + 8 }, Vector2{ (float)x + 17 + std::cos(a) * 6, (float)y + 8 + std::sin(a) * 6 }, Vector2{ (float)x + 17 + std::cos(a + 0.6f) * 3, (float)y + 8 + std::sin(a + 0.6f) * 3 }, Color{ 255, 210, 60, 255 }); } break; // formation
+    case 11: DrawRectangle(x + 5, y + 3, 12, 14, c); DrawRectangle(x, y + 3, 6, 6, c); DrawRectangle(x + 16, y + 3, 6, 6, c); DrawRectangle(x + 9, y + 3, 4, 2, BLACK); break;   // maillot
     default: DrawRectangle(x, y + 3, 22, 13, c); DrawTriangle(Vector2{ (float)x, (float)y + 3 }, Vector2{ (float)x + 11, (float)y + 11 }, Vector2{ (float)x + 22, (float)y + 3 }, BLACK); break;
     }
+}
+
+// ---------------- maillots du club (modifiables à l'intersaison : avant le premier match de championnat, ou saison terminée)
+static bool kitChangeAllowed() {
+    Season& S = g_career.season;
+    if (g_career.userTeam < 0) return false;
+    if (S.finished) return true;
+    for (auto& C : S.comps) if (C.kind == 1) for (auto& m : C.matches) if (m.played && (m.home == g_career.userTeam || m.away == g_career.userTeam)) return false;
+    return true;
+}
+static Kit g_kitEd[2];
+static int g_kitRow = 0;
+static void openKits() {
+    const Team& U = g_world.teams[g_career.userTeam];
+    g_kitEd[0] = U.home; g_kitEd[1] = U.away; g_kitRow = 0;
+    g_screen = SC_KITS;
+}
+static void screenKits() {
+    Team& U = g_world.teams[g_career.userTeam];
+    drawBackground("Maillots du club");
+    bool ok = kitChangeAllowed();
+    static float an = 0; an += GetFrameTime();
+    // aperçu : joueurs domicile et extérieur
+    int px = VW - 250;
+    DrawRectangle(px, 36, 236, 140, Color{ 34, 102, 34, 255 });
+    for (int i = 0; i < 7; i++) DrawRectangle(px, 36 + i * 20, 236, 10, Color{ 40, 116, 40, 255 });
+    DrawRectangleLines(px, 36, 236, 140, Color{ 240, 240, 240, 160 });
+    for (int k = 0; k < 2; k++) {
+        Kit kk = g_kitEd[k];
+        drawPlayerSprite(px + 60 + k * 116, 150, kk, 2 + k, k, 0, (int)(an * 6) + k * 2, PS_NORMAL, false, 0, 5);
+        drawTextCentered(k ? "EXTÉRIEUR" : "DOMICILE", px + 60 + k * 116, 158, 10, WHITE, false);
+    }
+    drawTextCentered(U.name, px + 118, 182, 10, C_HI, false);
+    if (!ok) drawTextCentered("Saison en cours : changement de maillot possible à l'intersaison.", px + 118, 196, 10, C_BAD, false);
+    struct Row { const char* label; int kit; int field; };
+    static const Row R[] = { { "Domicile - couleur principale", 0, 0 }, { "Domicile - couleur secondaire", 0, 1 }, { "Domicile - motif", 0, 4 }, { "Domicile - short", 0, 2 }, { "Domicile - chaussettes", 0, 3 },
+                             { "Extérieur - couleur principale", 1, 0 }, { "Extérieur - couleur secondaire", 1, 1 }, { "Extérieur - motif", 1, 4 }, { "Extérieur - short", 1, 2 }, { "Extérieur - chaussettes", 1, 3 } };
+    const int NR = 10, NI = NR + 2;
+    if (IN.up) g_kitRow = (g_kitRow + NI - 1) % NI;
+    if (IN.down) g_kitRow = (g_kitRow + 1) % NI;
+    int x = 12, w = VW - 280, y = 36;
+    auto colorRef = [&](Kit& k, int f) -> unsigned& { return f == 0 ? k.shirt : f == 1 ? k.shirt2 : f == 2 ? k.shorts : k.socks; };
+    int act = -1;
+    for (int i = 0; i < NI; i++) {
+        bool sel = i == g_kitRow;
+        bool hover = IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 16;
+        if (hover && IN.mouseMoved) g_kitRow = i;
+        DrawRectangle(x, y, w, 15, sel ? C_SEL : (i < 5 ? C_ITEM : i < NR ? Color{ 38, 62, 108, 255 } : Color{ 30, 46, 80, 255 }));
+        Color c = sel ? BLACK : ok ? C_TXT : C_DIM;
+        if (i < NR) {
+            const Row& r = R[i];
+            drawTextPx(r.label, x + 6, y + 3, 10, c);
+            Kit& k = g_kitEd[r.kit];
+            std::string v;
+            if (r.field == 4) v = PATTERN_NAMES[std::max(0, std::min(6, k.pattern))];
+            else { unsigned col = colorRef(k, r.field); DrawRectangle(x + 200, y + 3, 10, 9, hexc(col)); DrawRectangleLines(x + 200, y + 3, 10, 9, BLACK); v = colorName(col); }
+            drawTextPx("< " + v + " >", x + 216, y + 3, 10, c);
+            if (hover && IN.click && ok) { g_kitRow = i; act = 1; }
+        } else {
+            drawTextCentered(i == NR ? ">>> PRÉSENTER LES NOUVEAUX MAILLOTS <<<" : "Annuler", x + w / 2, y + 3, 10, c, false);
+            if (hover && IN.click) { g_kitRow = i; act = 2; }
+        }
+        y += i == NR - 1 || i == 4 ? 20 : 16;
+    }
+    int d = IN.left ? -1 : IN.right ? 1 : 0;
+    if (ok && g_kitRow < NR && (d || act == 1 || IN.ok)) {
+        if (!d) d = 1;
+        const Row& r = R[g_kitRow];
+        Kit& k = g_kitEd[r.kit];
+        if (r.field == 4) k.pattern = (k.pattern + d + 7) % 7;
+        else { unsigned& col = colorRef(k, r.field); col = PALETTE[(paletteIndex(col) + d + NUM_PALETTE) % NUM_PALETTE]; }
+    }
+    if ((IN.ok || act == 2) && g_kitRow == NR) {
+        if (!ok) toast("Changement impossible pendant la saison");
+        else {
+            U.home = g_kitEd[0]; U.away = g_kitEd[1];
+            g_career.season.news.push_back(U.name + " présente ses nouveaux maillots pour la saison " + fmt("%d-%02d", g_career.year, (g_career.year + 1) % 100) + ".");
+            addReputation(g_career.userTeam, 0);
+            toast("Nouveaux maillots présentés !");
+            g_screen = SC_CLUBMENU; return;
+        }
+    }
+    if (IN.back || ((IN.ok || act == 2) && g_kitRow == NR + 1)) { g_screen = SC_CLUBMENU; return; }
+    drawTextPx("Le maillot extérieur doit se distinguer du maillot domicile (couleurs de l'adversaire).", 12, VH - 34, 10, C_DIM);
+    drawFooter("Haut/Bas : choisir   Gauche/Droite : changer   OK : valider   Retour");
 }
 
 static int g_cmSel = 0;
@@ -35,27 +121,67 @@ static void screenClubMenu() {
         tiles.push_back({ "Finances", "Budget " + money(g_career.mgr.budget), 13, 6 });
         tiles.push_back({ "Offres reçues", g_career.mgr.offers.empty() ? std::string("aucune") : fmt("%d en attente", (int)g_career.mgr.offers.size()), 21, 9 });
     }
-    tiles.push_back({ "Centre de formation", "Jeunes U19", 22, 10 });
+    tiles.push_back({ "Formation", "Centre des jeunes", 22, 10 });
+    tiles.push_back({ "Archives", "Records, buteurs", 23, 7 });
+    tiles.push_back({ "Maillots", kitChangeAllowed() ? "Intersaison : modifiables" : "Changement à l'intersaison", 24, 11 });
     int n = (int)tiles.size(), cols = 4;
     if (IN.left) g_cmSel = (g_cmSel + n - 1) % n;
     if (IN.right) g_cmSel = (g_cmSel + 1) % n;
     if (IN.up) g_cmSel = (g_cmSel - cols + n) % n;
     if (IN.down) g_cmSel = (g_cmSel + cols) % n;
     if (g_cmSel >= n) g_cmSel = 0;
-    int tw = 146, th = 70, act = -1;
+    // bandeau du club : écusson (maillot), division, statut, budget, confiance du président
+    {
+        int bx = 12, by = 32, bw = VW - 24, bh = 50;
+        Color c1 = hexc(U.home.shirt), c2 = hexc(U.home.shirt2 != U.home.shirt ? U.home.shirt2 : U.home.shorts);
+        DrawRectangle(bx, by, bw, bh, Color{ 16, 26, 50, 255 });
+        DrawRectangle(bx, by, 6, bh, c1); DrawRectangle(bx + 6, by, 3, bh, c2);
+        DrawRectangle(bx, by + bh - 2, bw, 2, Color{ c1.r, c1.g, c1.b, 160 });
+        drawKitIcon(U.home, bx + 18, by + 8, 3);
+        drawTextPx(fitText(U.name, 300, 20), bx + 58, by + 2, 20, C_HI);
+        drawTextPx(fitText(g_career.teamLevelName(g_career.userTeam) + "   -   " + statusName(U.status) + (U.stadium.empty() ? std::string("") : "   -   " + U.stadium), 340, 10), bx + 58, by + 25, 10, C_DIM);
+        if (!g_career.managerName.empty()) drawTextPx(std::string("Manager : ") + g_career.managerName, bx + 58, by + 37, 10, C_TXT);
+        int rx = VW - 230;
+        drawTextPx("Budget", rx, by + 5, 10, C_DIM);
+        drawTextPx(mm ? money(g_career.mgr.budget) : std::string("géré par le club"), rx + 70, by + 5, 10, g_career.mgr.budget >= 0 ? C_GOOD : C_BAD);
+        drawTextPx("Président", rx, by + 18, 10, C_DIM);
+        int cf = std::max(0, std::min(100, g_career.mgr.confidence));
+        DrawRectangle(rx + 70, by + 20, 120, 7, Color{ 0, 0, 0, 140 });
+        DrawRectangle(rx + 70, by + 20, 120 * cf / 100, 7, cf >= 60 ? C_GOOD : cf >= 30 ? C_HI : C_BAD);
+        drawTextPx(fmt("%d%%", cf), rx + 194, by + 18, 10, C_TXT);
+        drawTextPx("Objectif", rx, by + 31, 10, C_DIM);
+        drawTextPx(fitText(g_career.objectiveText(), 150, 10), rx + 70, by + 31, 10, C_TXT);
+    }
+    // tuiles par familles : sportif (vert), administration (or), formation (bleu)
+    auto family = [](int id) { return id == 5 || id == 19 || id == 17 || id == 18 ? 0 : id == 22 ? 2 : 1; };
+    static const Color FAM[3] = { { 70, 190, 110, 255 }, { 230, 180, 60, 255 }, { 90, 160, 240, 255 } };
+    int tw = 150, th = n > 12 ? 50 : 60, act = -1;
+    int gx = (VW - (cols * tw + (cols - 1) * 8)) / 2;
     for (int i = 0; i < n; i++) {
-        int x = 18 + (i % cols) * (tw + 8), y = 44 + (i / cols) * (th + 10);
+        int x = gx + (i % cols) * (tw + 8), y = 90 + (i / cols) * (th + 6);
         bool hover = IN.mouse.x >= x && IN.mouse.x < x + tw && IN.mouse.y >= y && IN.mouse.y < y + th;
         if (hover && IN.mouseMoved) g_cmSel = i;
         bool sel = i == g_cmSel;
-        DrawRectangle(x, y, tw, th, sel ? Color{ 90, 80, 30, 255 } : C_ITEM);
+        Color fc = FAM[family(tiles[i].id)];
+        DrawRectangle(x + 2, y + 3, tw, th, Color{ 0, 0, 0, 90 });                                   // ombre
+        DrawRectangle(x, y, tw, th, sel ? Color{ 70, 64, 30, 255 } : Color{ 34, 54, 96, 255 });
+        DrawRectangle(x, y, tw, th / 2, sel ? Color{ 84, 76, 36, 255 } : Color{ 40, 64, 112, 255 });  // reflet
+        DrawRectangle(x, y, 4, th, fc);
         DrawRectangleLines(x, y, tw, th, sel ? C_SEL : Color{ 70, 100, 160, 255 });
-        drawIconTile(tiles[i].icon, x + tw / 2 - 11, y + 10, sel ? C_HI : C_TXT);
-        drawTextCentered(tiles[i].title, x + tw / 2, y + 36, 10, sel ? C_HI : C_TXT, false);
-        drawTextCentered(fitText(tiles[i].info, tw - 8, 10), x + tw / 2, y + 50, 10, C_DIM, false);
+        DrawCircle(x + 26, y + th / 2, 16, Color{ fc.r, fc.g, fc.b, (unsigned char)(sel ? 90 : 45) });
+        drawIconTile(tiles[i].icon, x + 15, y + th / 2 - 10, sel ? C_HI : C_TXT);
+        drawTextPx(fitText(tiles[i].title, tw - 56, 10), x + 50, y + 16, 10, sel ? C_HI : C_TXT);
+        drawTextPx(fitText(tiles[i].info, tw - 56, 10), x + 50, y + 32, 10, C_DIM);
+        if (sel) DrawRectangle(x + 50, y + 28, std::min(tw - 60, textWidth(tiles[i].title, 10)), 1, C_HI);
         if (hover && IN.click) act = i;
     }
-    if (!mm) drawTextCentered("Mode « matchs seulement » : finances, mercato, stade et staff sont gérés automatiquement.", VW / 2, 44 + 2 * (th + 10) + 8, 10, C_DIM, false);
+    {   // légende
+        int ly = 90 + ((n + cols - 1) / cols) * (th + 6) + 2;
+        static const char* FN[3] = { "Sportif", "Administration", "Formation" };
+        int lx = gx;
+        for (int f = 0; f < 3; f++) { DrawRectangle(lx, ly + 2, 8, 8, FAM[f]); drawTextPx(FN[f], lx + 12, ly, 10, C_DIM); lx += textWidth(FN[f], 10) + 30; }
+        if (!mm) drawTextPx("Mode « matchs seulement » : finances, mercato, stade et staff sont gérés automatiquement.", gx, ly + 14, 10, C_DIM);
+    }
     if (IN.ok) act = g_cmSel;
     drawFooter("Flèches : choisir   OK : ouvrir   Retour");
     if (IN.back) { openHub(); return; }
@@ -72,6 +198,8 @@ static void screenClubMenu() {
     case 19: g_screen = SC_TRAINING; break;
     case 21: g_screen = SC_OFFERS; break;
     case 22: g_screen = SC_ACADEMY; break;
+    case 23: openFiche(g_career.userTeam, SC_CLUBMENU); g_fichePage = 3; break;
+    case 24: openKits(); break;
     }
 }
 
@@ -114,9 +242,37 @@ static void screenOffers() {
 
 // ---------------- centre de formation : les U19 du club
 static ListW g_acaLW;
+// niveau du centre de formation : amélioration (coût, entretien mensuel) ; les jeunes formés au club progressent plus
+static void academyPanel(int y) {
+    int u = g_career.userTeam;
+    Team& U = g_world.teams[u];
+    static const char* LV[6] = { "aucun", "école de football", "centre régional", "centre agréé", "centre réputé", "centre d'élite" };
+    int ac = std::min(5, (int)U.academy);
+    DrawRectangle(12, y, VW - 24, 26, Color{ 20, 34, 64, 255 });
+    drawTextPx(fmt("Centre de formation : niveau %d / 5 (%s)", ac, LV[ac]), 18, y + 3, 10, C_HI);
+    for (int k = 0; k < 5; k++) DrawRectangle(260 + k * 12, y + 4, 10, 8, k < ac ? C_GOOD : Color{ 0, 0, 0, 120 });
+    drawTextPx(fmt("Jeunes : potentiel +%d, niveau +%d. Entretien : %s / mois.", ac * 2, ac, money(ac * (U.status == CS_PRO ? 25 : 6)).c_str()), 18, y + 14, 10, C_DIM);
+    if (ac < 5) {
+        int64_t cost = (int64_t)(ac + 1) * (ac + 1) * (U.status == CS_PRO ? 150 : 40);
+        if (button(VW - 200, y + 5, 180, 16, "Améliorer : " + money(cost))) {
+            askConfirm(fmt("Améliorer le centre de formation (niveau %d) pour %s ?", ac + 1, money(cost).c_str()), [cost]() {
+                Team& T = g_world.teams[g_career.userTeam];
+                if (g_career.mgr.budget < cost) { toast("Budget insuffisant"); return; }
+                g_career.mgr.budget -= cost; g_career.mgr.seasonStadiumCost += cost;
+                T.academy = (uint8_t)std::min(5, T.academy + 1);
+                addReputation(g_career.userTeam, 1);
+                g_career.season.news.push_back(fmt("Le centre de formation passe au niveau %d.", (int)T.academy));
+                toast("Centre de formation amélioré");
+            }, "Améliorer", "Annuler");
+        }
+    }
+    if (U.status == CS_PRO && ac == 0) drawTextPx("Obligatoire pour un club professionnel !", VW - 240, y + 14, 10, C_BAD);
+}
+
 static void screenAcademy() {
     drawBackground("Centre de formation");
     int u = g_career.userTeam, y19 = -1;
+    academyPanel(VH - 44);
     for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == u && g_world.teams[i].youth == 1) y19 = i;
     if (y19 < 0) {
         drawTextCentered("Le club n'a pas encore d'équipe U19.", VW / 2, 80, 10, C_TXT);
@@ -328,7 +484,7 @@ static void screenStaff() {
         drawTextPx(staffRoleName(r), 18, yy + 2, 10, sel ? C_HI : C_TXT);
         const StaffMember* m = nullptr; for (auto& s : M.staff) if (s.role == r) m = &s;
         if (m) {
-            drawTextPx(fitText(m->name, 150, 10), 18, yy + 13, 10, C_DIM);
+            drawTextPx(fitText(std::string(m->name) + (m->gender ? " (F)" : " (H)"), 150, 10), 18, yy + 13, 10, C_DIM);
             for (int k = 0; k < 5; k++) DrawRectangle(180 + k * 9, yy + 15, 7, 6, k < m->level ? C_GOOD : Color{ 0, 0, 0, 120 });
             drawTextPx(m->wage ? money(m->wage) : "bénévole", 232, yy + 13, 10, C_DIM);
         } else drawTextPx("(poste vacant)", 18, yy + 13, 10, C_BAD);
@@ -345,7 +501,7 @@ static void screenStaff() {
         int yy = y + 28 + k * 24;
         DrawRectangle(x, yy, VW - x - 10, 22, C_ITEM);
         drawTextPx(fitText(c.name, 130, 10), x + 4, yy + 2, 10, C_TXT);
-        drawTextPx(fmt("%d ans", c.age), x + 4, yy + 11, 10, C_DIM);
+        drawTextPx(fmt("%d ans - %s", c.age, c.gender ? "femme" : "homme"), x + 4, yy + 11, 10, C_DIM);
         for (int l = 0; l < 5; l++) DrawRectangle(x + 140 + l * 9, yy + 4, 7, 6, l < c.level ? C_GOOD : Color{ 0, 0, 0, 120 });
         drawTextPx(c.wage ? money(c.wage) + "/an" : "bénévole", x + 140, yy + 11, 10, C_DIM);
         if (button(VW - 90, yy + 3, 74, 16, "Engager")) {
@@ -368,14 +524,52 @@ static void screenStaff() {
 }
 
 // ---------------- réserves
-static ListW g_resLW;
-static void screenReserves() {
-    drawBackground("Équipes réserves");
+static ListW g_resLW, g_resPlLW;
+static int g_resPromote = -1;           // réserve dont on consulte les joueurs (promotion en équipe A)
+static void promoteToFirst(int from, int idx) {
     int u = g_career.userTeam;
+    Team& R = g_world.teams[from]; Team& A = g_world.teams[u];
+    if (idx < 0 || idx >= (int)R.squad.size()) return;
+    if ((int)A.squad.size() >= 32) { toast("Effectif de l'équipe A complet (32 joueurs)"); return; }
+    Player p = R.squad[idx];
+    std::vector<bool> used(100, false); for (auto& q : A.squad) if (q.num < 100) used[q.num] = true;
+    if (p.num >= 100 || used[p.num]) { p.num = 1; while (p.num < 99 && used[p.num]) p.num++; }
+    if (A.status == CS_PRO && p.contract == 2) p.contract = 1;          // premier contrat (fédéral) en montant en équipe A
+    A.squad.push_back(p);
+    R.squad.erase(R.squad.begin() + idx); R.xi.clear();
+    if ((int)R.squad.size() < 14) R.squad.push_back(g_world.makeYouth(from, p.pos, R.rating - 3));   // un jeune le remplace
+    g_career.season.news.push_back(p.name + " monte de " + R.name + " en équipe première.");
+    toast(p.name + " rejoint l'équipe A");
+}
+static void screenReserves() {
+    int u = g_career.userTeam;
+    if (g_resPromote >= 0) {
+        int t = g_resPromote;
+        g_world.ensureSquad(t);
+        Team& R = g_world.teams[t];
+        drawBackground("Joueurs de " + R.name);
+        drawTextPx("OK / clic : faire monter le joueur en équipe première (" + g_world.teams[u].name + ")", 12, 31, 10, C_DIM);
+        std::vector<int> ord; for (int i = 0; i < (int)R.squad.size(); i++) ord.push_back(i);
+        std::stable_sort(ord.begin(), ord.end(), [&](int a, int b) { return R.squad[a].overall() > R.squad[b].overall(); });
+        drawTextPx("Joueur", 36, 44, 10, C_DIM); drawTextPx("Âge", 250, 44, 10, C_DIM); drawTextPx("Note", 300, 44, 10, C_DIM); drawTextPx("Potentiel", 350, 44, 10, C_DIM);
+        int s = listRun(g_resPlLW, (int)ord.size(), 12, 56, VW - 24, 18, 15, [&](int i, int x, int y, bool sl) {
+            const Player& p = R.squad[ord[i]];
+            drawTextPx(posName(p.pos), x + 4, y + 2, 10, sl ? BLACK : C_DIM);
+            drawTextPx(p.name, x + 24, y + 2, 10, sl ? BLACK : C_TXT);
+            drawTextPx(fmt("%d", p.age), x + 238, y + 2, 10, sl ? BLACK : C_TXT);
+            drawTextPx(fmt("%d", p.overall()), x + 288, y + 2, 10, sl ? BLACK : C_HI);
+            drawTextPx(fmt("%d", p.pot), x + 338, y + 2, 10, sl ? BLACK : C_GOOD);
+        });
+        if (s >= 0 && s < (int)ord.size()) promoteToFirst(t, ord[s]);
+        drawFooter("OK : monter en équipe A   Retour");
+        if (IN.back) g_resPromote = -1;
+        return;
+    }
+    drawBackground("Équipes réserves");
     std::vector<int> res;
     for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == u) res.push_back(i);
     bool inter = g_career.transferWindow() && (g_career.season.now < 4.2 || g_career.season.finished);
-    drawTextPx("Jusqu'à 3 réserves + une équipe U19. Une nouvelle équipe débute en dernière division du district la saison suivante.", 12, 31, 10, C_DIM);
+    drawTextPx("3 réserves maximum + U19, U17, U15. Une nouvelle équipe débute la saison suivante en dernière division du district.", 12, 31, 10, C_DIM);
     int sel = listRun(g_resLW, (int)res.size(), 12, 46, VW - 24, 10, 16, [&](int i, int x, int y, bool s) {
         int t = res[i];
         const Team& T = g_world.teams[t];
@@ -395,10 +589,21 @@ static void screenReserves() {
         int t = g_career.createReserve(err);
         if (t < 0) toast(err); else { toast(g_world.teams[t].name + " créée"); levelCacheDirty(); }
     }
-    if (!hasU19 && button(VW - 232, by, 220, 16, "Créer l'équipe U19", false, inter)) {
-        std::string err;
-        int t = g_career.createU19(u, err);
-        if (t < 0) toast(err); else { toast(g_world.teams[t].name + " créée : début en District U19"); levelCacheDirty(); }
+    {   // équipes de jeunes : U19, U17, U15
+        bool hasY[4] = { false, false, false, false };
+        for (int t : res) if (g_world.teams[t].youth >= 1 && g_world.teams[t].youth <= 3) hasY[g_world.teams[t].youth] = true;
+        static const char* YN[4] = { "", "U19", "U17", "U15" };
+        int bx = VW - 330;
+        for (int k = 1; k <= 3; k++) {
+            if (hasY[k]) continue;
+            if (button(bx, by, 104, 16, std::string("Créer les ") + YN[k], false, inter)) {
+                std::string err;
+                int t = g_career.createYouth(u, k, err);
+                if (t < 0) toast(err); else { toast(g_world.teams[t].name + " créée : début en District " + YN[k]); levelCacheDirty(); }
+            }
+            bx += 108;
+        }
+        (void)hasU19;
     }
     if (!inter) drawTextPx("Création possible à l'intersaison (août ou fin de saison).", 240, by + 3, 10, C_DIM);
     int cur = g_resLW.cur;
@@ -413,6 +618,7 @@ static void screenReserves() {
             toast(ctrl ? "L'équipe est confiée au staff" : "Vous jouerez aussi les matchs de cette équipe");
         }
         if (button(240, by + 22, 150, 16, "Fiche")) { openFiche(t, SC_RESERVES); return; }
+        if (button(398, by + 22, 220, 16, "Joueurs / monter en équipe A")) { g_resPromote = t; g_resPlLW = ListW(); return; }
     }
     drawTextPx(fmt("Entraîneur de la réserve (staff) : niveau %d", g_career.staffLevel(SR_RESERVE)), 12, by + 46, 10, C_DIM);
     drawTextPx("Transferts de joueurs entre équipes : écran Effectif (PgPréc/PgSuiv pour changer d'équipe).", 12, by + 58, 10, C_DIM);

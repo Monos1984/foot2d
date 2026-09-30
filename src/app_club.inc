@@ -7,46 +7,70 @@ static int g_optBudget = 1;          // 0 serré, 1 normal, 2 confortable
 static ListW g_coptLW;
 
 static void startCareerWith(int team, Screen back) {
-    g_newTeam = team; g_newBack = back; g_coptLW = ListW(); g_coptLW.cur = 5;
+    g_newTeam = team; g_newBack = back; g_coptLW = ListW(); g_coptLW.cur = 9;
     g_screen = SC_CAREEROPT;
 }
 
+static Career::Opts g_optRules;
 static void screenCareerOpt() {
     drawBackground("Nouvelle carrière");
     const Team& T = g_world.teams[g_newTeam];
-    drawKitIcon(T.home, VW / 2 - 12, 36, 3);
-    drawTextCentered(T.name, VW / 2, 64, 20, C_HI);
-    drawTextCentered(divisionOf(g_newTeam), VW / 2, 86, 10, C_DIM);
+    drawKitIcon(T.home, VW / 2 - 12, 32, 3);
+    drawTextCentered(T.name, VW / 2, 58, 20, C_HI);
+    drawTextCentered(divisionOf(g_newTeam), VW / 2, 78, 10, C_DIM);
     static const char* BUD[] = { "Serré (budget divisé par 2)", "Normal", "Confortable (budget x 2)" };
+    Career::Opts& O = g_optRules;
     std::vector<std::string> items = {
         std::string("Mode de jeu : ") + (g_optMode == 0 ? "JEU (vous jouez les matchs, pas de gestion)" : g_optMode == 1 ? "MANAGER (gestion, matchs en temps forts)" : "MANAGER + JEU (gestion et vous jouez les matchs)"),
         std::string("Licenciement par le président : ") + (g_optNoSack ? "NON (vous ne pouvez pas être renvoyé)" : "OUI"),
         std::string("Budget de départ : ") + BUD[g_optBudget],
         "Manager : " + managerChoiceName(),
+        std::string("Coupe de la Ligue : ") + (O.cdl ? "OUI" : "NON (sa place européenne revient au championnat)"),
+        std::string("Buts à l'extérieur en coupes d'Europe : ") + (O.awayGoals ? "OUI (comptent double à égalité)" : "NON"),
+        std::string("Prolongation en Coupe de France : ") + (O.cdfET ? "OUI" : "NON (tirs au but directs, sauf en finale)"),
+        std::string("Coupes d'Europe : ") + (O.euroFormat ? "NOUVELLE FORMULE (C1, C3, C4 : phase de ligue à 36)" : "FORMULE 2003 (C1 à groupes, Coupe UEFA, Intertoto)"),
         "Choisir un autre club",
         ">>> COMMENCER LA CARRIÈRE <<<" };
-    int s = menuRun(g_coptLW, items, 104, 480);
-    int y = 104 + 20 * 6 + 10;
-    const char* help[] = {
-        "Le président fixe un objectif chaque saison. Si sa confiance tombe à 5 % ou moins, vous êtes licencié",
-        "(sauf si le licenciement est désactivé). Statut du club : PRO en L1/L2/L3, SEMI-PRO en National,",
-        "au choix SEMI-PRO ou AMATEUR en Régional, AMATEUR en Départemental.",
-        "JEU : vous jouez vos matchs sans gestion. MANAGER : gestion complète, vous regardez les temps forts",
-        "et donnez vos consignes. MANAGER + JEU : gestion complète et vous jouez vos matchs. (Modifiable en cours.)",
-    };
-    for (auto h : help) { drawTextCentered(h, VW / 2, y, 10, C_DIM, false); y += 12; }
+    const int NI = (int)items.size();
+    int wd = 480, x0 = VW / 2 - wd / 2, y0 = 94;
+    int s = listRun(g_coptLW, NI, x0, y0, wd, NI, 15, [&](int i, int xx, int yy, bool sel) {
+        Color c = sel ? Color{ 20, 20, 40, 255 } : (i >= 4 && i <= 7 ? Color{ 170, 210, 255, 255 } : C_TXT);
+        drawTextCentered(items[i], xx + wd / 2, yy + 3, 10, c, false);
+    });
+    int y = y0 + 15 * NI + 8;
+    static const char* HELP[10][2] = {
+        { "JEU : vous jouez vos matchs sans gestion. MANAGER : gestion complète, vous regardez les temps forts.", "MANAGER + JEU : gestion complète et vous jouez vos matchs. (Modifiable en cours de carrière.)" },
+        { "Le président fixe un objectif chaque saison. Si sa confiance tombe à 5 % ou moins, vous êtes licencié", "(sauf si le licenciement est désactivé)." },
+        { "Budget de départ du club (droits TV, sponsors et recettes viennent ensuite).", "" },
+        { "Nom, nationalité et apparence du manager.", "" },
+        { "Coupe de la Ligue (L1, L2, L3). Désactivée : pas de Coupe de la Ligue, la place en Coupe d'Europe", "de son vainqueur revient au club suivant du championnat." },
+        { "Règle des buts marqués à l'extérieur dans les matchs aller-retour européens (supprimée par l'UEFA en 2021).", "Désactivée : à égalité sur les deux matchs, prolongation puis tirs au but." },
+        { "Coupe de France : prolongation (2 x 15 min) avant les tirs au but.", "Désactivée : tirs au but dès la fin du temps réglementaire, la finale garde sa prolongation." },
+        { "Formule 2003 : 3 tours de qualification, C1 à 8 groupes de 4, Coupe UEFA à élimination directe, Intertoto.", "Nouvelle formule (2024) : C1, Ligue Europa et Ligue Conférence, phase de ligue à 36 et barrages." },
+        { "Revenir au choix du club.", "" },
+        { "Statut du club : PRO en L1/L2/L3, SEMI-PRO en National, au choix en Régional, AMATEUR en Départemental.", "" } };
+    int hc = std::max(0, std::min(NI - 1, g_coptLW.cur));
+    drawTextCentered(HELP[hc][0], VW / 2, y, 10, C_DIM, false);
+    if (HELP[hc][1][0]) drawTextCentered(HELP[hc][1], VW / 2, y + 12, 10, C_DIM, false);
     drawFooter("Gauche/Droite : modifier   OK : valider   Retour");
     int d = IN.left ? -1 : IN.right ? 1 : 0;
-    if (d || (s >= 0 && s < 4)) {
+    if (d || (s >= 0 && s < 8)) {
         if (!d) d = 1;
-        if (g_coptLW.cur == 0) g_optMode = (g_optMode + d + 3) % 3;
-        if (g_coptLW.cur == 1) g_optNoSack = !g_optNoSack;
-        if (g_coptLW.cur == 2) g_optBudget = (g_optBudget + d + 3) % 3;
-        if (g_coptLW.cur == 3) managerCycle(d);
+        switch (g_coptLW.cur) {
+        case 0: g_optMode = (g_optMode + d + 3) % 3; break;
+        case 1: g_optNoSack = !g_optNoSack; break;
+        case 2: g_optBudget = (g_optBudget + d + 3) % 3; break;
+        case 3: managerCycle(d); break;
+        case 4: O.cdl = !O.cdl; break;
+        case 5: O.awayGoals = !O.awayGoals; break;
+        case 6: O.cdfET = !O.cdfET; break;
+        case 7: O.euroFormat = !O.euroFormat; if (O.euroFormat) O.awayGoals = 0; break;
+        }
     }
-    if (IN.back || s == 4) { g_screen = g_newBack; return; }
-    if (s == 5) {
+    if (IN.back || s == 8) { g_screen = g_newBack; return; }
+    if (s == 9) {
         applyChosenManager();
+        g_career.opts = O;
         g_career.newClubCareer(g_newTeam, 2026);
         g_career.mgr.noSack = g_optNoSack || g_optMode == 0;
         g_career.mgr.managerMode = g_optMode != 0;
@@ -126,6 +150,22 @@ static void drawStadiumPlan(const StadiumInfo& S, int x, int y, int w, int h) {
     }
 }
 
+// icônes des produits dérivés (couleurs du club)
+static void drawMerchIcon(int k, int x, int y, const Kit& kit) {
+    Color a = hexc(kit.shirt), b = hexc(kit.shirt2 != kit.shirt ? kit.shirt2 : (((((kit.shirt >> 16) & 255) * 0.3f + ((kit.shirt >> 8) & 255) * 0.59f + (kit.shirt & 255) * 0.11f) / 255.f) > 0.55f ? 0x202020 : 0xF2F2F2));
+    switch (k) {
+    case -1: drawKitIcon(kit, x + 2, y + 1, 1); break;
+    case 0: for (int i = 0; i < 6; i++) DrawRectangle(x + i * 3, y + 5 + (i % 2), 3, 6, i % 2 ? b : a); DrawRectangle(x - 1, y + 11, 2, 4, b); DrawRectangle(x + 17, y + 11, 2, 4, b); break;   // écharpe
+    case 1: DrawRectangle(x + 3, y + 5, 12, 7, a); DrawRectangle(x + 3, y + 10, 12, 3, b); DrawRectangle(x + 8, y + 3, 3, 2, b); break;                                          // bonnet
+    case 2: DrawCircle(x + 9, y + 8, 7, RAYWHITE); DrawCircle(x + 9, y + 8, 3, a); DrawCircle(x + 4, y + 5, 1.5f, BLACK); DrawCircle(x + 14, y + 11, 1.5f, BLACK); break;       // ballon
+    case 3: drawKitIcon(kit, x + 4, y + 3, 1); DrawRectangle(x + 1, y + 13, 4, 2, C_HI); break;                                                                                 // maillot enfant
+    case 4: DrawRectangle(x + 3, y + 4, 10, 11, RAYWHITE); DrawRectangle(x + 3, y + 7, 10, 4, a); DrawRectangleLines(x + 13, y + 6, 4, 6, RAYWHITE); break;                     // mug
+    case 5: DrawRectangle(x + 3, y + 2, 12, 15, Color{ 230, 225, 210, 255 }); DrawRectangle(x + 5, y + 4, 8, 7, a); DrawRectangle(x + 5, y + 12, 8, 1, b); DrawRectangle(x + 5, y + 14, 6, 1, b); break;   // poster
+    case 6: DrawRectangle(x + 4, y + 2, 10, 8, a); DrawRectangle(x + 1, y + 3, 3, 6, a); DrawRectangle(x + 14, y + 3, 3, 6, a); DrawRectangle(x + 4, y + 10, 4, 7, b); DrawRectangle(x + 10, y + 10, 4, 7, b); DrawRectangle(x + 8, y + 2, 2, 8, b); break;  // survêtement
+    case 7: DrawCircle(x + 9, y + 11, 5, a); DrawCircle(x + 9, y + 5, 4, a); DrawCircle(x + 6, y + 2, 2, b); DrawCircle(x + 12, y + 2, 2, b); DrawRectangle(x + 7, y + 4, 1, 1, BLACK); DrawRectangle(x + 11, y + 4, 1, 1, BLACK); break;   // peluche
+    }
+}
+
 static void screenStadium() {
     Team& T = g_world.teams[g_career.userTeam];
     StadiumInfo& S = T.sta;
@@ -135,10 +175,11 @@ static void screenStadium() {
     int cap = S.capacity();
     drawTextPx(fmt("Capacité : %d places   Supporters : %d   Dernière affluence : %d (%d%%)", cap, S.fans, S.lastAtt, cap ? S.lastAtt * 100 / cap : 0), 12, 31, 10, C_TXT);
     drawTextPx("Budget : " + money(M.budget), VW - 170, 31, 10, M.budget >= 0 ? C_GOOD : C_BAD);
-    static const char* TABS[] = { "Tribunes et billets", "Équipements", "Boutique et sponsors", "Travaux en cours" };
-    for (int i = 0; i < 4; i++) if (button(12 + i * 154, 44, 150, 14, TABS[i], g_stTab == i)) { g_stTab = i; g_stLW = ListW(); }
-    if (IN.pgUp) g_stTab = (g_stTab + 3) % 4;
-    if (IN.pgDn) g_stTab = (g_stTab + 1) % 4;
+    static const char* TABS[] = { "Tribunes et billets", "Équipements", "Boutique", "Sponsors et club", "Travaux en cours" };
+    for (int i = 0; i < 5; i++) if (button(12 + i * 124, 44, 120, 14, TABS[i], g_stTab == i)) { g_stTab = i; g_stLW = ListW(); }
+    if (IN.pgUp) g_stTab = (g_stTab + 4) % 5;
+    if (IN.pgDn) g_stTab = (g_stTab + 1) % 5;
+    { static int prevTab = -1; if (prevTab != g_stTab) { g_stSel = 0; prevTab = g_stTab; } }
     int y = 62;
     auto launch = [&](int kind, int stand, int amount) {
         int64_t cost = Career::projectCost(T, kind, stand, amount);
@@ -150,6 +191,7 @@ static void screenStadium() {
         }, "Lancer", "Annuler");
     };
     if (g_stTab == 0) {
+        if (g_stSel < 0 || g_stSel > 3) g_stSel = 0;
         drawStadiumPlan(S, 12, y, 200, 150);
         if (IN.up) g_stSel = (g_stSel + 3) % 4;
         if (IN.down) g_stSel = (g_stSel + 1) % 4;
@@ -210,38 +252,112 @@ static void screenStadium() {
         }
         drawFooter("Clic : lancer des travaux   LB/RB : onglet   Retour");
     } else if (g_stTab == 2) {
+        // ---- boutique : maillot, produits dérivés, boutique en ligne
+        Merch& MC = T.merch; if (!MC.init) initMerch(T);
+        int nrow = 1 + NUM_MERCH;
+        if (IN.up) g_stSel = (g_stSel + nrow - 1) % nrow;
+        if (IN.down) g_stSel = (g_stSel + 1) % nrow;
+        if (g_stSel >= nrow) g_stSel = 0;
+        // en-tête : vitrine
+        DrawRectangle(12, y, VW - 24, 30, Color{ 20, 34, 64, 255 });
+        DrawRectangle(12, y, VW - 24, 2, hexc(T.home.shirt));
+        drawKitIcon(T.home, 20, y + 5, 2);
+        drawTextPx(fmt("Boutique officielle - niveau %d / 5", S.boutique), 44, y + 3, 10, C_HI);
+        int64_t tot = MC.shirtRevenue + MC.onlineRevenue; for (int k = 0; k < NUM_MERCH; k++) tot += MC.revenue[k];
+        drawTextPx("Ventes de la saison : " + money(M.seasonShop) + "   (produits : " + money(tot) + ")", 44, y + 15, 10, C_GOOD);
+        {   // boutique en ligne
+            static const char* ONL[] = { "aucune", "site simple", "site + livraison", "e-boutique internationale" };
+            drawTextPx(std::string("Boutique en ligne : ") + ONL[MC.online], VW - 300, y + 3, 10, MC.online ? C_GOOD : C_DIM);
+            int64_t cost = 60000LL * (MC.online + 1) * (MC.online + 1);
+            bool can = MC.online < 3;
+            if (button(VW - 300, y + 14, 180, 13, can ? "Développer : " + money(cost / 1000) : "Niveau maximum", false, can) && can) {
+                askConfirm(fmt("Développer la boutique en ligne pour %s ? (frais mensuels : %s)", money(cost / 1000).c_str(), money((MC.online + 1) * 1500 / 1000 + 1).c_str()), [cost]() {
+                    Team& TT = g_world.teams[g_career.userTeam];
+                    if (g_career.mgr.budget < cost / 1000) { toast("Budget insuffisant"); return; }
+                    g_career.mgr.budget -= cost / 1000; g_career.mgr.seasonStadiumCost += cost / 1000;
+                    TT.merch.online++; toast("Boutique en ligne améliorée"); }, "Développer", "Annuler");
+            }
+            if (MC.online) drawTextPx("En ligne : " + money(MC.onlineRevenue / 1000), VW - 110, y + 15, 10, C_GOOD);
+        }
+        y += 34;
+        // tableau des produits
+        drawTextPx("Produit", 44, y, 10, C_DIM); drawTextPx("Prix", 250, y, 10, C_DIM); drawTextPx("Réf.", 330, y, 10, C_DIM);
+        drawTextPx("Vendus", 380, y, 10, C_DIM); drawTextPx("Bénéfice", 450, y, 10, C_DIM); drawTextPx("En vente", VW - 80, y, 10, C_DIM);
+        y += 12;
+        float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
+        for (int r = 0; r < nrow; r++) {
+            int k = r - 1;
+            int yy = y + r * 21;
+            bool sel = r == g_stSel;
+            bool hover = IN.mouse.x >= 12 && IN.mouse.x < VW - 12 && IN.mouse.y >= yy && IN.mouse.y < yy + 20;
+            if (hover && IN.click) g_stSel = r;
+            bool locked = k >= 0 && S.boutique < merchMinShop(k);
+            DrawRectangle(12, yy, VW - 24, 20, sel ? Color{ 90, 80, 30, 255 } : (r % 2 ? C_ITEM : Color{ 38, 62, 108, 255 }));
+            drawMerchIcon(k, 18, yy + 2, T.home);
+            int price = k < 0 ? S.shirtPrice : MC.price[k];
+            int ref = k < 0 ? (int)shirtRef : merchRefPrice(k, T.status);
+            drawTextPx(k < 0 ? std::string("Maillot officiel") : std::string(merchName(k)), 44, yy + 5, 10, locked ? C_DIM : sel ? C_HI : C_TXT);
+            if (locked) { drawTextPx(fmt("boutique niveau %d requis", merchMinShop(k)), 250, yy + 5, 10, C_BAD); continue; }
+            drawTextPx(fmt("%d EUR", price), 250, yy + 5, 10, price > ref * 1.3f ? C_BAD : price < ref * 0.8f ? C_HI : C_TXT);
+            if (button(208, yy + 4, 14, 12, "-")) { if (k < 0) S.shirtPrice = (int16_t)std::max(5, S.shirtPrice - 5); else MC.price[k] = (int16_t)std::max(1, MC.price[k] - 1); }
+            if (button(296, yy + 4, 14, 12, "+")) { if (k < 0) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5); else MC.price[k] = (int16_t)std::min(300, MC.price[k] + 1); }
+            drawTextPx(fmt("%d", ref), 330, yy + 5, 10, C_DIM);
+            int units = k < 0 ? MC.shirtUnits : MC.units[k];
+            int64_t rev = k < 0 ? MC.shirtRevenue : MC.revenue[k];
+            drawTextPx(fmt("%d", units), 380, yy + 5, 10, C_TXT);
+            drawTextPx(money(rev / 1000), 450, yy + 5, 10, rev >= 0 ? C_GOOD : C_BAD);
+            bool on = k < 0 ? true : MC.on[k] != 0;
+            if (k >= 0) { if (button(VW - 80, yy + 3, 56, 14, on ? "OUI" : "NON", on)) MC.on[k] = !MC.on[k]; }
+            else drawTextPx("toujours", VW - 76, yy + 5, 10, C_DIM);
+        }
+        if (g_stSel >= 0) {
+            int k = g_stSel - 1;
+            if (IN.left) { if (k < 0) S.shirtPrice = (int16_t)std::max(5, S.shirtPrice - 5); else MC.price[k] = (int16_t)std::max(1, MC.price[k] - 1); }
+            if (IN.right) { if (k < 0) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5); else MC.price[k] = (int16_t)std::min(300, MC.price[k] + 1); }
+            if (IN.ok && k >= 0) MC.on[k] = !MC.on[k];
+        }
+        y += nrow * 21 + 2;
+        drawTextPx("Au-dessus du prix de référence : moins de ventes. Supporters, victoires et vente en ligne les font grimper.", 14, y, 10, C_DIM);
+        drawFooter("Haut/Bas : produit   Gauche/Droite : prix   OK : mettre en vente   LB/RB : onglet   Retour");
+    } else if (g_stTab == 3) {
         int x = 20;
-        drawSection(12, y, VW - 24, "BOUTIQUE"); y += 14;
-        drawTextPx(fmt("Prix du maillot : %d EUR", S.shirtPrice), x, y, 10, C_TXT);
-        if (button(200, y - 2, 60, 14, "-5")) S.shirtPrice = (int16_t)std::max(10, S.shirtPrice - 5);
-        if (button(264, y - 2, 60, 14, "+5")) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5);
-        if (IN.left) S.shirtPrice = (int16_t)std::max(10, S.shirtPrice - 5);
-        if (IN.right) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5);
-        y += 16;
-        drawTextPx(fmt("Niveau de la boutique : %d / 5   (améliorable dans Équipements)", S.boutique), x, y, 10, C_DIM); y += 12;
-        drawTextPx("Ventes de la saison : " + money(M.seasonShop), x, y, 10, C_GOOD); y += 12;
-        drawTextPx("Un maillot trop cher se vend moins ; les supporters et les victoires font grimper les ventes.", x, y, 10, C_DIM); y += 20;
         drawSection(12, y, VW - 24, "SPONSOR MAILLOT"); y += 14;
         {
             ManagerState& MM = g_career.mgr;
+            static int dur = 2;         // durée proposée (saisons)
+            // durée : plus le contrat est long, plus le montant annuel est garanti mais négocié à la baisse
+            static const int PCT[5] = { 0, 110, 100, 94, 88 };
             if (!T.sponsor.empty()) {
                 drawTextPx("Sponsor : " + T.sponsor + "  -  " + money(MM.sponsorIncome) + " par an", x, y, 10, C_GOOD);
-                if (button(VW - 220, y - 3, 200, 16, "Changer de sponsor")) { T.sponsor.clear(); MM.sponsorIncome = 0; }
+                std::string ct = MM.sponsorYears > 0 ? fmt("Contrat : encore %d saison%s (fin en juin %d)", MM.sponsorYears, MM.sponsorYears > 1 ? "s" : "", g_career.year + MM.sponsorYears) : std::string("Contrat sans durée fixée");
+                drawTextPx(ct, x, y + 12, 10, C_DIM);
+                int64_t pen = MM.sponsorYears > 0 ? MM.sponsorIncome * MM.sponsorYears / 2 : 0;
+                if (button(VW - 220, y - 3, 200, 16, pen > 0 ? "Rompre (indemnité " + money(pen) + ")" : "Changer de sponsor"))
+                    askConfirm(pen > 0 ? "Rompre le contrat ? Le club paie une indemnité de " + money(pen) + "." : std::string("Mettre fin au contrat de sponsoring ?"), [pen]() {
+                        Team& TT = g_world.teams[g_career.userTeam];
+                        g_career.mgr.budget -= pen; g_career.mgr.seasonStadiumCost += pen;
+                        TT.sponsor.clear(); g_career.mgr.sponsorIncome = 0; g_career.mgr.sponsorYears = 0; toast("Contrat rompu"); });
+                y += 12;
             } else {
                 static const char* SPN[] = { "Boulangerie Martin", "Garage du Centre", "Pixel Cola", "Crédit Régional", "Transports Leroy", "Amigoal", "Assurances du Sud", "Supermarché Plus", "BTP Moreau", "Brasserie des Sports" };
                 int cap = S.capacity();
-                int64_t off = std::max<int64_t>(2, (int64_t)(MM.incomeBase / 12 + cap / 200));
+                int64_t base = std::max<int64_t>(2, (int64_t)(MM.incomeBase / 12 + cap / 200));
+                int64_t off = std::max<int64_t>(2, base * PCT[dur] / 100);
                 int k = (int)((hashStr(T.name) + g_career.year) % 10);
                 if (T.status == CS_PRO) k = 2 + (int)(hashStr(T.name) % 4);
                 drawTextPx(fmt("Offre : %s - ", SPN[k]) + money(off) + " par an", x, y, 10, C_TXT);
-                if (button(VW - 220, y - 3, 200, 16, "Signer avec ce sponsor")) { T.sponsor = SPN[k]; MM.sponsorIncome = off; toast("Contrat de sponsoring signé"); }
+                drawTextPx(fmt("Durée : %d saison%s  (total %s)", dur, dur > 1 ? "s" : "", money(off * dur).c_str()), x, y + 12, 10, C_DIM);
+                if (button(VW - 330, y - 3, 50, 16, "- an", false, dur > 1) && dur > 1) dur--;
+                if (button(VW - 276, y - 3, 50, 16, "+ an", false, dur < 4) && dur < 4) dur++;
+                if (button(VW - 220, y - 3, 200, 16, "Signer avec ce sponsor")) { T.sponsor = SPN[k]; MM.sponsorIncome = off; MM.sponsorYears = dur; toast(fmt("Contrat de sponsoring signé pour %d saison%s", dur, dur > 1 ? "s" : "")); }
+                y += 12;
             }
             y += 20;
         }
         drawSection(12, y, VW - 24, "NOM DU STADE (SPONSOR)"); y += 14;
         if (S.namingIncome > 0) {
             drawTextPx(std::string("Nom commercial : ") + S.sponsor, x, y, 10, C_HI); y += 12;
-            drawTextPx("Revenu : " + money(S.namingIncome) + " par an", x, y, 10, C_GOOD);
+            drawTextPx("Revenu : " + money(S.namingIncome) + " par an" + (g_career.mgr.namingYears > 0 ? fmt("  -  encore %d saison%s", g_career.mgr.namingYears, g_career.mgr.namingYears > 1 ? "s" : "") : std::string()), x, y, 10, C_GOOD);
             if (button(VW - 220, y - 12, 200, 16, "Mettre fin au contrat")) askConfirm("Mettre fin au contrat de naming ?", [&S]() { S.namingIncome = 0; S.sponsor[0] = 0; });
             y += 16;
         } else {
@@ -251,8 +367,8 @@ static void screenStadium() {
                 static const char* SP[] = { "Pixel Cola", "Amigoal", "Crampons+", "Stade TV", "Goal FM", "Super But", "Banque du Sud", "Assurances Mutuelles" };
                 int k = (int)(hashStr(T.name) % 8);
                 snprintf(S.sponsor, sizeof S.sponsor, "%s Arena", SP[k]);
-                S.namingIncome = (int32_t)off;
-                toast("Contrat de naming signé");
+                S.namingIncome = (int32_t)off; g_career.mgr.namingYears = 5;
+                toast("Contrat de naming signé pour 5 saisons");
             }
             y += 16;
         }
@@ -262,11 +378,23 @@ static void screenStadium() {
         drawTextPx("Billetterie, buvette et parking cette saison : " + money(M.seasonGate), x, y, 10, C_GOOD); y += 12;
         drawTextPx("Coûts du stade cette saison (travaux, entretien, amendes) : " + money(M.seasonStadiumCost), x, y, 10, C_BAD); y += 12;
         drawTextPx(std::string("Statut du club : ") + statusName(T.status), x, y, 10, C_HI); y += 12;
-        static const int REQ[5] = { 15000, 8000, 4000, 2000, 1000 };
         int t = g_career.tierOfTeam(g_career.userTeam);
-        if (t >= 0 && t <= 4) drawTextPx(fmt("Cahier des charges de la division : %d places minimum (%s)", REQ[t], cap >= REQ[t] ? "conforme" : "NON CONFORME : amende chaque mois"), x, y, 10, cap >= REQ[t] ? C_GOOD : C_BAD);
-        drawFooter("Gauche/Droite : prix du maillot   LB/RB : onglet   Retour");
-    } else {
+        int req = minCapacity(t);
+        if (req > 0) drawTextPx(fmt("Cahier des charges de la division : %d places minimum (%s)", req, cap >= req ? "conforme" : "NON CONFORME : amende chaque mois"), x, y, 10, cap >= req ? C_GOOD : C_BAD);
+        y += 12;
+        drawTextPx(fmt("Réputation du club : %d / 100 (%s)", teamReputation(g_career.userTeam), reputationLabel(teamReputation(g_career.userTeam))), x, y, 10, C_HI); y += 14;
+        // dernière recette et politique de la Coupe de France
+        if (g_lastGate.att > 0) {
+            const GateInfo& G = g_lastGate;
+            drawSection(12, y, VW - 24, "DERNIÈRE RECETTE À DOMICILE" + std::string(G.opp.empty() ? "" : " (contre " + G.opp + ")")); y += 13;
+            drawTextPx(fmt("%d spectateurs   Brut ", G.att) + money(G.brut / 1000) + "   TVA 5,5 % -" + money(G.tva / 1000) + "   Prélèvement -" + money(G.prelev / 1000)
+                       + "   Arbitrage -" + money(G.arbitrage / 1000), x, y, 10, C_TXT); y += 12;
+            drawTextPx("Organisation (sécurité, stadiers) -" + money(G.orga / 1000) + "   Net " + money(G.net / 1000) + (G.shared ? "   Partage Coupe de France : part du club " + money(G.part / 1000) : std::string()), x, y, 10, C_GOOD); y += 14;
+        }
+        if (T.status == CS_PRO && button(x, y, 420, 14, std::string("Coupe de France contre un amateur : ") + (M.cdfGiveAll ? "laisser toute la recette (bonne image)" : "partager la recette (50/50)"), M.cdfGiveAll))
+            g_career.mgr.cdfGiveAll = !g_career.mgr.cdfGiveAll;
+        drawFooter("LB/RB : onglet   Retour");
+    } else if (g_stTab == 4) {
         auto& P = M.projects;
         if (P.empty()) drawTextCentered("Aucun chantier en cours", VW / 2, y + 20, 10, C_DIM);
         for (int i = 0; i < (int)P.size(); i++) {

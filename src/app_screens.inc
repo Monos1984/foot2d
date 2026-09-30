@@ -94,6 +94,53 @@ static void openFiche(int team, Screen back) {
     g_screen = SC_FICHE;
 }
 
+// archives d'un club : records et parcours (carrière), buteurs et passeurs de l'histoire du club
+static void drawClubArchive(int team, int y0) {
+    const Career& K = g_career;
+    auto it = K.archive.find(team);
+    int x = 12, y = y0;
+    drawSection(x, y, 300, "RECORDS DU CLUB (depuis le début de la carrière)"); y += 12;
+    auto row = [&](const std::string& k, const std::string& v) { drawTextPx(k, x + 4, y, 10, C_DIM); drawTextPx(fitText(v, 190, 10), x + 110, y, 10, C_TXT); y += 11; };
+    if (it == K.archive.end()) { drawTextPx("Aucune archive : les données sont enregistrées à chaque fin de saison.", x + 4, y, 10, C_DIM); y += 11; }
+    else {
+        const ClubArch& A = it->second;
+        auto run = [&](const char* k, const ArchRun& r) { if (r.depth >= 0) row(k, fmt("%s (%d)", r.label, r.year)); };
+        if (A.lgTier < 99) row("Meilleur classement", fmt("%d%s en %s (%d)", A.lgPos, A.lgPos == 1 ? "er" : "e", A.lgName, A.lgYear));
+        run("Coupe de France", A.cdf);
+        run("Coupe de la Ligue", A.cdl);
+        run("Coupe régionale", A.reg);
+        run("Coupe de district", A.dist);
+        run("Méga Coupe rég.", A.regSuper);
+        run("Ligue des champions", A.ucl);
+        run("Coupe UEFA", A.uefa);
+        if (A.bigWinGF >= 0 && A.bigWinOpp >= 0) row("Plus large victoire", fmt("%d-%d contre ", A.bigWinGF, A.bigWinGA) + g_world.teams[A.bigWinOpp].shortName + fmt(" (%d)", A.bigWinYear));
+        if (A.bigLossGA >= 0 && A.bigLossOpp >= 0) row("Plus lourde défaite", fmt("%d-%d contre ", A.bigLossGF, A.bigLossGA) + g_world.teams[A.bigLossOpp].shortName + fmt(" (%d)", A.bigLossYear));
+        row("Saisons / titres", fmt("%d saison%s, %d titre%s de champion", A.seasons, A.seasons > 1 ? "s" : "", A.titles, A.titles > 1 ? "s" : ""));
+    }
+    const Team& T = g_world.teams[team];
+    if (T.sta.bestAtt > 0) row("Record d'affluence", fmt("%d spectateurs", T.sta.bestAtt));
+    // buteurs et passeurs : archives + saison en cours
+    std::vector<ArchScorer> v;
+    auto is = K.archScorers.find(team);
+    if (is != K.archScorers.end()) v = is->second;
+    for (auto& p : T.squad) {
+        if (!p.goals && !p.assists) continue;
+        ArchScorer* e = nullptr; for (auto& a : v) if (a.pid == p.id) e = &a;
+        if (!e) { ArchScorer n; n.pid = p.id; snprintf(n.name, sizeof n.name, "%s", p.name.c_str()); v.push_back(n); e = &v.back(); }
+        e->goals += p.goals; e->assists += p.assists; e->apps += p.apps;
+    }
+    int x2 = 324, y2 = y0;
+    drawSection(x2, y2, VW - x2 - 8, "MEILLEURS BUTEURS"); y2 += 12;
+    std::vector<ArchScorer> g = v; std::sort(g.begin(), g.end(), [](const ArchScorer& a, const ArchScorer& b) { return a.goals > b.goals; });
+    for (int i = 0; i < (int)g.size() && i < 6 && g[i].goals > 0; i++) { drawTextPx(fmt("%d. %s", i + 1, g[i].name), x2 + 4, y2, 10, i == 0 ? C_HI : C_TXT); drawTextPx(fmt("%d buts", g[i].goals), VW - 70, y2, 10, C_DIM); y2 += 11; }
+    if (g.empty() || g[0].goals == 0) { drawTextPx("-", x2 + 4, y2, 10, C_DIM); y2 += 11; }
+    y2 += 4;
+    drawSection(x2, y2, VW - x2 - 8, "MEILLEURS PASSEURS"); y2 += 12;
+    std::sort(g.begin(), g.end(), [](const ArchScorer& a, const ArchScorer& b) { return a.assists > b.assists; });
+    for (int i = 0; i < (int)g.size() && i < 6 && g[i].assists > 0; i++) { drawTextPx(fmt("%d. %s", i + 1, g[i].name), x2 + 4, y2, 10, i == 0 ? C_HI : C_TXT); drawTextPx(fmt("%d passes", g[i].assists), VW - 70, y2, 10, C_DIM); y2 += 11; }
+    if (g.empty() || g[0].assists == 0) drawTextPx("-", x2 + 4, y2, 10, C_DIM);
+}
+
 static void screenFiche(float dt) {
     static float anim = 0; anim += dt;
     Team& t = g_world.teams[g_ficheTeam];
@@ -130,7 +177,7 @@ static void screenFiche(float dt) {
         if (t.nation >= 0) line("Pays", g_world.teams[t.nation].name);
         line("Division", g_ficheDiv, C_HI);
         if (t.founded > 0) line("Fondé en", fmt("%d", t.founded));
-        if (t.parent < 0) line("Président", presidentName(g_ficheTeam) + fmt(" (%d ans, né à ", presidentAge(g_ficheTeam)) + presidentPlace(g_ficheTeam) + ")");
+        if (t.parent < 0) line(t.presGender ? "Présidente" : "Président", presidentName(g_ficheTeam) + fmt(" (%d ans, né à ", presidentAge(g_ficheTeam)) + presidentPlace(g_ficheTeam) + ")");
         if (t.custom) line("Origine", "Club créé avec l'éditeur", C_GOOD);
         else if (t.edited) line("Origine", "Club modifié avec l'éditeur", C_GOOD);
     } else {
@@ -144,15 +191,17 @@ static void screenFiche(float dt) {
     y += 10;
     int yInfoEnd = std::max(y, 130);
     // onglets
-    const char* tabs[] = { "Effectif", "Palmarès", "Réserves / club" };
-    for (int i = 0; i < 3; i++) {
+    const char* tabs[] = { "Effectif", "Palmarès", "Réserves / club", "Archives" };
+    int nTabs = t.kind == TK_CLUB && g_careerActive && g_career.kind == CK_CLUB ? 4 : 3;
+    if (g_fichePage >= nTabs) g_fichePage = 0;
+    for (int i = 0; i < nTabs; i++) {
         int tx = 12 + i * 110;
         DrawRectangle(tx, yInfoEnd, 106, 13, g_fichePage == i ? C_SEL : C_ITEM);
         drawTextCentered(tabs[i], tx + 53, yInfoEnd + 2, 10, g_fichePage == i ? BLACK : C_TXT, false);
         if (IN.click && IN.mouse.x >= tx && IN.mouse.x < tx + 106 && IN.mouse.y >= yInfoEnd && IN.mouse.y < yInfoEnd + 13) { g_fichePage = i; g_ficheLW = ListW(); }
     }
-    if (IN.left) { g_fichePage = (g_fichePage + 2) % 3; g_ficheLW = ListW(); }
-    if (IN.right) { g_fichePage = (g_fichePage + 1) % 3; g_ficheLW = ListW(); }
+    if (IN.left) { g_fichePage = (g_fichePage + nTabs - 1) % nTabs; g_ficheLW = ListW(); }
+    if (IN.right) { g_fichePage = (g_fichePage + 1) % nTabs; g_ficheLW = ListW(); }
     int ly = yInfoEnd + 16;
     int rows = (VH - 18 - ly) / 12;
     static const char* PN[] = { "G", "D", "M", "A" };
@@ -213,6 +262,8 @@ static void screenFiche(float dt) {
             std::string ys; for (auto& y2 : h.years) ys += (ys.empty() ? "" : ", ") + y2;
             drawTextPx(fitText(ys, VW - 390, 10), xx + 350, yy + 1, 10, sel ? BLACK : C_DIM);
         });
+    } else if (g_fichePage == 3) {
+        drawClubArchive(g_ficheTeam, ly);
     } else {
         if (g_ficheRelated.empty()) drawTextPx(t.kind == TK_CLUB ? "Ce club n'a pas d'équipe réserve engagée." : "-", 16, ly + 4, 10, C_DIM);
         act = listRun(g_ficheLW, (int)g_ficheRelated.size(), 12, ly, VW - 24, rows, 12, [&](int i, int xx, int yy, bool sel) {
@@ -370,7 +421,7 @@ static void finishClubEditor() {
     T.name = g_ed.name; T.shortName = g_ed.shortName; T.stadium = g_ed.stadium; T.town = g_ed.town;
     T.home = g_ed.home; T.away = g_ed.away;
     T.sponsor = g_ed.sponsor;
-    T.president = g_ed.president; T.presAge = g_ed.presAge; T.presPlace = g_ed.presPlace;
+    T.president = g_ed.president; T.presAge = g_ed.presAge; T.presPlace = g_ed.presPlace; T.presGender = g_ed.presGender;
     savePresident(T);
     if (g_edU19) {
         bool has = false; for (auto& o : g_world.teams) if (o.parent == g_editTeam && o.youth == 1) has = true;
@@ -419,6 +470,7 @@ static void screenClubEdit() {
         { "Sponsor maillot", g_ed.sponsor.empty() ? std::string("(aucun)") : g_ed.sponsor, 0 },
         { "Équipes de jeunes (U19, U17)", g_edU19 ? (hasU19 ? "oui" : "oui (District U19 et U17, dès la 1re saison)") : "non", (creating || !hasU19) ? 1 : 4 },
         { "Président", g_ed.president, 0 }, { "Âge du président", fmt("%d ans", g_ed.presAge ? g_ed.presAge : 50), 1 }, { "Président né à", g_ed.presPlace.empty() ? std::string("(non renseigné)") : g_ed.presPlace, 0 },
+        { "Genre (président / présidente)", g_ed.presGender ? "Femme" : "Homme", 1 },
         { creating ? ">>> CRÉER LE CLUB <<<" : ">>> ENREGISTRER <<<", "", 2 }, { "Annuler", "", 2 } };
     int n = (int)rows.size();
     if (g_edTyping < 0) {
@@ -428,7 +480,7 @@ static void screenClubEdit() {
     int y = 32, x = 12, w = VW - 180;
     for (int i = 0; i < n; i++) {
         bool sel = i == g_edRow;
-        if (IN.click && g_edTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 14) g_edRow = i;
+        if (IN.click && g_edTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 13) g_edRow = i;
         DrawRectangle(x, y, w, 12, sel ? C_SEL : (rows[i].kind == 4 ? Color{ 30, 46, 80, 255 } : C_ITEM));
         Color c = sel ? BLACK : (rows[i].kind == 4 ? C_DIM : C_TXT);
         if (rows[i].kind == 2) drawTextCentered(rows[i].label, x + w / 2, y + 1, 10, c, false);
@@ -443,7 +495,7 @@ static void screenClubEdit() {
             } else if (rows[i].kind == 1) drawTextPx("< " + v + " >", x + 150, y + 2, 10, c);
             else drawTextPx(fitText(v, w - 160, 10), x + 150, y + 2, 10, g_edTyping == i ? (sel ? Color{ 120, 0, 0, 255 } : C_HI) : c);
         }
-        y += 14;
+        y += 13;
     }
     if (creating) {
         drawTextPx("Le club débutera dans la dernière division de son district (la ligue dépend du district).", 12, y + 2, 10, C_DIM);
@@ -478,8 +530,9 @@ static void screenClubEdit() {
         case 14: g_ed.sta.lights = (uint8_t)((g_ed.sta.lights - 1 + d + 4) % 4 + 1); break;
         case 16: g_edU19 = !g_edU19; break;
         case 18: g_ed.presAge = std::max(25, std::min(90, (g_ed.presAge ? g_ed.presAge : 50) + d)); break;
+        case 20: g_ed.presGender = g_ed.presGender ? 0 : 1; break;
         }
-    } else if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 32 && IN.mouse.y < 32 + n * 14)) {
+    } else if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 32 && IN.mouse.y < 32 + n * 13)) {
         if (R.kind == 0) { g_edTyping = g_edRow; g_textMode = true; while (GetCharPressed() > 0) {} }
         else if (R.kind == 3) { g_deptLW = ListW(); auto v = editorDepts(); for (int i = 0; i < (int)v.size(); i++) if (v[i] == g_ed.district) g_deptLW.cur = i; g_screen = SC_DEPTPICK; }
         else if (R.kind == 2) { if (g_edRow == n - 2) finishClubEditor(); else { g_screen = g_editBack == SC_PICK ? SC_PICK : g_editBack; } }
@@ -643,7 +696,7 @@ static void screenCoeff() {
     for (int k = 0; k < 5; k++) drawTextPx(fmt("%02d-%02d", (yr - 5 + k) % 100, (yr - 4 + k) % 100), 200 + k * 42, y, 10, C_DIM);
     drawTextPx("Total", 412, y, 10, C_HI);
     drawTextPx("En cours", 456, y, 10, C_DIM);
-    drawTextPx("C1 / C3 / IT", 520, y, 10, C_DIM);
+    drawTextPx(g_career.opts.euroFormat ? "C1 / C3 / C4" : "C1 / C3 / IT", 520, y, 10, C_DIM);
     y += 12;
     listRun(g_coeffLW, (int)v.size(), 12, y, VW - 24, 22, 12, [&](int i, int x, int yy, bool sel) {
         const UefaCountry& u = *v[i].u;
@@ -760,9 +813,13 @@ static void screenEuroSpots() {
     if (button(534, 30, 96, 14, "Prévision", g_esMode == 1)) { g_esMode = 1; g_esOpen = -1; if (pvYear != g_career.year) { pv = g_career.previewEuro(); pvYear = g_career.year; } }
     const EuroSpots& E = g_esMode == 1 && pvYear == g_career.year ? pv : g_career.nextEuro;
     const std::vector<int>* L[9] = { &E.uclGS, &E.uclQ3, &E.uclQ2, &E.uclQ1, &E.uefaR1, &E.uefaQR, &E.itR3, &E.itR2, &E.itR1 };
-    static const char* LN[9] = { "Ligue des champions - phase de groupes", "Ligue des champions - 3e tour de qualification", "Ligue des champions - 2e tour de qualification",
+    static const char* LN0[9] = { "Ligue des champions - phase de groupes", "Ligue des champions - 3e tour de qualification", "Ligue des champions - 2e tour de qualification",
                                  "Ligue des champions - 1er tour de qualification", "Coupe UEFA - 1er tour", "Coupe UEFA - tour de qualification",
                                  "Coupe Intertoto - 3e tour", "Coupe Intertoto - 2e tour", "Coupe Intertoto - 1er tour" };
+    static const char* LN1[9] = { "Ligue des champions - phase de ligue", "Ligue des champions - 3e tour de qualification ou barrage", "Ligue des champions - 2e tour de qualification",
+                                 "Ligue des champions - 1er tour de qualification", "Ligue Europa - phase de ligue", "Ligue Europa - 3e tour de qualification",
+                                 "", "", "Ligue Conférence (qualifications ou phase de ligue)" };
+    const char* const* LN = g_career.opts.euroFormat ? LN1 : LN0;
     struct R { int rank; std::string code; int n[9]; };
     std::vector<R> v;
     for (auto& u : g_career.uefa) { R r; r.rank = g_career.uefaRank(u.code); r.code = u.code; for (int k = 0; k < 9; k++) r.n[k] = 0; v.push_back(r); }

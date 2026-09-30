@@ -60,10 +60,14 @@ void simulateMatch(MatchRes& m, const Competition* c) {
     Rng& r = g_rng;
     double rh = teamStrength(m.home), ra = teamStrength(m.away);
     double d = rh - ra + (m.neutral ? 0 : 4.0);
-    double lh = 1.40 * std::exp(d / 22.0), la = 1.15 * std::exp(-d / 22.0);
-    lh = std::min(lh, 6.0); la = std::min(la, 6.0);
+    // écart de niveau « tassé » : un gros écart donne une large victoire, rarement un score fleuve (les favoris gèrent)
+    double dd = 30.0 * std::tanh(d / 30.0);
+    double lh = 1.38 * std::exp(dd / 22.0), la = 1.13 * std::exp(-dd / 22.0);
+    lh = std::max(0.12, std::min(lh, 4.2)); la = std::max(0.12, std::min(la, 4.2));
     m.hg = (int16_t)poisson(r, lh);
     m.ag = (int16_t)poisson(r, la);
+    if (m.hg > 6) m.hg = (int16_t)(6 + (m.hg - 6) / 3);
+    if (m.ag > 6) m.ag = (int16_t)(6 + (m.ag - 6) / 3);
     m.aet = false; m.ph = m.pa = -1;
     if (m.decisive) {
         int fh = 0, fa = 0;
@@ -214,14 +218,15 @@ void Competition::setupSwiss(const std::vector<int>& teams, int nrounds, const s
 Stage& Competition::addKOStage(const std::vector<std::pair<int, int>>& pairs, int lg, double time, const std::string& nm, bool neutralFinal) {
     Stage st; st.type = ST_KO; st.legs = lg; st.name = nm;
     Round r1; r1.time = time; r1.name = lg == 2 ? nm + " (aller)" : nm;
-    double gap = (format == FMT_UCL2000 || format == FMT_UEFA2000) ? 2.0 : format == FMT_INTERTOTO ? 1.0 : 0.5;   // coupes d'Europe : retour 2 semaines plus tard
+    double gap = (format == FMT_UCL2000 || format == FMT_UEFA2000) ? 2.0 : format == FMT_NEWEURO ? 1.0 : format == FMT_INTERTOTO ? 1.0 : 0.5;   // coupes d'Europe : retour 2 semaines plus tard
     Round r2; r2.time = time + gap; r2.name = nm + " (retour)";
     for (auto& p : pairs) {
         Tie t; t.a = p.first; t.b = p.second;
         if (t.b < 0) { t.winner = t.a; st.ties.push_back(t); continue; }
         MatchRes m; m.home = t.a; m.away = t.b; m.tie = (int16_t)st.ties.size();
         m.neutral = neutralFinal || (format == FMT_TOURNAMENT && kind != 21);
-        if (format == FMT_SINGLE || (penaltiesOnly() && !neutralFinal)) { m.noET = 1; }
+        if (format == FMT_SINGLE || (penaltiesOnly() && (!neutralFinal || kind == 26 || kind == 27))) { m.noET = 1; }
+        if (kind == 2 && nm != "Finale" && g_career.kind == CK_CLUB && !g_career.opts.cdfET) m.noET = 1;   // option : Coupe de France sans prolongation (sauf la finale)   // supercoupes de région et Méga Coupe : TAB directs, finale comprise
         if (format == FMT_TOURNAMENT && host >= 0 && (t.a == host || t.b == host)) {
             m.neutral = false; if (t.b == host) { m.home = t.b; m.away = t.a; }
         }
@@ -461,11 +466,14 @@ void Competition::koRound(const std::vector<int>& teams, int lg, double time, co
     std::vector<int> top(s.begin(), s.begin() + n / 2), bot(s.begin() + n / 2, s.end());
     g_rng.shuffle(top); g_rng.shuffle(bot);
     // éviter deux clubs d'un même pays
+    // (échanges faits avant de former les paires : un échange avec une paire déjà formée dupliquait un club)
     for (int i = 0; i < n / 2; i++) {
         if (g_world.teams[top[i]].nation == g_world.teams[bot[i]].nation) {
             for (int j = 0; j < n / 2; j++)
                 if (j != i && g_world.teams[top[i]].nation != g_world.teams[bot[j]].nation && g_world.teams[top[j]].nation != g_world.teams[bot[i]].nation) { std::swap(bot[i], bot[j]); break; }
         }
+    }
+    for (int i = 0; i < n / 2; i++) {
         // la tête de série reçoit au retour
         if (lg == 2) pairs.push_back({ bot[i], top[i] }); else pairs.push_back(g_rng.chance(0.5f) ? std::make_pair(top[i], bot[i]) : std::make_pair(bot[i], top[i]));
     }
@@ -478,6 +486,7 @@ void Competition::resume() {
     if (awaiting < 0) return;
     int k = awaiting;
     awaiting = -1;
+    if (format == FMT_NEWEURO) { std::vector<int> pool = carry; carry.clear(); newEuroStart(*this, k, pool); return; }
     std::vector<int> pool = carry;
     if (k < (int)entrants.size()) for (int e : entrants[k]) pool.push_back(e);
     carry.clear();
@@ -526,25 +535,40 @@ static std::vector<std::vector<int>> drawGroupsUCL(std::vector<int> teams, int n
         if (v.size() >= 4) { int h2 = g_rng.range(0, 1); half[v[2]] = h2; half[v[3]] = 1 - h2; }
         // 3e club seul : au hasard (pas de contrainte)
     }
+    // tirage complet avec retour arrière : chapeau par chapeau, groupe par groupe (A, B, C...), comme le tirage réel ;
+    // un club n'est jamais placé dans un groupe qui rendrait la suite du tirage impossible
     std::vector<std::vector<int>> g(ng);
     int per = (int)teams.size() / ng;
-    for (int pot = 0; pot < per; pot++) {
-        std::vector<int> p(teams.begin() + pot * ng, teams.begin() + std::min((int)teams.size(), (pot + 1) * ng));
-        bool placed = false;
-        for (int pass = 0; pass < 2 && !placed; pass++) {
-            for (int attempt = 0; attempt < 600; attempt++) {
-                g_rng.shuffle(p);
-                bool ok = true;
-                for (int i = 0; i < (int)p.size() && ok; i++) {
-                    for (int t : g[i]) if (g_world.teams[t].nation == g_world.teams[p[i]].nation) { ok = false; break; }
-                    auto it = half.find(p[i]);
-                    if (ok && pass == 0 && it != half.end() && it->second != i / 4) ok = false;
-                }
-                if (ok) { placed = true; break; }
-            }
+    int n = per * ng;
+    std::vector<int> slotTeam(n, -1);
+    std::vector<char> used(n, 0);
+    auto nat = [](int t) { return g_world.teams[t].nation; };
+    long budget = 400000;
+    bool useHalf = true;
+    std::function<bool(int)> place = [&](int slot) -> bool {
+        if (slot == n) return true;
+        if (--budget < 0) return false;
+        int pot = slot / ng, grp = slot % ng;
+        std::vector<int> cand;
+        for (int i = pot * ng; i < (pot + 1) * ng; i++) if (!used[i]) cand.push_back(i);
+        g_rng.shuffle(cand);
+        for (int ci : cand) {
+            int t = teams[ci];
+            bool ok = true;
+            for (int k = 0; k < pot && ok; k++) { int o = slotTeam[k * ng + grp]; if (o >= 0 && nat(o) == nat(t)) ok = false; }
+            if (ok && useHalf) { auto it = half.find(t); if (it != half.end() && it->second != grp / (ng / 2)) ok = false; }
+            if (!ok) continue;
+            used[ci] = 1; slotTeam[slot] = t;
+            if (place(slot + 1)) return true;
+            used[ci] = 0; slotTeam[slot] = -1;
         }
-        for (int i = 0; i < (int)p.size(); i++) g[i].push_back(p[i]);
-    }
+        return false;
+    };
+    bool ok = place(0);
+    if (!ok) { useHalf = false; budget = 400000; std::fill(used.begin(), used.end(), 0); std::fill(slotTeam.begin(), slotTeam.end(), -1); ok = place(0); }
+    if (!ok) return drawGroups(teams, ng, holder);
+    for (int sl = 0; sl < n; sl++) g[sl % ng].push_back(slotTeam[sl]);
+    for (int i = n; i < (int)teams.size(); i++) g[i % ng].push_back(teams[i]);
     return g;
 }
 
@@ -736,6 +760,7 @@ void Competition::onStageFinished() {
         return;
     }
     case FMT_QUAL_GROUPS: done = true; return;
+    case FMT_NEWEURO: newEuroStageFinished(*this, winners); return;
     case FMT_KO_ONLY: {
         int want = std::max(1, qualSpots);
         int nk = (int)stages.size();

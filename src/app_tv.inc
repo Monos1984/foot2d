@@ -6,7 +6,7 @@ static void finishMatchToResult();
 static std::vector<std::string> wrapText(const std::string& s, int maxw);
 
 static void matchContext(MatchSetup& s, bool career, int comp, int match) {
-    s.tv = false; s.night = false; s.channel.clear(); s.kickoffTime = "20h45"; s.weather = 0;
+    s.tv = false; s.night = false; s.channel.clear(); s.kickoffTime = "20h45"; s.kickoffDate.clear(); s.weather = 0;
     const Team& H = g_world.teams[s.home];
     s.anthems = H.kind == TK_NATION && g_world.teams[s.away].kind == TK_NATION;   // hymnes entre sélections nationales
     ensureStadium(s.home);
@@ -28,16 +28,10 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     int lvl = std::min(teamLevel(s.home), teamLevel(s.away));
     Rng r((uint64_t)(comp * 7919 + match * 31 + g_career.year));
     // horaire
-    int hour = 15, minute = 0;
-    if (C.kind == 3) { hour = r.chance(0.6f) ? 20 : 21; minute = hour == 20 ? 45 : 0; }          // Ligue des champions : en soirée
-    else if (C.kind == 8) { hour = r.chance(0.5f) ? 21 : 18; minute = r.chance(0.5f) ? 0 : 45; if (hour == 18) minute = 45; }
-    else if (lvl == 0) { int k = r.range(0, 9); hour = k < 4 ? 21 : k < 6 ? 17 : k < 8 ? 15 : 13; minute = hour == 21 ? 0 : 0; if (k == 9) { hour = 20; minute = 45; } }
-    else if (lvl == 1) { hour = r.chance(0.7f) ? 20 : 19; }
-    else if (lvl == 2) { hour = 19; minute = 30; }
-    else if (lvl <= 4) { hour = 18; }
-    else { hour = 15; }
-    if (C.format == FMT_CUP && C.name == "Coupe de France" && lvl <= 2) { hour = r.chance(0.5f) ? 21 : 18; minute = r.chance(0.5f) ? 10 : 0; }
+    int ko = kickoffMinutes(comp, match);                      // calendrier réel de la journée
+    int hour = (ko % 1440) / 60, minute = ko % 60;
     s.kickoffTime = fmt("%dh%02d", hour, minute);
+    s.kickoffDate = kickoffText(comp, match, true);
     s.night = hour >= 20 || (winter && hour >= 17) || C.kind == 3 || C.kind == 7;
     // météo selon la saison (réglage « Aléatoire »)
     if (g_settings.pitch == 5) {
@@ -84,7 +78,7 @@ static void screenTvIntro(float dt) {
     drawTextShadow(g_tv.channel, 14, 22, 20, WHITE);
     drawTextPx("EN DIRECT", VW - 90, 26, 10, ((int)(t * 2)) % 2 ? WHITE : Color{ 255, 200, 200, 255 });
     drawTextCentered(fitText(g_setup.title, VW - 40, 10), VW / 2, 52, 10, C_HI);
-    drawTextCentered("En direct du " + g_setup.stadium + "  -  coup d'envoi " + g_setup.kickoffTime + "  -  " + WEATHER_NAMES[g_setup.weather], VW / 2, 66, 10, C_TXT);
+    drawTextCentered("En direct du " + g_setup.stadium + "  -  " + (g_setup.kickoffDate.empty() ? "coup d'envoi " + g_setup.kickoffTime : g_setup.kickoffDate) + "  -  " + WEATHER_NAMES[g_setup.weather], VW / 2, 66, 10, C_TXT);
     // équipes
     drawKitIcon(H.home, 40, 86, 4); drawKitIcon(A.home, VW - 72, 86, 4);
     drawTextCentered(fitText(H.name, 220, 20), 190, 90, 20, WHITE);
@@ -570,13 +564,18 @@ static void showSeasonArticle() {
             return out;
         };
         auto join = [](const std::vector<std::string>& v) { std::string r; for (size_t i = 0; i < v.size(); i++) r += (i ? (i + 1 == v.size() ? " et " : ", ") : "") + v[i]; return r; };
-        auto ucl = names(g_career.ucl, { "1er tour préliminaire", "2e tour préliminaire", "3e tour préliminaire", "phase de groupes" });
-        auto uefa = names(g_career.uel, { "tour de qualification", "1er tour", "", "" });
-        auto itt = names(g_career.intertoto, { "1er tour", "2e tour", "3e tour" });
+        bool nf = g_career.opts.euroFormat != 0;
+        auto ucl = nf ? names(g_career.ucl, { "1er tour de qualification", "2e tour de qualification", "3e tour de qualification", "barrage", "phase de ligue" })
+                      : names(g_career.ucl, { "1er tour préliminaire", "2e tour préliminaire", "3e tour préliminaire", "phase de groupes" });
+        auto uefa = nf ? names(g_career.uel, { "3e tour de qualification", "barrage", "phase de ligue" }) : names(g_career.uel, { "tour de qualification", "1er tour", "", "" });
+        auto itt = nf ? names(g_career.uecl, { "1er tour de qualification", "2e tour de qualification", "3e tour de qualification", "barrage", "phase de ligue" })
+                      : names(g_career.intertoto, { "1er tour", "2e tour", "3e tour" });
         std::string eu;
+        const char* n3 = nf ? "Ligue Europa" : "Coupe UEFA";
+        const char* n4 = nf ? "Ligue Conférence" : "Coupe Intertoto";
         if (!ucl.empty()) { g_article.push_back("En Ligue des champions, la France sera représentée par " + join(ucl) + "."); eu += "Ligue des champions : " + join(ucl) + ". "; }
-        if (!uefa.empty()) { g_article.push_back("En Coupe UEFA : " + join(uefa) + "."); eu += "Coupe UEFA : " + join(uefa) + ". "; }
-        if (!itt.empty()) { g_article.push_back("En Coupe Intertoto : " + join(itt) + "."); eu += "Intertoto : " + join(itt) + "."; }
+        if (!uefa.empty()) { g_article.push_back(std::string("En ") + n3 + " : " + join(uefa) + "."); eu += std::string(n3) + " : " + join(uefa) + ". "; }
+        if (!itt.empty()) { g_article.push_back(std::string("En ") + n4 + " : " + join(itt) + "."); eu += std::string(n4) + " : " + join(itt) + "."; }
         if (!eu.empty()) { std::string ln = "Coupes d'Europe " + fmt("%d-%02d", g_career.year, (g_career.year + 1) % 100) + " - clubs français : " + eu;
             auto& N = g_career.season.news; if (std::find(N.begin(), N.end(), ln) == N.end()) N.push_back(ln); }
         if (ucl.empty() && uefa.empty() && itt.empty()) g_article.push_back("Aucun club français n'est engagé en coupe d'Europe cette saison.");
@@ -590,8 +589,9 @@ static void showSeasonArticle() {
         }
     }
     if (!g_career.tdcVenue.empty()) g_article.push_back("Le Trophée des Champions se disputera au " + g_career.tdcVenue + ".");
-    if (!g_career.uclFinalVenue.empty()) g_article.push_back("L'UEFA a annoncé les lieux des finales : la Ligue des champions se jouera au " + g_career.uclFinalVenue + ", la Coupe UEFA au " + g_career.uefaFinalVenue + ".");
-    g_article.push_back("Coupe Intertoto : trois billets pour le 1er tour de la Coupe UEFA sont en jeu cet été.");
+    if (!g_career.uclFinalVenue.empty()) g_article.push_back("L'UEFA a annoncé les lieux des finales : la Ligue des champions se jouera au " + g_career.uclFinalVenue + (g_career.opts.euroFormat ? ", la Ligue Europa au " : ", la Coupe UEFA au ") + g_career.uefaFinalVenue + ".");
+    if (g_career.opts.euroFormat) g_article.push_back("Nouvelle formule : phase de ligue à 36 clubs dans les trois coupes d'Europe, 8 matchs (6 en Ligue Conférence) contre des adversaires différents.");
+    else g_article.push_back("Coupe Intertoto : trois billets pour le 1er tour de la Coupe UEFA sont en jeu cet été.");
     g_articleNoMatch = true; g_articleBack = SC_HUB;
     g_screen = SC_ARTICLE;
 }

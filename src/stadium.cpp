@@ -6,6 +6,7 @@ const char* statusName(int s) { return s == CS_PRO ? "PRO" : s == CS_SEMIPRO ? "
 
 int playerWage(const Player& p) {
     if (p.contract == 2) return 0;
+    if (p.wageK > 0) return p.wageK;                          // salaire négocié
     int w = p.wage();
     return p.contract == 1 ? std::max(1, w * 35 / 100) : w;
 }
@@ -170,7 +171,7 @@ int Career::expectedAttendance(int stand, bool vip) const {
     const StadiumInfo& S = T.sta;
     int cap = S.capacity();
     float ref = (float)refPrice(cap);
-    float D = S.fans * (0.8f + 0.03f * S.lights + 0.04f * S.screen + 0.03f * S.pitch + 0.02f * S.parking);
+    float D = S.fans * (0.8f + 0.03f * S.lights + 0.04f * S.screen + 0.03f * S.pitch + 0.02f * S.parking) * (0.85f + teamReputation(userTeam) / 330.f);
     float wsum = 0;
     for (auto& x : S.s) wsum += kindWeight(x.kind) * x.seats;
     const Stand& st = S.s[stand];
@@ -194,6 +195,7 @@ static void addEuros(Career& K, int64_t eur, int64_t* bucket) {
     if (bucket) *bucket += k;
 }
 
+static int64_t merchSales(Team& T, double base);
 void Career::homeMatchDay(int comp, int mi) {
     Team& T = g_world.teams[userTeam];
     StadiumInfo& S = T.sta;
@@ -220,11 +222,33 @@ void Career::homeMatchDay(int comp, int mi) {
     float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
     int64_t shop = (int64_t)(total * 0.012 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0)) * S.shirtPrice);
     int64_t park = (int64_t)(total * 0.25 * S.parking * 3);
+    shop += merchSales(T, total);                                                 // écharpes, goodies... les jours de match
+    { Merch& M = T.merch; int su = (int)(total * 0.012 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0))); M.shirtUnits += su; M.shirtRevenue += su * S.shirtPrice; }
     S.lastAtt = total; S.lastGate = (int32_t)(gate / 1000);
     S.bestAtt = std::max(S.bestAtt, total);
     S.seasonAttTotal += total; S.seasonHomeMatches++;
-    addEuros(*this, gate, &mgr.seasonGate);
-    addEuros(*this, -(gate / 4) - total * 1500LL / 1000, nullptr);   // organisation : sécurité, stadiers, billetterie (25 %) + 1,5 EUR par spectateur
+    // recette : TVA (5,5 % sur la billetterie), prélèvement de la fédération / de la ligue, arbitrage, organisation
+    GateInfo gi; gi.brut = gate; gi.att = total; gi.opp = O.name;
+    gi.tva = gate * 55 / 1055;
+    bool cdfM = C.kind == 2;
+    int pct = cdfM ? 10 : (C.kind == 4 || C.kind == 5) ? 5 : C.kind == 1 && teamLevel(userTeam) >= 3 ? 3 : 0;
+    gi.prelev = (gate - gi.tva) * pct / 100;
+    gi.arbitrage = refereeFee(comp, m.home);
+    gi.orga = (gate - gi.tva) / 5 + total * 1200LL / 1000;              // sécurité, stadiers, billetterie : 20 % + 1,2 EUR par spectateur
+    gi.net = gate - gi.tva - gi.prelev - gi.arbitrage - gi.orga;
+    gi.part = gi.net;
+    // Coupe de France : la recette nette est partagée entre les deux clubs ; un club pro peut laisser toute la recette à un amateur
+    if (cdfM && gi.net > 0) {
+        gi.shared = true;
+        bool amateurOpp = O.status != CS_PRO;
+        if (T.status == CS_PRO && amateurOpp && mgr.cdfGiveAll) { gi.part = 0; addReputation(userTeam, 2); season.news.push_back("Coupe de France : le club laisse toute la recette (" + money(gi.net / 1000) + ") à " + O.name + ". Beau geste salué par la presse."); }
+        else {
+            gi.part = gi.net / 2;
+            if (T.status == CS_PRO && amateurOpp) addReputation(userTeam, -1);
+        }
+    }
+    g_lastGate = gi;
+    addEuros(*this, gi.part, &mgr.seasonGate);
     addEuros(*this, buv + park, &mgr.seasonGate);
     addEuros(*this, shop, &mgr.seasonShop);
     // supporters : les victoires attirent du monde
@@ -233,6 +257,43 @@ void Career::homeMatchDay(int comp, int mi) {
     if (win) S.fans += S.fans / 250 + 3;
     if (loss) S.fans -= S.fans / 500;
     S.fans = std::max(50, S.fans);
+}
+
+// ------------------------------------------------------------------ produits dérivés
+static const struct { const char* name; int ref[3]; float rate; int minShop; } MERCH[NUM_MERCH] = {
+    { "Écharpe",              { 18, 12, 10 }, 0.020f, 0 },
+    { "Bonnet / casquette",   { 22, 15, 12 }, 0.012f, 1 },
+    { "Ballon officiel",      { 30, 20, 15 }, 0.006f, 1 },
+    { "Maillot enfant",       { 60, 38, 25 }, 0.007f, 2 },
+    { "Mug et goodies",       { 12, 9, 7 },   0.015f, 1 },
+    { "Poster et calendrier", { 10, 8, 6 },   0.010f, 0 },
+    { "Survêtement",          { 80, 50, 35 }, 0.003f, 3 },
+    { "Peluche mascotte",     { 20, 15, 12 }, 0.006f, 2 },
+};
+const char* merchName(int k) { return k >= 0 && k < NUM_MERCH ? MERCH[k].name : "?"; }
+int merchRefPrice(int k, int status) { return k >= 0 && k < NUM_MERCH ? MERCH[k].ref[std::max(0, std::min(2, status))] : 10; }
+int merchMinShop(int k) { return k >= 0 && k < NUM_MERCH ? MERCH[k].minShop : 0; }
+void initMerch(Team& t) {
+    Merch& M = t.merch;
+    if (M.init) return;
+    M = Merch(); M.init = 1;
+    for (int k = 0; k < NUM_MERCH; k++) { M.price[k] = (int16_t)merchRefPrice(k, t.status); M.on[k] = t.sta.boutique >= MERCH[k].minShop && k != 6 ? 1 : 0; }
+}
+// ventes de produits dérivés pour « base » acheteurs potentiels ; renvoie le bénéfice (€)
+static int64_t merchSales(Team& T, double base) {
+    Merch& M = T.merch;
+    if (!M.init) initMerch(T);
+    int64_t tot = 0;
+    for (int k = 0; k < NUM_MERCH; k++) {
+        if (!M.on[k] || T.sta.boutique < MERCH[k].minShop) continue;
+        double ref = merchRefPrice(k, T.status);
+        double u = base * MERCH[k].rate * (0.6 + 0.4 * T.sta.boutique) * std::exp(-1.5 * (M.price[k] / ref - 1.0)) * (0.7 + teamReputation(&T - &g_world.teams[0]) / 160.0);
+        int units = (int)(u * g_rng.frange(0.85f, 1.15f));
+        int64_t profit = (int64_t)(units * (M.price[k] - ref * 0.45));       // coût de fabrication : ~45 % du prix de référence
+        M.units[k] += units; M.revenue[k] += (int32_t)profit;
+        tot += profit;
+    }
+    return tot;
 }
 
 // ------------------------------------------------------------------ travaux
@@ -325,6 +386,19 @@ void stadiumMonth(Career& K) {
     float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
     int64_t shop = (int64_t)(S.fans * 0.004 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0)) * S.shirtPrice);
     int64_t museum = (int64_t)(S.museum * S.fans * 0.02 * 8);
+    // produits dérivés hors match (supporters) et boutique en ligne
+    {
+        Merch& M = T.merch; if (!M.init) initMerch(T);
+        int64_t m1 = merchSales(T, S.fans * 0.15);
+        int64_t online = 0;
+        if (M.online > 0) {
+            online = merchSales(T, S.fans * 0.12 * M.online) + (int64_t)(S.fans * 0.0015 * M.online * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0)) * S.shirtPrice);
+            online -= 1500LL * M.online;                                            // hébergement, logistique
+            M.onlineRevenue += (int32_t)online;
+        }
+        int su = (int)(S.fans * 0.004 * S.boutique * std::exp(-1.3 * (S.shirtPrice / shirtRef - 1.0))); M.shirtUnits += su; M.shirtRevenue += su * S.shirtPrice;
+        shop += m1 + online;
+    }
     int64_t naming = (int64_t)S.namingIncome * 1000 / 11;
     addEuros(K, shop + museum, &K.mgr.seasonShop);
     addEuros(K, naming, nullptr);
@@ -333,9 +407,9 @@ void stadiumMonth(Career& K) {
     int t = K.tierOfTeam(K.userTeam);
     int p0, q0, g0; K.tierOfTeam(K.userTeam, &p0, &q0, &g0);
     if (t >= 0 && K.pyramids[p0].country == "FRA" && K.pyramids[p0].dom < 0) {
-        static const int REQ[5] = { 15000, 8000, 4000, 2000, 1000 };
-        if (t <= 4 && cap < REQ[t]) {
-            int64_t fine = t <= 1 ? 50 : t == 2 ? 15 : 3;
+        int req = minCapacity(t);
+        if (req > 0 && cap < req) {
+            int64_t fine = t <= 1 ? 50 : t == 2 ? 15 : t <= 4 ? 3 : 1;
             K.mgr.budget -= fine; K.mgr.seasonStadiumCost += fine;
         }
     }

@@ -5,6 +5,7 @@
 struct MenuInput {
     bool up = false, down = false, left = false, right = false, ok = false, back = false, tab = false, start = false;
     bool pgUp = false, pgDn = false;
+    bool btnNext = false, btnPress = false;   // manette : Y = bouton suivant, X = activer le bouton choisi
     bool devLeft[NUM_INPUTS] = {}, devRight[NUM_INPUTS] = {};
     bool click = false, rclick = false, mouseMoved = false;
     float wheel = 0;
