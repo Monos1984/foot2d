@@ -11,7 +11,8 @@ enum Culture {
 };
 
 // Motifs de maillot
-enum KitPattern { KP_PLAIN = 0, KP_VSTRIPES, KP_HOOPS, KP_HALVES, KP_SASH, KP_CHECK, KP_SLEEVES };
+enum KitPattern { KP_PLAIN = 0, KP_VSTRIPES, KP_HOOPS, KP_HALVES, KP_SASH, KP_CHECK, KP_SLEEVES,
+                  KP_PINSTRIPES, KP_QUARTERS, KP_BAND, KP_SHOULDERS, KP_CHEVRON, KP_CROSS, KP_DIAGHALF, NUM_PATTERNS };
 
 struct NationDef {
     const char* code;     // trigramme FIFA

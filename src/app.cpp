@@ -3629,6 +3629,18 @@ void appTestStart(const char* mode) {
     } else if (m == "kits") {
         int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true; openKits();
+        g_kitThird = true; g_kitEd[2].pattern = KP_CHEVRON; g_kitEd[0].pattern = KP_QUARTERS; g_kitEd[1].pattern = KP_BAND;
+    } else if (m == "editmenu") {
+        g_edMenuLW = ListW(); g_screen = SC_EDITMENU;
+    } else if (m == "clubedit") {
+        int t = g_world.nationIndex("FRA"); for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") t = i;
+        openClubEditor(t, false, SC_MAIN); g_ed.hasThird = 1; g_ed.third.shirt = 0x111111; g_ed.third.shirt2 = 0xFFD700; g_ed.third.pattern = KP_SHOULDERS; g_edRow = 5;
+    } else if (m == "fichecal") {
+        int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") user = i;
+        g_career.newClubCareer(user, 2026); g_careerActive = true;
+        for (int k = 0; k < 60; k++) { auto pm = g_career.season.advance(true); if (pm.comp < 0) break; }
+        int res = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == user) { res = i; break; }
+        openFiche(res >= 0 ? res : user, SC_MAIN); g_fichePage = 4;
     } else if (m == "lifenew") {
         openLifeNew();
     } else if (m == "lifehub" || m == "life" || m == "life2" || m == "life3" || m == "lifesim" || m == "bribe" || m == "lifematch") {

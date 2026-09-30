@@ -24,11 +24,12 @@ static bool kitChangeAllowed() {
     for (auto& C : S.comps) if (C.kind == 1) for (auto& m : C.matches) if (m.played && (m.home == g_career.userTeam || m.away == g_career.userTeam)) return false;
     return true;
 }
-static Kit g_kitEd[2];
+static Kit g_kitEd[3];
+static bool g_kitThird = false;
 static int g_kitRow = 0;
 static void openKits() {
     const Team& U = g_world.teams[g_career.userTeam];
-    g_kitEd[0] = U.home; g_kitEd[1] = U.away; g_kitRow = 0;
+    g_kitEd[0] = U.home; g_kitEd[1] = U.away; g_kitEd[2] = U.hasThird ? U.third : teamKit(U, 2); g_kitThird = U.hasThird; g_kitRow = 0;
     g_screen = SC_KITS;
 }
 static void screenKits() {
@@ -41,17 +42,20 @@ static void screenKits() {
     DrawRectangle(px, 36, 236, 140, Color{ 34, 102, 34, 255 });
     for (int i = 0; i < 7; i++) DrawRectangle(px, 36 + i * 20, 236, 10, Color{ 40, 116, 40, 255 });
     DrawRectangleLines(px, 36, 236, 140, Color{ 240, 240, 240, 160 });
-    for (int k = 0; k < 2; k++) {
+    int nk = g_kitThird ? 3 : 2;
+    for (int k = 0; k < nk; k++) {
         Kit kk = g_kitEd[k];
-        drawPlayerSprite(px + 60 + k * 116, 150, kk, 2 + k, k, 0, (int)(an * 6) + k * 2, PS_NORMAL, false, 0, 5);
-        drawTextCentered(k ? "EXTÉRIEUR" : "DOMICILE", px + 60 + k * 116, 158, 10, WHITE, false);
+        int cx = px + (nk == 3 ? 40 + k * 78 : 60 + k * 116);
+        drawPlayerSprite(cx, 150, kk, 2 + k, k, 0, (int)(an * 6) + k * 2, PS_NORMAL, false, 0, nk == 3 ? 4 : 5);
+        drawTextCentered(k == 0 ? "DOMICILE" : k == 1 ? "EXTÉRIEUR" : "TROISIÈME", cx, 158, 10, WHITE, false);
     }
     drawTextCentered(U.name, px + 118, 182, 10, C_HI, false);
     if (!ok) drawTextCentered("Saison en cours : changement de maillot possible à l'intersaison.", px + 118, 196, 10, C_BAD, false);
     struct Row { const char* label; int kit; int field; };
     static const Row R[] = { { "Domicile - couleur principale", 0, 0 }, { "Domicile - couleur secondaire", 0, 1 }, { "Domicile - motif", 0, 4 }, { "Domicile - short", 0, 2 }, { "Domicile - chaussettes", 0, 3 },
-                             { "Extérieur - couleur principale", 1, 0 }, { "Extérieur - couleur secondaire", 1, 1 }, { "Extérieur - motif", 1, 4 }, { "Extérieur - short", 1, 2 }, { "Extérieur - chaussettes", 1, 3 } };
-    const int NR = 10, NI = NR + 2;
+                             { "Extérieur - couleur principale", 1, 0 }, { "Extérieur - couleur secondaire", 1, 1 }, { "Extérieur - motif", 1, 4 }, { "Extérieur - short", 1, 2 }, { "Extérieur - chaussettes", 1, 3 },
+                             { "Troisième maillot", 2, 9 }, { "3e - couleur principale", 2, 0 }, { "3e - couleur secondaire", 2, 1 }, { "3e - motif", 2, 4 }, { "3e - short", 2, 2 } };
+    const int NR = 15, NI = NR + 2;
     if (IN.up) g_kitRow = (g_kitRow + NI - 1) % NI;
     if (IN.down) g_kitRow = (g_kitRow + 1) % NI;
     int x = 12, w = VW - 280, y = 36;
@@ -59,37 +63,42 @@ static void screenKits() {
     int act = -1;
     for (int i = 0; i < NI; i++) {
         bool sel = i == g_kitRow;
-        bool hover = IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 16;
+        bool hover = IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 13;
         if (hover && IN.mouseMoved) g_kitRow = i;
-        DrawRectangle(x, y, w, 15, sel ? C_SEL : (i < 5 ? C_ITEM : i < NR ? Color{ 38, 62, 108, 255 } : Color{ 30, 46, 80, 255 }));
+        DrawRectangle(x, y, w, 13, sel ? C_SEL : (i < 5 ? C_ITEM : i < 10 ? Color{ 38, 62, 108, 255 } : i < NR ? Color{ 50, 50, 96, 255 } : Color{ 30, 46, 80, 255 }));
         Color c = sel ? BLACK : ok ? C_TXT : C_DIM;
         if (i < NR) {
             const Row& r = R[i];
-            drawTextPx(r.label, x + 6, y + 3, 10, c);
+            drawTextPx(r.label, x + 6, y + 2, 10, c);
             Kit& k = g_kitEd[r.kit];
             std::string v;
-            if (r.field == 4) v = PATTERN_NAMES[std::max(0, std::min(6, k.pattern))];
-            else { unsigned col = colorRef(k, r.field); DrawRectangle(x + 200, y + 3, 10, 9, hexc(col)); DrawRectangleLines(x + 200, y + 3, 10, 9, BLACK); v = colorName(col); }
-            drawTextPx("< " + v + " >", x + 216, y + 3, 10, c);
+            if (r.field == 9) v = g_kitThird ? "oui" : "non";
+            else if (r.kit == 2 && !g_kitThird) v = "-";
+            else if (r.field == 4) v = PATTERN_NAMES[std::max(0, std::min(NUM_PATTERNS - 1, k.pattern))];
+            else { unsigned col = colorRef(k, r.field); DrawRectangle(x + 200, y + 2, 10, 9, hexc(col)); DrawRectangleLines(x + 200, y + 2, 10, 9, BLACK); v = colorName(col); }
+            drawTextPx("< " + v + " >", x + 216, y + 2, 10, c);
             if (hover && IN.click && ok) { g_kitRow = i; act = 1; }
         } else {
             drawTextCentered(i == NR ? ">>> PRÉSENTER LES NOUVEAUX MAILLOTS <<<" : "Annuler", x + w / 2, y + 3, 10, c, false);
             if (hover && IN.click) { g_kitRow = i; act = 2; }
         }
-        y += i == NR - 1 || i == 4 ? 20 : 16;
+        y += i == NR - 1 || i == 4 || i == 9 ? 17 : 14;
     }
     int d = IN.left ? -1 : IN.right ? 1 : 0;
     if (ok && g_kitRow < NR && (d || act == 1 || IN.ok)) {
         if (!d) d = 1;
         const Row& r = R[g_kitRow];
         Kit& k = g_kitEd[r.kit];
-        if (r.field == 4) k.pattern = (k.pattern + d + 7) % 7;
+        if (r.field == 9) g_kitThird = !g_kitThird;
+        else if (r.kit == 2 && !g_kitThird) {}
+        else if (r.field == 4) k.pattern = (k.pattern + d + NUM_PATTERNS) % NUM_PATTERNS;
         else { unsigned& col = colorRef(k, r.field); col = PALETTE[(paletteIndex(col) + d + NUM_PALETTE) % NUM_PALETTE]; }
     }
     if ((IN.ok || act == 2) && g_kitRow == NR) {
         if (!ok) toast("Changement impossible pendant la saison");
         else {
             U.home = g_kitEd[0]; U.away = g_kitEd[1];
+            U.hasThird = g_kitThird ? 1 : 0; if (g_kitThird) { U.third = g_kitEd[2]; U.third.socks = U.third.shirt; }
             g_career.season.news.push_back(U.name + " présente ses nouveaux maillots pour la saison " + fmt("%d-%02d", g_career.year, (g_career.year + 1) % 100) + ".");
             addReputation(g_career.userTeam, 0);
             toast("Nouveaux maillots présentés !");

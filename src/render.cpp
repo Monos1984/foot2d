@@ -314,6 +314,13 @@ static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair,
         case KP_SASH: if ((x + y) % 5 == 0 || (x + y) % 5 == 1) c = k.shirt2; break;
         case KP_CHECK: if ((x + y) % 2) c = k.shirt2; break;
         case KP_SLEEVES: if (x <= 1 || x >= 5) c = k.shirt2; break;
+        case KP_PINSTRIPES: if (x % 3 == 1) c = k.shirt2; break;                               // fines rayures
+        case KP_QUARTERS: if ((x >= 4) != ((y % 4) >= 2)) c = k.shirt2; break;                 // quartiers
+        case KP_BAND: if (y % 4 == 2) c = k.shirt2; break;                                      // bande pectorale
+        case KP_SHOULDERS: if (y % 4 == 0) c = k.shirt2; break;                                 // épaules contrastées
+        case KP_CHEVRON: if (y % 4 == std::abs(x - 3)) c = k.shirt2; break;                     // chevron (V)
+        case KP_CROSS: if (x == 3 || y % 4 == 2) c = k.shirt2; break;                           // croix (style nordique)
+        case KP_DIAGHALF: if (x > (y % 4) * 2) c = k.shirt2; break;                             // moitiés en diagonale
         }
         return hexc(c);
     }

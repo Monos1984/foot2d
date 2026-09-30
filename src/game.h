@@ -146,6 +146,7 @@ struct Team {
     int nation = -1;          // sélection : index NATIONS ; club : pays
     float rating = 50;
     Kit home, away;
+    Kit third; uint8_t hasThird = 0;       // troisième maillot (build 5)
     int culture = CU_FR;
     int region = -1, dept = -1;
     int district = -1;        // district de football (districts.cpp) ; peut couvrir plusieurs départements ou une partie

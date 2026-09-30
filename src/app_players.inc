@@ -274,11 +274,14 @@ static CustomStaff g_dbSt;
 
 static void openEditDb() { g_dbTeam = -1; g_dbPres = -1; g_dbStaffEdit = -1; g_dbTyping = false; g_textMode = false; g_screen = SC_EDITDB; }
 
-static void newPlayerFor(int team) {
+static void newPlayerFor(int team, int gender = -1) {
     g_world.ensureSquad(team);
     Team& T = g_world.teams[team];
     Player p = g_world.makeYouth(team, POS_MF, std::max(20.f, T.rating - 3));
-    p.name = "Nouveau joueur"; p.age = 20; p.nation = (int16_t)(T.nation >= 0 ? T.nation : -1);
+    if (gender < 0) gender = T.youth == 6 ? 1 : 0;          // section féminine : une joueuse par défaut
+    if ((gender == 1) != (T.youth == 6)) { toast(gender ? "Une joueuse évolue dans une équipe féminine (sélection ou club féminin)" : "Équipe féminine : seules des joueuses peuvent y être créées"); return; }
+    p.gender = (uint8_t)gender;
+    p.name = gender ? "Nouvelle joueuse" : "Nouveau joueur"; p.age = 20; p.nation = (int16_t)(T.nation >= 0 ? T.nation : -1);
     T.squad.push_back(p);
     g_plTeam = team; g_plIdx = (int)T.squad.size() - 1; g_plBack = SC_EDITDB;
     openPlayerEditorFwd();
@@ -442,7 +445,8 @@ static void screenEditDb() {
     int root = T.parent >= 0 ? T.parent : g_dbTeam;
     drawTextPx("Président : " + presidentName(root) + fmt(" (%d ans)", presidentAge(root)), 36, 62, 10, C_TXT);
     if (button(VW - 330, 48, 150, 14, "Modifier le président")) { g_dbPres = root; g_dbPresT = g_world.teams[root]; g_dbPresT.president = presidentName(root); g_dbPresT.presAge = presidentAge(root); g_dbPresT.presPlace = presidentPlace(root); g_dbPresRow = 0; g_dbPresTyping = -1; return; }
-    if (button(VW - 174, 48, 162, 14, "Créer un nouveau joueur")) { newPlayerFor(g_dbTeam); return; }
+    if (button(VW - 174, 32, 162, 14, "Créer un nouveau joueur")) { newPlayerFor(g_dbTeam, 0); return; }
+    if (button(VW - 174, 48, 162, 14, "Créer une nouvelle joueuse")) { newPlayerFor(g_dbTeam, 1); return; }
     drawTextPx("N°  P   Joueur", 16, 78, 10, C_DIM);
     const char* cols[] = { "ÂGE", "VIT", "TIR", "PAS", "TAC", "GAR", "NOTE" };
     for (int k = 0; k < 7; k++) drawTextPx(cols[k], 300 + k * 44, 78, 10, C_DIM);

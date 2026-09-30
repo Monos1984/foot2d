@@ -54,7 +54,8 @@ static const unsigned PALETTE[] = { 0xFFFFFF, 0x101010, 0xE2001A, 0x8B1020, 0x7A
 static const int NUM_PALETTE = sizeof(PALETTE) / sizeof(PALETTE[0]);
 static const char* PALETTE_NAMES[] = { "Blanc", "Noir", "Rouge", "Grenat", "Bordeaux", "Bleu marine", "Bleu", "Bleu ciel", "Vert", "Vert clair",
                                        "Jaune", "Orange", "Violet", "Gris", "Turquoise", "Crème", "Marron", "Rose" };
-static const char* PATTERN_NAMES[] = { "Uni", "Rayures verticales", "Cerceaux", "Moitiés", "Écharpe", "Damier", "Manches contrastées" };
+static const char* PATTERN_NAMES[NUM_PATTERNS] = { "Uni", "Rayures verticales", "Cerceaux", "Moitiés", "Écharpe", "Damier", "Manches contrastées",
+                                              "Fines rayures", "Quartiers", "Bande pectorale", "Épaules contrastées", "Chevron", "Croix", "Diagonale" };
 static int paletteIndex(unsigned c) {
     int best = 0; long long bd = 1LL << 40;
     for (int i = 0; i < NUM_PALETTE; i++) {
@@ -154,10 +155,17 @@ static void screenFiche(float dt) {
     // maillots
     DrawRectangle(10, 32, 128, 92, Color{ 10, 18, 36, 200 });
     int fr = (int)(anim * 6);
-    drawPlayerSprite(42, 100, t.home, 2, 1, 0, fr, PS_NORMAL, false, 0, 5);
-    drawPlayerSprite(104, 100, t.away, 1, 2, 0, fr + 2, PS_NORMAL, false, 0, 5);
-    drawTextCentered("Domicile", 42, 108, 10, C_DIM, false);
-    drawTextCentered("Extérieur", 104, 108, 10, C_DIM, false);
+    if (t.hasThird) {
+        drawPlayerSprite(32, 100, t.home, 2, 1, 0, fr, PS_NORMAL, false, 0, 4);
+        drawPlayerSprite(74, 100, t.away, 1, 2, 0, fr + 2, PS_NORMAL, false, 0, 4);
+        drawPlayerSprite(116, 100, t.third, 3, 0, 0, fr + 1, PS_NORMAL, false, 0, 4);
+        drawTextCentered("Dom.", 32, 108, 10, C_DIM, false); drawTextCentered("Ext.", 74, 108, 10, C_DIM, false); drawTextCentered("3e", 116, 108, 10, C_DIM, false);
+    } else {
+        drawPlayerSprite(42, 100, t.home, 2, 1, 0, fr, PS_NORMAL, false, 0, 5);
+        drawPlayerSprite(104, 100, t.away, 1, 2, 0, fr + 2, PS_NORMAL, false, 0, 5);
+        drawTextCentered("Domicile", 42, 108, 10, C_DIM, false);
+        drawTextCentered("Extérieur", 104, 108, 10, C_DIM, false);
+    }
     // informations
     int x = 148, y = 34;
     auto line = [&](const std::string& k, const std::string& v, Color c = C_TXT) {
@@ -191,17 +199,21 @@ static void screenFiche(float dt) {
     y += 10;
     int yInfoEnd = std::max(y, 130);
     // onglets
-    const char* tabs[] = { "Effectif", "Palmarès", "Réserves / club", "Archives" };
-    int nTabs = t.kind == TK_CLUB && g_careerActive && g_career.kind == CK_CLUB ? 4 : 3;
-    if (g_fichePage >= nTabs) g_fichePage = 0;
+    const char* tabs[] = { "Effectif", "Palmarès", "Réserves / club", "Archives", "Calendrier" };
+    bool clubCareer = t.kind == TK_CLUB && g_careerActive && g_career.kind == CK_CLUB;
+    int nTabs = clubCareer ? 5 : g_careerActive ? 3 : 3;
+    int tabIds[5] = { 0, 1, 2, 3, 4 };
+    if (!clubCareer && g_careerActive) { nTabs = 4; tabIds[3] = 4; }       // sélections, autres modes : calendrier sans archives
+    int curTab = 0; for (int i = 0; i < nTabs; i++) if (tabIds[i] == g_fichePage) curTab = i;
+    if (g_fichePage != tabIds[curTab]) g_fichePage = tabIds[0];
     for (int i = 0; i < nTabs; i++) {
         int tx = 12 + i * 110;
-        DrawRectangle(tx, yInfoEnd, 106, 13, g_fichePage == i ? C_SEL : C_ITEM);
-        drawTextCentered(tabs[i], tx + 53, yInfoEnd + 2, 10, g_fichePage == i ? BLACK : C_TXT, false);
-        if (IN.click && IN.mouse.x >= tx && IN.mouse.x < tx + 106 && IN.mouse.y >= yInfoEnd && IN.mouse.y < yInfoEnd + 13) { g_fichePage = i; g_ficheLW = ListW(); }
+        DrawRectangle(tx, yInfoEnd, 106, 13, g_fichePage == tabIds[i] ? C_SEL : C_ITEM);
+        drawTextCentered(tabs[tabIds[i]], tx + 53, yInfoEnd + 2, 10, g_fichePage == tabIds[i] ? BLACK : C_TXT, false);
+        if (IN.click && IN.mouse.x >= tx && IN.mouse.x < tx + 106 && IN.mouse.y >= yInfoEnd && IN.mouse.y < yInfoEnd + 13) { g_fichePage = tabIds[i]; g_ficheLW = ListW(); }
     }
-    if (IN.left) { g_fichePage = (g_fichePage + nTabs - 1) % nTabs; g_ficheLW = ListW(); }
-    if (IN.right) { g_fichePage = (g_fichePage + 1) % nTabs; g_ficheLW = ListW(); }
+    if (IN.left) { g_fichePage = tabIds[(curTab + nTabs - 1) % nTabs]; g_ficheLW = ListW(); }
+    if (IN.right) { g_fichePage = tabIds[(curTab + 1) % nTabs]; g_ficheLW = ListW(); }
     int ly = yInfoEnd + 16;
     int rows = (VH - 18 - ly) / 12;
     static const char* PN[] = { "G", "D", "M", "A" };
@@ -264,6 +276,49 @@ static void screenFiche(float dt) {
         });
     } else if (g_fichePage == 3) {
         drawClubArchive(g_ficheTeam, ly);
+    } else if (g_fichePage == 4) {
+        // calendrier complet de l'équipe (toutes compétitions) et compétitions en cours
+        const Season& S = g_career.season;
+        struct FM { double t; int comp, mi; };
+        std::vector<FM> v;
+        std::vector<std::string> comps;
+        for (int c = 0; c < (int)S.comps.size(); c++) {
+            const Competition& C = S.comps[c];
+            bool in = false;
+            for (auto& st : C.stages) for (auto& R : st.rounds) for (int mi : R.m) {
+                const MatchRes& m = C.matches[mi];
+                if (m.home != g_ficheTeam && m.away != g_ficheTeam) continue;
+                v.push_back({ R.time, c, mi }); in = true;
+            }
+            if (in) comps.push_back(C.shortName + (C.done ? (C.winner == g_ficheTeam ? " (vainqueur)" : " (terminé)") : " (en cours)"));
+        }
+        std::stable_sort(v.begin(), v.end(), [](const FM& a, const FM& b) { return a.t < b.t; });
+        std::string cl; for (auto& s : comps) cl += (cl.empty() ? "" : "   ") + s;
+        for (auto& l : wrapText("Compétitions : " + (cl.empty() ? std::string("aucune") : cl), VW - 30)) { drawTextPx(l, 16, ly, 10, C_HI); ly += 11; rows--; }
+        ly += 2;
+        int nextI = -1; for (int i = 0; i < (int)v.size(); i++) if (!S.comps[v[i].comp].matches[v[i].mi].played) { nextI = i; break; }
+        static int lastFicheCal = -1;
+        if (lastFicheCal != g_ficheTeam) { lastFicheCal = g_ficheTeam; if (nextI > 3) { g_ficheLW.cur = nextI; g_ficheLW.top = nextI - 3; } }
+        act = listRun(g_ficheLW, (int)v.size(), 12, ly, VW - 24, rows, 12, [&](int i, int xx, int yy, bool sel) {
+            const Competition& C = S.comps[v[i].comp];
+            const MatchRes& m = C.matches[v[i].mi];
+            bool home = m.home == g_ficheTeam;
+            int opp = home ? m.away : m.home;
+            Color c = sel ? BLACK : i == nextI ? C_HI : C_TXT;
+            drawTextPx(fitText(dateOf(v[i].t, g_career.year), 90, 10), xx + 4, yy + 1, 10, c);
+            drawTextPx(fitText(C.shortName, 110, 10), xx + 96, yy + 1, 10, sel ? BLACK : C_DIM);
+            drawTextPx(home ? "dom." : "ext.", xx + 210, yy + 1, 10, sel ? BLACK : C_DIM);
+            if (opp >= 0) { drawKitIcon(g_world.teams[opp].home, xx + 244, yy + 1, 1); drawTextPx(fitText(g_world.teams[opp].name, 220, 10), xx + 256, yy + 1, 10, c); }
+            if (m.played) {
+                int gf = home ? m.hg : m.ag, ga = home ? m.ag : m.hg;
+                Color rc = gf > ga ? C_GOOD : gf < ga ? C_BAD : C_HI;
+                if (gf == ga && m.ph >= 0) rc = ((home ? m.ph : m.pa) > (home ? m.pa : m.ph)) ? C_GOOD : C_BAD;
+                drawTextPx(fmt("%d - %d", gf, ga) + (m.aet ? " ap" : "") + (m.ph >= 0 ? fmt(" (%d-%d tab)", home ? m.ph : m.pa, home ? m.pa : m.ph) : ""), xx + VW - 150, yy + 1, 10, sel ? BLACK : rc);
+            } else drawTextPx("à jouer", xx + VW - 150, yy + 1, 10, sel ? BLACK : C_DIM);
+        });
+        if (v.empty()) drawTextPx("Aucun match programmé pour cette équipe.", 16, ly + 2, 10, C_DIM);
+        if (act >= 0) { openMatchInfo(v[act].comp, v[act].mi, SC_FICHE); return; }
+        act = -1;
     } else {
         if (g_ficheRelated.empty()) drawTextPx(t.kind == TK_CLUB ? "Ce club n'a pas d'équipe réserve engagée." : "-", 16, ly + 4, 10, C_DIM);
         act = listRun(g_ficheLW, (int)g_ficheRelated.size(), 12, ly, VW - 24, rows, 12, [&](int i, int xx, int yy, bool sel) {
@@ -313,25 +368,52 @@ static void openClubEditor(int team, bool forCareer, Screen back) {
 }
 
 static void screenEditMenu() {
-    drawBackground("Éditeur de clubs");
+    drawBackground("Éditeurs");
     int nCustom = 0, nEdited = 0;
     for (int i = 0; i < (int)g_world.teams.size(); i++) { if (g_world.teams[i].custom) nCustom++; else if (g_world.teams[i].edited) nEdited++; }
-    drawTextCentered(fmt("%d club%s créé%s   -   %d club%s modifié%s", nCustom, nCustom > 1 ? "s" : "", nCustom > 1 ? "s" : "", nEdited, nEdited > 1 ? "s" : "", nEdited > 1 ? "s" : ""), VW / 2, 40, 10, C_DIM);
-    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d) : reprendre, modifier, supprimer", nCustom), "Modifier un club existant (nom, stade, couleurs)", "Éditeur de joueurs, présidents et staff (créer / modifier)", "Éditeur de sponsors (nom, logo)", "Éditeur de managers (carrière)", "Retour" };
-    int s = menuRun(g_edMenuLW, items, 70, 420);
-    int y = 230;
+    drawTextCentered(fmt("%d club%s créé%s   -   %d club%s modifié%s", nCustom, nCustom > 1 ? "s" : "", nCustom > 1 ? "s" : "", nEdited, nEdited > 1 ? "s" : "", nEdited > 1 ? "s" : ""), VW / 2, 32, 10, C_DIM);
+    // tuiles regroupées par thème : CLUBS / JOUEURS ET PERSONNES / PARTENAIRES
+    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Sponsors", "Retour" };
+    static const int GRP[7] = { 0, 0, 0, 1, 1, 2, 3 };
+    static const char* GN[3] = { "CLUBS", "PERSONNES", "PARTENAIRES" };
+    static const Color GC[3] = { { 80, 150, 240, 255 }, { 60, 190, 90, 255 }, { 240, 190, 50, 255 } };
+    static const char* DESC[7] = {
+        "Nom, couleurs (domicile, extérieur, 3e maillot, 13 motifs), stade, district, président. Le club débute dans la dernière division de son district.",
+        "Reprendre une carrière avec un club créé, le modifier ou le supprimer.",
+        "Renommer un club, changer ses maillots (dont un 3e maillot), son stade et son président.",
+        "Créer de nouveaux joueurs ou joueuses, modifier les caractéristiques, l'apparence (6 couleurs de peau) et le staff.",
+        "Créer votre manager (obligatoire en carrière) : nom, nationalité, apparence, diplôme.",
+        "Ajouter des sponsors (nom et logo PNG/JPG) proposés aux clubs.",
+        "Revenir au menu principal." };
+    int mx = 40, mw = 290, my = 50, rh = 20;
+    int s = listRun(g_edMenuLW, (int)items.size(), mx, my, mw, (int)items.size(), rh, [&](int i, int x, int y, bool sel) {
+        if (GRP[i] < 3) DrawRectangle(x + 4, y + 5, 6, 9, sel ? BLACK : GC[GRP[i]]);
+        drawTextPx(items[i], x + 16, y + 5, 10, sel ? BLACK : C_TXT);
+        if (GRP[i] < 3 && (i == 0 || GRP[i] != GRP[i - 1])) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 5, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ GC[GRP[i]].r, GC[GRP[i]].g, GC[GRP[i]].b, 170 }); }
+    });
+    {   // panneau de description
+        int cur = std::max(0, std::min(6, g_edMenuLW.cur));
+        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 7;
+        Color gc = GRP[cur] < 3 ? GC[GRP[cur]] : Color{ 150, 160, 180, 255 };
+        DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
+        DrawRectangle(px, py, pw, 16, gc);
+        drawTextPx(GRP[cur] < 3 ? GN[GRP[cur]] : "", px + 6, py + 3, 10, BLACK);
+        DrawRectangleLines(px, py, pw, ph, gc);
+        drawTextPx(fitText(items[cur], pw - 12, 10), px + 8, py + 24, 10, C_HI);
+        int yy = py + 42;
+        for (auto& l : wrapText(DESC[cur], pw - 18)) { drawTextPx(l, px + 8, yy, 10, C_TXT); yy += 12; }
+    }
+    int y = my + rh * 7 + 14;
     const char* txt[] = {
-        "Un club créé débute toujours dans la dernière division de son district (qui le rattache à sa ligue).",
-        "En cours de carrière, il est intégré à la pyramide au début de la saison suivante.",
-        "Les clubs créés ou modifiés sont enregistrés dans le fichier clubs_perso.txt (à côté du jeu).",
-        "Joueurs (clubs créés compris) et présidents : joueurs_perso.txt ; staff : staff_perso.txt.",
-        "Les joueurs ne se modifient qu'avant de lancer une carrière (menu Éditeur).",
+        "Les clubs créés ou modifiés sont enregistrés dans clubs_perso.txt (à côté du jeu).",
+        "Joueurs et présidents : joueurs_perso.txt ; staff : staff_perso.txt ; managers : managers.txt.",
+        "Les joueurs se modifient avant de lancer une carrière ; un club créé en cours de carrière joue la saison suivante.",
     };
     for (auto l : txt) { drawTextCentered(l, VW / 2, y, 10, C_DIM, false); y += 13; }
     drawFooter("OK : valider   Retour");
     if (IN.back || s == 6) { g_screen = SC_MAIN; return; }
-    if (s == 4) { g_screen = SC_SPONSORS; return; }
-    if (s == 5) { g_screen = SC_MANAGERS; return; }
+    if (s == 5) { g_screen = SC_SPONSORS; return; }
+    if (s == 4) { g_screen = SC_MANAGERS; return; }
     if (s == 0) openClubEditor(-1, false, SC_EDITMENU);
     else if (s == 1) g_screen = SC_CUSTOMLIST;
     else if (s == 2) openPick(PM_EDIT);
@@ -419,7 +501,7 @@ static void finishClubEditor() {
     }
     Team& T = g_world.teams[g_editTeam];
     T.name = g_ed.name; T.shortName = g_ed.shortName; T.stadium = g_ed.stadium; T.town = g_ed.town;
-    T.home = g_ed.home; T.away = g_ed.away;
+    T.home = g_ed.home; T.away = g_ed.away; T.third = g_ed.third; T.hasThird = g_ed.hasThird;
     T.sponsor = g_ed.sponsor;
     T.president = g_ed.president; T.presAge = g_ed.presAge; T.presPlace = g_ed.presPlace; T.presGender = g_ed.presGender;
     savePresident(T);
@@ -447,10 +529,17 @@ static void screenClubEdit() {
     static float an = 0; an += GetFrameTime();
     Kit away; away.shirt = g_ed.home.shirt2; away.shirt2 = g_ed.home.shirt; away.shorts = g_ed.home.shirt2; away.socks = g_ed.home.shirt2; away.pattern = g_ed.home.pattern;
     Kit home = g_ed.home; home.socks = home.shirt;
-    drawPlayerSprite(VW - 115, 110, home, 2, 1, 0, (int)(an * 6), PS_NORMAL, false, 0, 5);
-    drawPlayerSprite(VW - 45, 110, away, 1, 2, 0, (int)(an * 6) + 2, PS_NORMAL, false, 0, 5);
+    if (g_ed.hasThird) {
+        drawPlayerSprite(VW - 128, 110, home, 2, 1, 0, (int)(an * 6), PS_NORMAL, false, 0, 4);
+        drawPlayerSprite(VW - 80, 110, away, 1, 2, 0, (int)(an * 6) + 2, PS_NORMAL, false, 0, 4);
+        Kit t3 = g_ed.third; t3.socks = t3.shirt;
+        drawPlayerSprite(VW - 32, 110, t3, 3, 0, 0, (int)(an * 6) + 1, PS_NORMAL, false, 0, 4);
+    } else {
+        drawPlayerSprite(VW - 115, 110, home, 2, 1, 0, (int)(an * 6), PS_NORMAL, false, 0, 5);
+        drawPlayerSprite(VW - 45, 110, away, 1, 2, 0, (int)(an * 6) + 2, PS_NORMAL, false, 0, 5);
+    }
     drawTextCentered(fitText(g_ed.name, 130, 10), VW - 80, 124, 10, C_HI, false);
-    drawTextCentered("Domicile / Extérieur", VW - 80, 134, 10, C_DIM, false);
+    drawTextCentered(g_ed.hasThird ? "Domicile / Extérieur / 3e" : "Domicile / Extérieur", VW - 80, 134, 10, C_DIM, false);
 
     struct Row { std::string label, value; int kind; }; // 0 texte, 1 cycle, 2 action, 3 département
     bool hasU19 = false; if (!creating) for (auto& o : g_world.teams) if (o.parent == g_editTeam && o.youth) hasU19 = true;
@@ -460,7 +549,7 @@ static void screenClubEdit() {
         { "Nom", g_ed.name, 0 }, { "Nom court", g_ed.shortName, 0 }, { "Stade", g_ed.stadium, 0 }, { "Ville", g_ed.town, 0 },
         { "District", creating ? (g_ed.district >= 0 ? districtLabel(g_ed.district) : "(à choisir)") : districtLabel(g_ed.district), creating ? 3 : 4 },
         { "Couleur principale", colorName(g_ed.home.shirt), 1 }, { "Couleur secondaire", colorName(g_ed.home.shirt2), 1 },
-        { "Couleur du short", colorName(g_ed.home.shorts), 1 }, { "Motif du maillot", PATTERN_NAMES[std::max(0, std::min(6, g_ed.home.pattern))], 1 },
+        { "Couleur du short", colorName(g_ed.home.shorts), 1 }, { "Motif du maillot", PATTERN_NAMES[std::max(0, std::min(NUM_PATTERNS - 1, g_ed.home.pattern))], 1 },
         { "Niveau (note)", fmt("%d", (int)g_ed.rating), (creating || (g_editTeam >= 0 && g_world.teams[g_editTeam].custom)) ? 1 : 4 },
         { "Stade : capacité", fmt("%d places", g_ed.sta.capacity()), stadEd ? 1 : 4 },
         { "Tribune principale", g_ed.sta.s[0].kind == STK_COVERED ? "couverte" : g_ed.sta.s[0].kind == STK_SEATS ? "gradins (sièges)" : "places debout", stadEd ? 1 : 4 },
@@ -471,31 +560,49 @@ static void screenClubEdit() {
         { "Équipes de jeunes (U19, U17)", g_edU19 ? (hasU19 ? "oui" : "oui (District U19 et U17, dès la 1re saison)") : "non", (creating || !hasU19) ? 1 : 4 },
         { "Président", g_ed.president, 0 }, { "Âge du président", fmt("%d ans", g_ed.presAge ? g_ed.presAge : 50), 1 }, { "Président né à", g_ed.presPlace.empty() ? std::string("(non renseigné)") : g_ed.presPlace, 0 },
         { "Genre (président / présidente)", g_ed.presGender ? "Femme" : "Homme", 1 },
+        { "Troisième maillot", g_ed.hasThird ? "oui" : "non", 1 },
+        { "3e : couleur 1", colorName(g_ed.third.shirt), g_ed.hasThird ? 1 : 4 },
+        { "3e : couleur 2", colorName(g_ed.third.shirt2), g_ed.hasThird ? 1 : 4 },
+        { "3e : motif", PATTERN_NAMES[std::max(0, std::min(NUM_PATTERNS - 1, g_ed.third.pattern))], g_ed.hasThird ? 1 : 4 },
         { creating ? ">>> CRÉER LE CLUB <<<" : ">>> ENREGISTRER <<<", "", 2 }, { "Annuler", "", 2 } };
     int n = (int)rows.size();
+    // onglets : identité, maillots, stade, président (lignes de l'onglet + les deux actions)
+    static int edTab = 0;
+    static const char* ETABS[] = { "Identité", "Maillots", "Stade", "Président" };
+    static const std::vector<int> TABROWS[4] = { { 0, 1, 3, 4, 9, 16 }, { 5, 6, 7, 8, 21, 22, 23, 24, 15 }, { 2, 10, 11, 12, 13, 14 }, { 17, 18, 19, 20 } };
+    if (g_edTyping < 0) for (int i = 0; i < 4; i++) if (button(12 + i * 116, 30, 112, 14, ETABS[i], edTab == i)) { edTab = i; g_edRow = TABROWS[i][0]; }
+    if (g_edTyping < 0 && (IN.pgDn || IN.tab)) { edTab = (edTab + 1) % 4; g_edRow = TABROWS[edTab][0]; }
+    if (g_edTyping < 0 && IN.pgUp) { edTab = (edTab + 3) % 4; g_edRow = TABROWS[edTab][0]; }
+    if (g_edRow < n - 2 && std::find(TABROWS[edTab].begin(), TABROWS[edTab].end(), g_edRow) == TABROWS[edTab].end())
+        for (int i = 0; i < 4; i++) if (std::find(TABROWS[i].begin(), TABROWS[i].end(), g_edRow) != TABROWS[i].end()) edTab = i;   // retour d'un sous-écran
+    std::vector<int> vis = TABROWS[edTab]; vis.push_back(n - 2); vis.push_back(n - 1);
+    if (std::find(vis.begin(), vis.end(), g_edRow) == vis.end()) g_edRow = vis[0];
     if (g_edTyping < 0) {
-        if (IN.up) g_edRow = (g_edRow - 1 + n) % n;
-        if (IN.down) g_edRow = (g_edRow + 1) % n;
+        int k = (int)(std::find(vis.begin(), vis.end(), g_edRow) - vis.begin());
+        if (IN.up) g_edRow = vis[(k - 1 + (int)vis.size()) % vis.size()];
+        if (IN.down) g_edRow = vis[(k + 1) % vis.size()];
     }
-    int y = 32, x = 12, w = VW - 180;
-    for (int i = 0; i < n; i++) {
+    int y = 50, x = 12, w = VW - 180;
+    for (int vi = 0; vi < (int)vis.size(); vi++) {
+        int i = vis[vi];
+        if (vi == (int)vis.size() - 2) y += 8;           // actions séparées
         bool sel = i == g_edRow;
-        if (IN.click && g_edTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 13) g_edRow = i;
-        DrawRectangle(x, y, w, 12, sel ? C_SEL : (rows[i].kind == 4 ? Color{ 30, 46, 80, 255 } : C_ITEM));
+        if (IN.click && g_edTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 15) g_edRow = i;
+        DrawRectangle(x, y, w, 14, sel ? C_SEL : (rows[i].kind == 4 ? Color{ 30, 46, 80, 255 } : C_ITEM));
         Color c = sel ? BLACK : (rows[i].kind == 4 ? C_DIM : C_TXT);
         if (rows[i].kind == 2) drawTextCentered(rows[i].label, x + w / 2, y + 1, 10, c, false);
         else {
             drawTextPx(rows[i].label, x + 6, y + 2, 10, c);
             std::string v = rows[i].value;
             if (g_edTyping == i && fmod(GetTime(), 1.0) < 0.5) v += "_";
-            if (rows[i].kind == 1 && i >= 5 && i <= 7) {
-                unsigned col = i == 5 ? g_ed.home.shirt : i == 6 ? g_ed.home.shirt2 : g_ed.home.shorts;
+            if (rows[i].kind == 1 && ((i >= 5 && i <= 7) || i == 22 || i == 23)) {
+                unsigned col = i == 5 ? g_ed.home.shirt : i == 6 ? g_ed.home.shirt2 : i == 7 ? g_ed.home.shorts : i == 22 ? g_ed.third.shirt : g_ed.third.shirt2;
                 DrawRectangle(x + 150, y + 2, 10, 8, hexc(col)); DrawRectangleLines(x + 150, y + 2, 10, 8, BLACK);
                 drawTextPx("< " + v + " >", x + 166, y + 2, 10, c);
             } else if (rows[i].kind == 1) drawTextPx("< " + v + " >", x + 150, y + 2, 10, c);
             else drawTextPx(fitText(v, w - 160, 10), x + 150, y + 2, 10, g_edTyping == i ? (sel ? Color{ 120, 0, 0, 255 } : C_HI) : c);
         }
-        y += 13;
+        y += 16;
     }
     if (creating) {
         drawTextPx("Le club débutera dans la dernière division de son district (la ligue dépend du district).", 12, y + 2, 10, C_DIM);
@@ -517,7 +624,7 @@ static void screenClubEdit() {
         case 5: g_ed.home.shirt = PALETTE[(paletteIndex(g_ed.home.shirt) + d + NUM_PALETTE) % NUM_PALETTE]; break;
         case 6: g_ed.home.shirt2 = PALETTE[(paletteIndex(g_ed.home.shirt2) + d + NUM_PALETTE) % NUM_PALETTE]; break;
         case 7: g_ed.home.shorts = PALETTE[(paletteIndex(g_ed.home.shorts) + d + NUM_PALETTE) % NUM_PALETTE]; break;
-        case 8: g_ed.home.pattern = (g_ed.home.pattern + d + 7) % 7; break;
+        case 8: g_ed.home.pattern = (g_ed.home.pattern + d + NUM_PATTERNS) % NUM_PATTERNS; break;
         case 9: g_ed.rating = std::max(5.f, std::min(95.f, g_ed.rating + d)); break;
         case 10: {
             static const int CAPS[] = { 150, 300, 500, 800, 1000, 1500, 2000, 3000, 5000 };
@@ -531,8 +638,15 @@ static void screenClubEdit() {
         case 16: g_edU19 = !g_edU19; break;
         case 18: g_ed.presAge = std::max(25, std::min(90, (g_ed.presAge ? g_ed.presAge : 50) + d)); break;
         case 20: g_ed.presGender = g_ed.presGender ? 0 : 1; break;
+        case 21:
+            g_ed.hasThird = !g_ed.hasThird;
+            if (g_ed.hasThird && g_ed.third.shirt == 0xFFFFFF && g_ed.third.shirt2 == 0) { g_ed.hasThird = 0; Kit t3 = teamKit(g_ed, 2); g_ed.third = t3; g_ed.hasThird = 1; }   // proposition de départ
+            break;
+        case 22: g_ed.third.shirt = PALETTE[(paletteIndex(g_ed.third.shirt) + d + NUM_PALETTE) % NUM_PALETTE]; g_ed.third.socks = g_ed.third.shorts = g_ed.third.shirt; break;
+        case 23: g_ed.third.shirt2 = PALETTE[(paletteIndex(g_ed.third.shirt2) + d + NUM_PALETTE) % NUM_PALETTE]; break;
+        case 24: g_ed.third.pattern = (g_ed.third.pattern + d + NUM_PATTERNS) % NUM_PATTERNS; break;
         }
-    } else if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 32 && IN.mouse.y < 32 + n * 13)) {
+    } else if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 50 && IN.mouse.y < y)) {
         if (R.kind == 0) { g_edTyping = g_edRow; g_textMode = true; while (GetCharPressed() > 0) {} }
         else if (R.kind == 3) { g_deptLW = ListW(); auto v = editorDepts(); for (int i = 0; i < (int)v.size(); i++) if (v[i] == g_ed.district) g_deptLW.cur = i; g_screen = SC_DEPTPICK; }
         else if (R.kind == 2) { if (g_edRow == n - 2) finishClubEditor(); else { g_screen = g_editBack == SC_PICK ? SC_PICK : g_editBack; } }

@@ -2892,7 +2892,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 19;
+static const unsigned SAVE_VERSION = 20;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -2938,7 +2938,7 @@ bool Career::save(const char* path) const {
     for (auto& t0 : g_world.teams) {
         Team& t = const_cast<Team&>(t0);
         w.str(t.name); w.str(t.shortName); w.str(t.stadium); w.str(t.town);
-        w.pod(t.kind); w.pod(t.nation); w.pod(t.rating); ioKit(w, t.home); ioKit(w, t.away); w.pod(t.culture); w.pod(t.region); w.pod(t.dept);
+        w.pod(t.kind); w.pod(t.nation); w.pod(t.rating); ioKit(w, t.home); ioKit(w, t.away); ioKit(w, t.third); w.pod(t.hasThird); w.pod(t.culture); w.pod(t.region); w.pod(t.dept);
         w.pod(t.seed); w.pod(t.formation); w.pod(t.dbClub); w.pod(t.parent); w.pod(t.resLevel); w.pod(t.custom); w.pod(t.edited);
         w.pod(t.lastTier); w.pod(t.founded); w.pod(t.squadGen); w.vstr(t.honours);
         unsigned np = (unsigned)t.squad.size(); w.pod(np);
@@ -3006,14 +3006,14 @@ bool Career::load(const char* path) {
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
-    if (magic != SAVE_MAGIC || ver < 19 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
+    if (magic != SAVE_MAGIC || ver < 20 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }
     g_world.teams.resize(nt);
     for (auto& t : g_world.teams) {
         r.str(t.name); r.str(t.shortName); r.str(t.stadium); r.str(t.town);
-        r.pod(t.kind); r.pod(t.nation); r.pod(t.rating); ioKit(r, t.home); ioKit(r, t.away); r.pod(t.culture); r.pod(t.region); r.pod(t.dept);
+        r.pod(t.kind); r.pod(t.nation); r.pod(t.rating); ioKit(r, t.home); ioKit(r, t.away); ioKit(r, t.third); r.pod(t.hasThird); r.pod(t.culture); r.pod(t.region); r.pod(t.dept);
         r.pod(t.seed); r.pod(t.formation); r.pod(t.dbClub); r.pod(t.parent); r.pod(t.resLevel); r.pod(t.custom); r.pod(t.edited);
         r.pod(t.lastTier); r.pod(t.founded); r.pod(t.squadGen); r.vstr(t.honours);
         unsigned np = 0; r.pod(np); if (!r.ok || np > 200) { fclose(f); return false; }

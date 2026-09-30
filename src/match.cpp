@@ -39,6 +39,7 @@ void matchKits(const MatchSetup& S, Kit kit[2]) {
 Kit teamKit(const Team& T, int sel) {
     if (sel <= 0) return T.home;
     if (sel == 1) return T.away;
+    if (T.hasThird) return T.third;
     static const unsigned C[] = { 0xFFD700, 0x6CABDD, 0x111111, 0xF47920, 0x00843D, 0x7A1438, 0xFFFFFF, 0x6A2C91, 0x2BB5B0 };
     unsigned best = C[0]; float bd = -1;
     for (unsigned c : C) { float d = std::min(colorDist(c, T.home.shirt), colorDist(c, T.away.shirt)); if (d > bd) { bd = d; best = c; } }

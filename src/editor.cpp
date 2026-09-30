@@ -47,6 +47,10 @@ void loadCustomClubs() {
             t.formation = 0;
             if (v.size() > 19) { int di = districtIndex(v[19]); if (di >= 0 && districtRegion(di) == t.region) t.district = di; }
             if (t.district < 0) t.district = districtFor(t.dept, t.town, t.name);
+            if (v.size() > 24 && v[20] == "1") {       // troisième maillot
+                t.hasThird = 1; t.third.shirt = (unsigned)strtoul(v[21].c_str(), nullptr, 16); t.third.shirt2 = (unsigned)strtoul(v[22].c_str(), nullptr, 16);
+                t.third.shorts = (unsigned)strtoul(v[23].c_str(), nullptr, 16); t.third.pattern = atoi(v[24].c_str()); t.third.socks = t.third.shirt;
+            }
             int idx = g_world.addCustomClub(t);
             if (v.size() > 18 && v[18] == "1" && idx >= 0) { makeU19Team(g_world, idx); makeU17Team(g_world, idx); }    // équipes U19 et U17 du club
         } else if (v.size() >= 10 && v[0] == "EDIT") {
@@ -59,6 +63,10 @@ void loadCustomClubs() {
             t.home.shorts = (unsigned)strtoul(v[7].c_str(), nullptr, 16);
             t.home.pattern = atoi(v[8].c_str());
             t.home.socks = t.home.shirt;
+            if (v.size() > 13 && v[9] == "1") {
+                t.hasThird = 1; t.third.shirt = (unsigned)strtoul(v[10].c_str(), nullptr, 16); t.third.shirt2 = (unsigned)strtoul(v[11].c_str(), nullptr, 16);
+                t.third.shorts = (unsigned)strtoul(v[12].c_str(), nullptr, 16); t.third.pattern = atoi(v[13].c_str()); t.third.socks = t.third.shirt;
+            }
             t.edited = true;
         }
     }
@@ -72,14 +80,14 @@ void saveCustomClubs() {
         const Team& t = g_world.teams[i];
         if (t.custom && !t.youth) {
             bool u19 = false; for (auto& o : g_world.teams) if (o.parent == i && o.youth == 1) u19 = true;
-            fprintf(f, "CLUB|%s|%s|%s|%s|%d|%06X|%06X|%06X|%d|%.1f|%d|%d|%d|%d|%d|%d|%s|%d|%s\n", clean(t.name).c_str(), clean(t.shortName).c_str(), clean(t.stadium).c_str(),
+            fprintf(f, "CLUB|%s|%s|%s|%s|%d|%06X|%06X|%06X|%d|%.1f|%d|%d|%d|%d|%d|%d|%s|%d|%s|%d|%06X|%06X|%06X|%d\n", clean(t.name).c_str(), clean(t.shortName).c_str(), clean(t.stadium).c_str(),
                     clean(t.town).c_str(), t.dept, t.home.shirt, t.home.shirt2, t.home.shorts, t.home.pattern, t.rating, t.founded,
                     t.sta.init ? t.sta.capacity() : 300, (int)t.sta.s[0].kind, (int)t.sta.buvette, (int)t.sta.boutique, (int)t.sta.lights, clean(t.sponsor).c_str(), u19 ? 1 : 0,
-                    clean(districtName(t.district)).c_str());
+                    clean(districtName(t.district)).c_str(), (int)t.hasThird, t.third.shirt, t.third.shirt2, t.third.shorts, t.third.pattern);
         }
         else if (t.edited && i < g_world.baseCount)
-            fprintf(f, "EDIT|%d|%s|%s|%s|%06X|%06X|%06X|%d\n", i, clean(t.name).c_str(), clean(t.shortName).c_str(), clean(t.stadium).c_str(),
-                    t.home.shirt, t.home.shirt2, t.home.shorts, t.home.pattern);
+            fprintf(f, "EDIT|%d|%s|%s|%s|%06X|%06X|%06X|%d|%d|%06X|%06X|%06X|%d\n", i, clean(t.name).c_str(), clean(t.shortName).c_str(), clean(t.stadium).c_str(),
+                    t.home.shirt, t.home.shirt2, t.home.shorts, t.home.pattern, (int)t.hasThird, t.third.shirt, t.third.shirt2, t.third.shorts, t.third.pattern);
     }
     fclose(f);
 }
