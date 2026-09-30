@@ -16,13 +16,15 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
 static void lifeStartCareer(int club);
 static void lifeCheckPromotion();
 static bool requireManager(Screen back);
+static int g_caSel = -1;
+static void drawClubSeason(int y, bool results);
 
 static Screen g_screen = SC_SPLASH;
 static MenuInput IN;
@@ -1644,6 +1646,10 @@ static void screenHub() {
                 [c, club]() { g_career.withdrawFromCup(c, g_career.userTeam); g_career.season.news.push_back(club + " ne s'inscrit pas à la Coupe de France cette saison."); toast("Pas d'inscription à la Coupe de France"); });
         }
     }
+    {   // début de saison : récapitulatif des engagements de toutes les équipes du club
+        static int shownYear = -1;
+        if (g_career.kind == CK_CLUB && !g_career.euroOnly && !g_confirm.active && g_career.year != shownYear && S.now < 0.6 && g_career.userTeam >= 0) { shownYear = g_career.year; g_screen = SC_SEASONSTART; return; }
+    }
     if (g_needAdvance && !g_confirm.active) {
         crashMark("carrière : avance du calendrier (saison %d)", g_career.year);
         g_pending = S.advance(false);
@@ -1732,7 +1738,7 @@ static void screenHub() {
     }
     else if (S.finished) m1.push_back({ club ? "Bilan de fin de saison" : "Bilan du tournoi", 2 });
     if (!m1.empty()) secs.push_back({ "MATCH", m1 });
-    if (club) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 }, { "Coefficients UEFA", 10 }, { "Arbitres", 19 } } });
+    if (club) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Engagements de la saison (toutes les équipes)", 44 }, { "Palmarès", 6 }, { "Archives des compétitions", 43 }, { "Coefficients UEFA", 10 }, { "Arbitres", 19 } } });
     else if (euro) secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 }, { "Coefficients UEFA", 10 } } });
     else secs.push_back({ "COMPÉTITIONS", { { "Classements, résultats, buteurs", 3 }, { "Calendrier de l'équipe", 4 }, { "Palmarès", 6 } } });
     if (lifeP) secs.push_back({ "MA CARRIÈRE", { { "Ma fiche", 42 }, { "Vie du joueur (argent, couple, paris)", 40 }, { "Effectif du club", 5 }, { fmt("Messages (%d non lu%s)", newsUnread(), newsUnread() > 1 ? "s" : ""), 14 } } });
@@ -1877,6 +1883,8 @@ static void screenHub() {
     case 31: g_screen = SC_HOSTS; break;
     case 32: g_screen = SC_COACHLOG; break;
     case 40: g_lifeTab = 0; g_screen = SC_LIFE; break;
+    case 43: g_caSel = -1; g_screen = SC_COMPARCH; break;
+    case 44: g_screen = SC_SEASONSTART; break;
     case 41: g_screen = SC_BRIBE; break;
     case 42: { int t = -1; int idx = -1; Player* me = g_career.lifePlayer(&t); if (me) { for (int i = 0; i < (int)g_world.teams[t].squad.size(); i++) if (g_world.teams[t].squad[i].id == me->id) idx = i; openPlayer(t, idx, SC_HUB); } break; }
     case 22: if (!openMatchday(g_pending.comp, g_pending.match, false)) toast("Un seul match pour ce tour"); break;
@@ -1950,9 +1958,12 @@ static void screenSeasonEnd() {
         };
         if (button(20, y - 2, 180, 14, "Palmarès de la saison", seTab == 0)) seTab = 0;
         if (button(204, y - 2, 180, 14, "Qualifiés pour l'Europe", seTab == 2)) seTab = 2;
-        if (button(388, y - 2, 180, 14, "Votre saison", seTab == 1)) seTab = 1;
-        if (IN.tab) seTab = seTab == 0 ? 2 : seTab == 2 ? 1 : 0;
+        if (button(388, y - 2, 120, 14, "Votre saison", seTab == 1)) seTab = 1;
+        if (button(512, y - 2, 110, 14, "Tout le club", seTab == 3)) seTab = 3;
+        if (IN.tab) seTab = seTab == 0 ? 2 : seTab == 2 ? 1 : seTab == 1 ? 3 : 0;
         y += 16;
+        if (seTab == 3) { drawClubSeason(y, true); }
+        else
         if (seTab == 2) {
             // clubs qualifiés pour les coupes d'Europe de la saison prochaine (France en priorité)
             static int pvYear = -1; static EuroSpots pv;
@@ -2013,6 +2024,8 @@ static void screenSeasonEnd() {
             cupLine("Coupe de France", g_career.cdf, true);
             cupLine("Coupe de la Ligue", g_career.cdl, true);
             for (int c : g_career.superCups) if (S.comps[c].tag == frp) cupLine(S.comps[c].shortName, c, true);
+            yr += 3;
+            drawSection(324, yr, 302, "COUPES RÉGIONALES"); yr += 13;
             cupLine("Méga Coupe des Régions", g_career.superRegions, true);
             yr += 3;
             drawSection(324, yr, 302, "EUROPE"); yr += 13;
@@ -2171,7 +2184,6 @@ static void screenComps() {
         case 2:
             if (g_career.cdfNational >= 0) v.push_back(g_career.cdfNational);
             if (g_career.cdl >= 0) v.push_back(g_career.cdl);
-            if (g_career.superRegions >= 0) v.push_back(g_career.superRegions);
             for (int c : g_career.superCups) if (S.comps[c].tag == frp) v.push_back(c);
             if (g_career.cdfNational < 0) for (int c : g_career.cdfRegional) v.push_back(c);
             break;
@@ -2282,8 +2294,23 @@ static void screenComps() {
         for (int c = 0; c < (int)S.comps.size(); c++) if (!mine.count(c)) items.push_back({ S.comps[c].name, c, 0 });
     }
     int rows = (VH - 18 - y) / 13;
+    // sous-groupes (National 1 groupes A/B/C, National 2 A à D...) : famille = nom avant « - Groupe » / « - Poule »
+    auto family = [](const std::string& l, std::string& grp) {
+        size_t k = l.find(" - Groupe "); if (k == std::string::npos) k = l.find(" - Poule ");
+        if (k == std::string::npos) { grp.clear(); return l; }
+        grp = l.substr(k + 3); return l.substr(0, k);
+    };
     int s = listRun(g_compsLW, (int)items.size(), 20, y, VW - 40, rows, 13, [&](int i, int x, int yy, bool sel) {
-        drawTextPx(fitText(items[i].label, VW - 140, 10), x + 6, yy + 1, 10, sel ? BLACK : (items[i].label[0] == '*' ? C_HI : C_TXT));
+        std::string g0, g1, f0 = family(items[i].label, g0);
+        std::string f1 = i > 0 ? family(items[i - 1].label, g1) : std::string();
+        if (!g0.empty()) {
+            // bande de couleur par groupe et séparateur en tête de famille
+            static const Color GCOL[6] = { { 80, 150, 240, 255 }, { 240, 160, 60, 255 }, { 110, 210, 120, 255 }, { 220, 100, 200, 255 }, { 240, 220, 80, 255 }, { 120, 220, 230, 255 } };
+            int gi = 0; size_t sp = g0.rfind(' '); if (sp != std::string::npos && sp + 1 < g0.size()) gi = (g0[sp + 1] - 'A' + 6000) % 6;
+            DrawRectangle(x, yy, 4, 12, GCOL[gi]);
+            if (f0 != f1) DrawRectangle(x, yy - 1, VW - 40, 1, Color{ 240, 200, 60, 160 });
+        } else if (i > 0 && !g1.empty()) DrawRectangle(x, yy - 1, VW - 40, 1, Color{ 240, 200, 60, 160 });
+        drawTextPx(fitText(items[i].label, VW - 140, 10), x + 8, yy + 1, 10, sel ? BLACK : (items[i].label[0] == '*' ? C_HI : C_TXT));
         if (items[i].comp >= 0) {
             const Competition& C = S.comps[items[i].comp];
             std::string st = C.done ? (C.winner >= 0 ? "Vainqueur : " + g_world.teams[C.winner].shortName : "terminé") : C.stages.empty() ? "à venir" : "en cours";
@@ -2519,25 +2546,39 @@ static void screenCompView() {
         return;
     }
     // zones de montée / descente
-    int upN = 0, downN = 0, barN = 0; bool terminal = false;
+    int upN = 0, downN = 0, barN = 0, barDown = 0; bool terminal = false;
+    int eu1 = 0, eu3 = 0, eu4 = 0;       // places européennes (C1, C3, C4) de la 1re division
     if (C.kind == 1 && C.tag >= 0 && g_career.kind == CK_CLUB) {
         int p = C.tag / 100000, q = (C.tag / 100) % 1000;
         if (p < (int)g_career.pyramids.size() && q < (int)g_career.pyramids[p].pools.size()) {
-            const Pool& pl = g_career.pyramids[p].pools[q];
-            const TierConf& T = g_career.pyramids[p].tiers[pl.tier];
+            const Pyramid& PY = g_career.pyramids[p];
+            const Pool& pl = PY.pools[q];
+            const TierConf& T = PY.tiers[pl.tier];
             upN = pl.tier > 0 ? T.up : 0; downN = T.flexible || pl.terminal ? 0 : T.down; barN = T.barrageUp ? (T.barrageUp == 2 ? 4 : T.barrageUp == 3 ? 3 : 1) : 0;
+            if (pl.tier + 1 < (int)PY.tiers.size() && PY.tiers[pl.tier + 1].barrageUp && downN) barDown = 1;     // barrage de maintien
             terminal = pl.terminal;
+            if (pl.tier == 0 && PY.dom < 0 && !g_career.euroOnly) {
+                int rk = g_career.uefaRank(PY.country);
+                if (rk <= 55) {
+                    // accès selon le rang UEFA de l'association (formule actuelle, simplifiée)
+                    eu1 = rk <= 4 ? 4 : rk <= 6 ? 3 : rk <= 10 ? 2 : 1;
+                    eu3 = rk <= 6 ? 2 : rk <= 15 ? 1 : 0;
+                    eu4 = rk <= 33 ? 1 : 2;
+                    if (rk > 33) eu3 = 0;
+                    if (!g_career.opts.euroFormat) { eu3 += eu4; eu4 = 0; }      // formule 2003 : pas de Ligue Conférence
+                }
+            }
         }
     }
     // ---- onglets des groupes
     int ng = (int)st.groups.size();
     if (league && ng > 1) {
-        int bw = std::max(22, std::min(60, (VW - 20) / ng));
+        int bw = std::max(22, std::min(80, (VW - 20) / ng));
         int perRow = (VW - 20) / bw;
         for (int g = 0; g < ng; g++) {
             int bx = 10 + (g % perRow) * bw, by = y + (g / perRow) * 15;
             bool mine = false; for (int t : st.groups[g]) if (S.isControlled(t)) mine = true;
-            std::string lb = ng <= 26 ? fmt("%s%c", bw >= 50 ? "Gr. " : "", 'A' + g) : fmt("%d", g + 1);
+            std::string lb = ng <= 26 ? fmt("%s%c", bw >= 70 ? "Groupe " : bw >= 50 ? "Gr. " : "", 'A' + g) : fmt("%d", g + 1);
             if (button(bx, by, bw - 2, 13, lb + (mine ? "*" : ""), g == g_cvGroup)) { g_cvGroup = g; g_cvLW = ListW(); }
         }
         y += 15 * ((ng + perRow - 1) / perRow) + 2;
@@ -2562,9 +2603,15 @@ static void screenCompView() {
             bool me = S.isControlled(s.team);
             Color c = sel2 ? BLACK : (me ? C_HI : C_TXT);
             Color zone = BLANK;
+            static const Color Z_C1 = { 70, 140, 255, 255 }, Z_C3 = { 255, 140, 40, 255 }, Z_C4 = { 60, 200, 120, 255 }, Z_BAR = { 250, 220, 60, 255 };
             if (i < upN) zone = C_GOOD;
-            else if (barN && i >= upN && i < upN + barN && C.kind == 1) zone = Color{ 255, 170, 60, 255 };
+            else if (barN && i >= upN && i < upN + barN && C.kind == 1) zone = Z_BAR;
+            if (eu1 && i < eu1) zone = Z_C1;
+            else if (eu1 && i < eu1 + eu3) zone = Z_C3;
+            else if (eu1 && i < eu1 + eu3 + eu4) zone = Z_C4;
             if (downN && i >= n - downN) zone = C_BAD;
+            else if (barDown && i == n - downN - 1) zone = Z_BAR;
+            if (zone.a && C.kind == 1) DrawRectangle(x + 3, yy, VW - 30, 11, Color{ zone.r, zone.g, zone.b, 28 });   // bande de couleur sur toute la ligne
             if (C.kind != 1 && i < C.groupsAdvance) zone = C_GOOD;
             if (st.type == ST_SWISS) zone = i < 8 ? C_GOOD : i < 24 ? Color{ 255, 170, 60, 255 } : C_BAD;
             if (zone.a) DrawRectangle(x, yy, 3, 11, zone);
@@ -2577,12 +2624,15 @@ static void screenCompView() {
         if (sel >= 0) { openFiche(tb[sel].team, SC_COMPVIEW); return; }
         std::string info;
         if (C.kind == 1) {
-            if (upN) info += "Vert : montée   ";
-            if (barN) info += "Orange : barrages   ";
-            if (downN) info += "Rouge : descente";
-            if (terminal) info += "Dernier niveau (pas de descente)";
-        } else info = "Vert : qualifiés";
-        drawTextPx(info, 12, VH - 27, 10, C_DIM);
+            // légende en couleur
+            int lx = 12;
+            auto leg = [&](Color c, const std::string& t) { DrawRectangle(lx, VH - 26, 8, 8, c); drawTextPx(t, lx + 11, VH - 28, 10, C_DIM); lx += 20 + textWidth(t, 10); };
+            if (eu1) { leg(Color{ 70, 140, 255, 255 }, "Ligue des champions"); if (eu3) leg(Color{ 255, 140, 40, 255 }, g_career.opts.euroFormat ? "Ligue Europa" : "Coupe UEFA"); if (eu4) leg(Color{ 60, 200, 120, 255 }, "Ligue Conférence"); }
+            if (upN) leg(C_GOOD, "Montée");
+            if (barN || barDown) leg(Color{ 250, 220, 60, 255 }, "Barrages");
+            if (downN) leg(C_BAD, "Relégation");
+            if (terminal) drawTextPx("Dernier niveau (pas de descente)", lx, VH - 28, 10, C_DIM);
+        } else drawTextPx("Vert : qualifiés", 12, VH - 27, 10, C_DIM);
         help += ng > 1 ? "   G/D : groupe   OK : fiche" : "   OK : fiche du club";
     } else {
         int nr = (int)st.rounds.size();
@@ -2603,8 +2653,17 @@ static void screenCompView() {
         }
         int rows = (VH - 32 - y) / 12;
         bool cup = C.kind != 1;
+        // coupes d'Europe (nouvelle formule) : qualifications séparées en voie des champions / voie de la ligue
+        bool paths = !league && !C.extra2.empty() && std::find(C.koNames.begin(), C.koNames.begin() + std::min((int)C.koNames.size(), C.regionalRounds), st.name) != C.koNames.begin() + std::min((int)C.koNames.size(), C.regionalRounds);
+        std::set<int> champs(C.extra2.begin(), C.extra2.end());
+        if (paths) std::stable_sort(ms.begin(), ms.end(), [&](int a, int b) { bool ca = champs.count(C.matches[a].home) || champs.count(C.matches[a].away), cb = champs.count(C.matches[b].home) || champs.count(C.matches[b].away); return ca > cb; });
         int sel = listRun(g_cvLW, (int)ms.size(), 12, y, VW - 24, rows, 12, [&](int i, int x, int yy, bool sel2) {
             const MatchRes& m = C.matches[ms[i]];
+            if (paths) {
+                bool cp = champs.count(m.home) || champs.count(m.away);
+                DrawRectangle(x + 1, yy + 1, 3, 10, cp ? Color{ 240, 200, 60, 255 } : Color{ 90, 160, 240, 255 });
+                drawTextPx(cp ? "Voie champions" : "Voie ligue", x + 8, yy + 1, 10, sel2 ? BLACK : cp ? C_HI : Color{ 150, 190, 250, 255 });
+            }
             bool me = S.isControlled(m.home) || S.isControlled(m.away);
             Color c = sel2 ? BLACK : (me ? C_HI : C_TXT);
             std::string hn = cup ? nameLvl(m.home) : g_world.teams[m.home].name, an = cup ? nameLvl(m.away) : g_world.teams[m.away].name;
@@ -3022,6 +3081,7 @@ static void screenIntl() {
 #include "app_players.inc"
 #include "app_coach.inc"
 #include "app_life.inc"
+#include "app_season.inc"
 
 // ------------------------------------------------------------------ options / aide
 static void screenOptions() {
@@ -3395,6 +3455,8 @@ void appFrame(float dt) {
     case SC_LIFENEW: screenLifeNew(); break;
     case SC_LIFE: screenLife(); break;
     case SC_BRIBE: screenBribe(); break;
+    case SC_SEASONSTART: screenSeasonStart(); break;
+    case SC_COMPARCH: screenCompArch(); break;
     case SC_MAIN: screenMain(dt); break;
     case SC_PICK: screenPick(); break;
     case SC_SETUP: screenSetup(); break;
@@ -3685,10 +3747,11 @@ void appTestStart(const char* mode) {
     else if (m == "managers") g_screen = SC_MANAGERS;
     else if (m == "leaguemode") g_screen = SC_LEAGUEMODE;
     else if (m == "intlopt") g_screen = SC_INTL;
-    else if (m == "studio" || m == "history" || m == "news" || m == "newslist" || m == "seasonart" || m == "seasonart2" || m == "cdlbracket" || m == "finance2") {
+    else if (m == "studio" || m == "history" || m == "comparch" || m == "clubend" || m == "news" || m == "newslist" || m == "seasonart" || m == "seasonart2" || m == "cdlbracket" || m == "finance2") {
         int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Paris Saint-Germain") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true;
         Season& S = g_career.season;
+        if (m == "comparch" || m == "clubend") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } if (m == "clubend") { g_screen = SC_SEASONEND; seTab = 3; return; } g_career.endSeason(); g_caSel = -1; g_screen = SC_COMPARCH; return; }
         if (m == "history") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } g_career.endSeason(); g_histTab = 5; g_screen = SC_HISTORY; return; }
         if (m == "seasonart") { showSeasonArticle(); return; }
         if (m == "cdlbracket") { while (true) { auto pm = S.advance(true); if (pm.comp < 0) break; } openCompView(g_career.cdl, -1, -1); g_cvMode = 0; for (int k = 0; k < (int)S.comps[g_career.cdl].stages.size(); k++) if (S.comps[g_career.cdl].stages[k].ties.size() == 8) g_cvStage = k; return; }
@@ -3759,7 +3822,7 @@ void appTestStart(const char* mode) {
         int p, q, gg; g_career.tierOfTeam(user, &p, &q, &gg);
         openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2;
     }
-    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "market" || m == "market4" || m == "market5" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
+    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "compsfr" || m == "table1" || m == "market" || m == "market4" || m == "market5" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
         int user = -1;
         for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Lavallois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true;
@@ -3774,6 +3837,8 @@ void appTestStart(const char* mode) {
         if (m == "end") { S.advance(true); g_screen = SC_SEASONEND; }
         if (m == "scorers") { openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2; }
         if (m == "market" || m == "nego") openMarket();
+        if (m == "compsfr") { g_screen = SC_COMPS; g_compsCat = 1; g_compsSub = 0; }
+        if (m == "table1") { int p, q, g; for (int i = 0; i < (int)g_career.pyramids.size(); i++) if (g_career.pyramids[i].country == "FRA" && g_career.pyramids[i].dom < 0) { int qq = g_career.pyramids[i].poolIndex(0, 0); openCompView(g_career.pyramids[i].pools[qq].comps[0], 0, 0); g_cvMode = 0; } (void)p; (void)q; (void)g; }
         if (m == "market4" || m == "market5") { openMarket(); g_mkTab = m == "market4" ? 3 : 4; std::string e; g_career.loanIn(g_world.teams[g_world.nationIndex("FRA")].squad.empty() ? -1 : -1, e); }
         if (m == "nego" && !g_mkList.empty()) { MkRow r = g_mkList[0]; g_nego = Nego(); g_nego.active = true; g_nego.team = r.team; g_nego.pid = r.pid; g_nego.ask = askingPrice(r.team, r.idx); g_nego.fee = g_nego.ask * 8 / 10; g_nego.demand = wageDemand(g_world.teams[r.team].squad[r.idx], g_career.userTeam); g_nego.wage = g_nego.demand; g_nego.last = "Test : refus du club"; }
         if (m == "archive") { while (!S.finished) S.advance(true); g_career.endSeason(); openFiche(user, SC_HUB); g_fichePage = 3; }

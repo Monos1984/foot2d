@@ -117,7 +117,7 @@ struct StadiumInfo {
     int capacity() const { int c = 0; for (auto& x : s) c += x.seats + x.vip; return c; }
 };
 // produits dérivés (boutique) en plus du maillot
-enum { NUM_MERCH = 8 };
+enum { NUM_MERCH = 14 };
 struct Merch {
     uint8_t init = 0, online = 0;           // boutique en ligne : niveau 0 à 3
     uint8_t on[NUM_MERCH] = {};             // produit en vente
@@ -534,6 +534,10 @@ struct ClubArch {
     int16_t bigLossGF = 0, bigLossGA = -1, bigLossYear = 0; int32_t bigLossOpp = -1;
     int16_t seasons = 0, titles = 0, promotions = 0, relegations = 0;
 };
+// archives des compétitions : vainqueur, finaliste, meilleurs buteur et passeur de chaque saison ; classement « all-time »
+struct CompArchRec { char comp[48] = { 0 }; int16_t year = 0, goals = 0, assists = 0, pad = 0; int32_t winner = -1, runner = -1, scorerTeam = -1, assistTeam = -1; char scorer[30] = { 0 }, assister[30] = { 0 }; };
+struct CompAllTime { char comp[48] = { 0 }; int32_t pid = 0, team = -1; char name[30] = { 0 }; int16_t goals = 0, assists = 0, seasons = 0, pad = 0; };
+std::string compFamily(const std::string& name);    // nom de la compétition sans l'année
 struct ArchScorer { int32_t pid = 0; char name[30] = { 0 }; int16_t goals = 0, assists = 0, apps = 0, pad = 0; };
 
 // carrière de sélectionneur : joueur convoqué (pid du joueur dans son club, club = -1 : championnat local)
@@ -748,6 +752,9 @@ struct Career {
     // build 5 : joker, extra-communautaires, prêts, numéros, DNCG, fair-play financier, presse du mercato
     bool jokerAvailable() const;
     std::vector<Loan> loans;
+    std::vector<CompArchRec> compArch;
+    std::vector<CompAllTime> compAllTime;
+    void archiveComps();
     bool loanIn(int pid, std::string& err);
     bool loanOut(int pid, std::string& err);
     void returnLoans(std::vector<std::string>& msgs);

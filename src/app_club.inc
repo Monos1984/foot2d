@@ -245,6 +245,12 @@ static void drawMerchIcon(int k, int x, int y, const Kit& kit) {
     case 5: DrawRectangle(x + 3, y + 2, 12, 15, Color{ 230, 225, 210, 255 }); DrawRectangle(x + 5, y + 4, 8, 7, a); DrawRectangle(x + 5, y + 12, 8, 1, b); DrawRectangle(x + 5, y + 14, 6, 1, b); break;   // poster
     case 6: DrawRectangle(x + 4, y + 2, 10, 8, a); DrawRectangle(x + 1, y + 3, 3, 6, a); DrawRectangle(x + 14, y + 3, 3, 6, a); DrawRectangle(x + 4, y + 10, 4, 7, b); DrawRectangle(x + 10, y + 10, 4, 7, b); DrawRectangle(x + 8, y + 2, 2, 8, b); break;  // survêtement
     case 7: DrawCircle(x + 9, y + 11, 5, a); DrawCircle(x + 9, y + 5, 4, a); DrawCircle(x + 6, y + 2, 2, b); DrawCircle(x + 12, y + 2, 2, b); DrawRectangle(x + 7, y + 4, 1, 1, BLACK); DrawRectangle(x + 11, y + 4, 1, 1, BLACK); break;   // peluche
+    case 8: { Kit k2 = kit; std::swap(k2.shirt, k2.shirt2); if (k2.shirt == 0) k2.shirt = 0xF2F2F2; drawKitIcon(k2, x + 2, y + 1, 1); break; }   // maillot extérieur
+    case 9: DrawRectangle(x + 4, y + 3, 10, 10, Color{ 30, 30, 36, 255 }); DrawRectangle(x + 4, y + 6, 10, 2, a); DrawRectangle(x + 1, y + 4, 3, 5, Color{ 30, 30, 36, 255 }); DrawRectangle(x + 14, y + 4, 3, 5, Color{ 30, 30, 36, 255 }); break;   // 3e maillot
+    case 10: DrawRectangle(x + 6, y + 2, 5, 13, a); DrawRectangle(x + 7, y + 1, 3, 2, b); DrawRectangle(x + 11, y + 6, 5, 8, b); break;      // gourde et sac
+    case 11: DrawRectangle(x + 5, y + 1, 8, 15, Color{ 30, 30, 36, 255 }); DrawRectangle(x + 6, y + 2, 6, 13, a); DrawCircle(x + 9, y + 8, 2, b); break;   // coque
+    case 12: DrawRectangle(x + 3, y + 3, 12, 12, a); DrawRectangle(x + 3, y + 3, 2, 12, b); DrawRectangle(x + 7, y + 7, 6, 1, b); DrawRectangle(x + 7, y + 10, 5, 1, b); break;   // livre
+    case 13: drawPlayerSprite(x + 9, y + 15, kit, 1, 0, 0, 0, PS_NORMAL, false, 0, 1); break;   // figurine
     }
 }
 
@@ -374,28 +380,28 @@ static void screenStadium() {
         float shirtRef = T.status == CS_PRO ? 75.f : T.status == CS_SEMIPRO ? 45.f : 28.f;
         for (int r = 0; r < nrow; r++) {
             int k = r - 1;
-            int yy = y + r * 21;
+            int yy = y + r * 15;
             bool sel = r == g_stSel;
-            bool hover = IN.mouse.x >= 12 && IN.mouse.x < VW - 12 && IN.mouse.y >= yy && IN.mouse.y < yy + 20;
+            bool hover = IN.mouse.x >= 12 && IN.mouse.x < VW - 12 && IN.mouse.y >= yy && IN.mouse.y < yy + 14;
             if (hover && IN.click) g_stSel = r;
             bool locked = k >= 0 && S.boutique < merchMinShop(k);
-            DrawRectangle(12, yy, VW - 24, 20, sel ? Color{ 90, 80, 30, 255 } : (r % 2 ? C_ITEM : Color{ 38, 62, 108, 255 }));
-            drawMerchIcon(k, 18, yy + 2, T.home);
+            DrawRectangle(12, yy, VW - 24, 14, sel ? Color{ 90, 80, 30, 255 } : (r % 2 ? C_ITEM : Color{ 38, 62, 108, 255 }));
+            drawMerchIcon(k, 18, yy - 2, T.home);
             int price = k < 0 ? S.shirtPrice : MC.price[k];
             int ref = k < 0 ? (int)shirtRef : merchRefPrice(k, T.status);
-            drawTextPx(k < 0 ? std::string("Maillot officiel") : std::string(merchName(k)), 44, yy + 5, 10, locked ? C_DIM : sel ? C_HI : C_TXT);
-            if (locked) { drawTextPx(fmt("boutique niveau %d requis", merchMinShop(k)), 250, yy + 5, 10, C_BAD); continue; }
-            drawTextPx(fmt("%d EUR", price), 250, yy + 5, 10, price > ref * 1.3f ? C_BAD : price < ref * 0.8f ? C_HI : C_TXT);
-            if (button(208, yy + 4, 14, 12, "-")) { if (k < 0) S.shirtPrice = (int16_t)std::max(5, S.shirtPrice - 5); else MC.price[k] = (int16_t)std::max(1, MC.price[k] - 1); }
-            if (button(296, yy + 4, 14, 12, "+")) { if (k < 0) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5); else MC.price[k] = (int16_t)std::min(300, MC.price[k] + 1); }
-            drawTextPx(fmt("%d", ref), 330, yy + 5, 10, C_DIM);
+            drawTextPx(k < 0 ? std::string("Maillot officiel") : std::string(merchName(k)), 44, yy + 2, 10, locked ? C_DIM : sel ? C_HI : C_TXT);
+            if (locked) { drawTextPx(fmt("boutique niveau %d requis", merchMinShop(k)), 250, yy + 2, 10, C_BAD); continue; }
+            drawTextPx(fmt("%d EUR", price), 250, yy + 2, 10, price > ref * 1.3f ? C_BAD : price < ref * 0.8f ? C_HI : C_TXT);
+            if (button(208, yy + 1, 14, 12, "-")) { if (k < 0) S.shirtPrice = (int16_t)std::max(5, S.shirtPrice - 5); else MC.price[k] = (int16_t)std::max(1, MC.price[k] - 1); }
+            if (button(296, yy + 1, 14, 12, "+")) { if (k < 0) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5); else MC.price[k] = (int16_t)std::min(300, MC.price[k] + 1); }
+            drawTextPx(fmt("%d", ref), 330, yy + 2, 10, C_DIM);
             int units = k < 0 ? MC.shirtUnits : MC.units[k];
             int64_t rev = k < 0 ? MC.shirtRevenue : MC.revenue[k];
-            drawTextPx(fmt("%d", units), 380, yy + 5, 10, C_TXT);
-            drawTextPx(money(rev / 1000), 450, yy + 5, 10, rev >= 0 ? C_GOOD : C_BAD);
+            drawTextPx(fmt("%d", units), 380, yy + 2, 10, C_TXT);
+            drawTextPx(money(rev / 1000), 450, yy + 2, 10, rev >= 0 ? C_GOOD : C_BAD);
             bool on = k < 0 ? true : MC.on[k] != 0;
-            if (k >= 0) { if (button(VW - 80, yy + 3, 56, 14, on ? "OUI" : "NON", on)) MC.on[k] = !MC.on[k]; }
-            else drawTextPx("toujours", VW - 76, yy + 5, 10, C_DIM);
+            if (k >= 0) { if (button(VW - 80, yy, 56, 13, on ? "OUI" : "NON", on)) MC.on[k] = !MC.on[k]; }
+            else drawTextPx("toujours", VW - 76, yy + 2, 10, C_DIM);
         }
         if (g_stSel >= 0) {
             int k = g_stSel - 1;
@@ -403,7 +409,7 @@ static void screenStadium() {
             if (IN.right) { if (k < 0) S.shirtPrice = (int16_t)std::min(250, S.shirtPrice + 5); else MC.price[k] = (int16_t)std::min(300, MC.price[k] + 1); }
             if (IN.ok && k >= 0) MC.on[k] = !MC.on[k];
         }
-        y += nrow * 21 + 2;
+        y += nrow * 15 + 2;
         drawTextPx("Au-dessus du prix de référence : moins de ventes. Supporters, victoires et vente en ligne les font grimper.", 14, y, 10, C_DIM);
         drawFooter("Haut/Bas : produit   Gauche/Droite : prix   OK : mettre en vente   LB/RB : onglet   Retour");
     } else if (g_stTab == 3) {

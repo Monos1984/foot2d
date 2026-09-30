@@ -285,6 +285,12 @@ static const struct { const char* name; int ref[3]; float rate; int minShop; } M
     { "Poster et calendrier", { 10, 8, 6 },   0.010f, 0 },
     { "Survêtement",          { 80, 50, 35 }, 0.003f, 3 },
     { "Peluche mascotte",     { 20, 15, 12 }, 0.006f, 2 },
+    { "Maillot extérieur",    { 85, 50, 32 }, 0.004f, 2 },
+    { "Troisième maillot",    { 90, 55, 35 }, 0.003f, 3 },
+    { "Gourde et sac",        { 25, 18, 14 }, 0.008f, 1 },
+    { "Coque de téléphone",   { 20, 15, 12 }, 0.009f, 2 },
+    { "Livre du centenaire",  { 35, 28, 22 }, 0.003f, 3 },
+    { "Figurine rétro 16 bits",{ 30, 25, 20 }, 0.004f, 4 },
 };
 const char* merchName(int k) { return k >= 0 && k < NUM_MERCH ? MERCH[k].name : "?"; }
 int merchRefPrice(int k, int status) { return k >= 0 && k < NUM_MERCH ? MERCH[k].ref[std::max(0, std::min(2, status))] : 10; }
