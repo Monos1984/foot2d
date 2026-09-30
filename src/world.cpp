@@ -211,6 +211,9 @@ static void addSmallLeagueClubs(World& w) {
         auto& lst = w.countryClubs[L.code];
         int nat = w.nationIndex(L.code);
         if (nat < 0 || lst.size() >= 7) continue;
+        bool real = false;      // championnat réel disponible (section 10) : pas de clubs génériques
+        for (int l = 0; l < NUM_EXT_LEAGUES; l++) if (!strcmp(EXT_LEAGUES[l].country, L.code) && EXT_LEAGUES[l].tier == 1) real = true;
+        if (real) continue;
         float lo = 60; for (int t : lst) lo = std::min(lo, w.teams[t].rating);
         if (lst.empty()) lo = 45;
         std::set<std::string> have; for (int t : lst) have.insert(w.teams[t].name);
@@ -291,6 +294,33 @@ void World::build() {
         worldPool.push_back(id);
         countryClubs[d.dept].push_back(id);
     }
+    // championnats complémentaires (section 10) : un club déjà créé (clubs européens / sud-américains) est repris
+    {
+        std::map<std::string, int> byName;
+        for (int i = firstClub; i < (int)teams.size(); i++) byName.emplace(teams[i].name, i);
+        extLeagueClubs.assign(NUM_EXT_LEAGUES, {});
+        for (int l = 0; l < NUM_EXT_LEAGUES; l++) {
+            const ExtLeagueDef& L = EXT_LEAGUES[l];
+            int nat = nationIndex(L.country);
+            for (auto& cs : splitOn(L.clubs, ';')) {
+                auto f = splitOn(cs.c_str(), '|');
+                if (f.size() < 5 || f[0].empty()) continue;
+                std::string nm = sanitize(f[0].c_str());
+                auto it = byName.find(nm);
+                if (it != byName.end()) { extLeagueClubs[l].push_back(it->second); continue; }
+                ClubDef d{};
+                d.name = f[0].c_str(); d.shortName = f[1].c_str(); d.rating = atoi(f[2].c_str());
+                unsigned c1 = (unsigned)strtoul(f[3].c_str(), nullptr, 16), c2 = (unsigned)strtoul(f[4].c_str(), nullptr, 16);
+                d.shirt = c1; d.shirt2 = c2; d.shorts = c1 == 0xFFFFFF ? c2 : (hashStr(nm) % 3 == 0 ? c1 : c2 == 0xFFFFFF ? 0xFFFFFF : c1);
+                d.pattern = (int)(hashStr(nm + "p") % 5 == 0 ? KP_VSTRIPES : KP_PLAIN);
+                d.dept = ""; d.stadium = f.size() > 5 ? f[5].c_str() : ""; d.dbKey = "";
+                int id = makeClubFromDef(*this, d, nat, nat >= 0 ? NATIONS[nat].culture : CU_EN);
+                if (f.size() <= 5) teams[id].stadium = "Stade " + nm;
+                byName.emplace(nm, id);
+                extLeagueClubs[l].push_back(id);
+            }
+        }
+    }
     // représentants d'outre-mer en Coupe de France (hors championnats simulés)
     {
         struct OM { const char* name; const char* sh; const char* st; unsigned c1, c2; float r; };
@@ -299,6 +329,9 @@ void World::build() {
                                    { "AS Saint-Pierraise", "ASSP", "Stade John-Girardin", 0x00843D, 0xFFFFFF, 26 } };
         int fra = nationIndex("FRA");
         for (int i = 0; i < 3; i++) {
+            int ex = -1;        // déjà créé par un championnat réel (Nouvelle-Calédonie, Tahiti)
+            for (int k = firstClub; k < (int)teams.size(); k++) if (teams[k].name == sanitize(oms[i].name)) ex = k;
+            if (ex >= 0) { omReps[i] = ex; continue; }
             Team t; t.name = sanitize(oms[i].name); t.shortName = oms[i].sh; t.stadium = sanitize(oms[i].st); t.kind = TK_CLUB; t.nation = fra;
             t.rating = oms[i].r; t.culture = CU_FR; t.seed = hashStr(t.name) ^ 0x5151;
             makeKits(t, oms[i].c1, oms[i].c2, oms[i].c2, 0);

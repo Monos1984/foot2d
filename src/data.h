@@ -77,6 +77,11 @@ extern const NationDef NATIONS[];
 extern const int NUM_NATIONS;
 extern const LeagueDef LEAGUES[];
 extern const int NUM_LEAGUES;
+// championnats complémentaires du monde (data_world_leagues.cpp) : clubs "Nom|ABR|note|c1|c2|stade;..."
+struct ExtLeagueDef { const char* id; const char* name; const char* country; int tier; int down; const char* clubs; };
+extern const ExtLeagueDef EXT_LEAGUES[];
+extern const int NUM_EXT_LEAGUES;
+const char* extCupName(const char* country);
 extern const ClubDef EURO_POOL[];
 extern const int NUM_EURO_POOL;
 extern const ClubDef WORLD_POOL[];

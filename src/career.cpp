@@ -546,7 +546,16 @@ static const char* cupNameFor(const std::string& c) {
     if (c == "POL") return "Coupe de Pologne";
     if (c == "ROU") return "Coupe de Roumanie";
     if (c == "IRL") return "FAI Cup";
-    return "Coupe nationale";
+    if (const char* e = extCupName(c.c_str())) return e;
+    static std::map<std::string, std::string> gen;     // coupe créée automatiquement
+    auto it = gen.find(c);
+    if (it == gen.end()) {
+        int n = g_world.nationIndex(c.c_str());
+        std::string nm = n >= 0 ? sanitize(NATIONS[n].name) : c;
+        bool vowel = !nm.empty() && strchr("AEIOUÉÎaeiou", nm[0]);
+        it = gen.emplace(c, (vowel ? "Coupe d'" : "Coupe de ") + nm).first;
+    }
+    return it->second.c_str();
 }
 static const char* superNameFor(const std::string& c) {
     if (c == "FRA") return "Trophée des Champions";
@@ -847,12 +856,13 @@ void Career::startSeason() {
             }
         }
     }
-    // ---------------- coupes nationales étrangères (clubs européens)
+    // ---------------- coupes nationales étrangères : chaque pays doté d'un championnat a sa coupe (nom réel ou « Coupe de <pays> »)
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) {
         Pyramid& P = pyramids[p];
-        if (P.dom >= 0 || P.country == "FRA" || !isEuropean(P.country)) continue;
+        if (P.dom >= 0 || P.country == "FRA" || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
         std::vector<int> t;
-        for (auto& pl : P.pools) for (int x : pl.clubs) if (g_world.teams[x].parent < 0) t.push_back(x);
+        for (auto& pl : P.pools) for (int x : pl.clubs) if (g_world.teams[x].parent < 0 && !g_world.teams[x].youth) t.push_back(x);
+        if (t.size() < 4) continue;
         Competition c;
         c.name = cupNameFor(P.country); c.shortName = c.name; c.kind = 2; c.tag = p;
         simpleCup(c, t, 6, 39);
@@ -2893,7 +2903,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 20;
+static const unsigned SAVE_VERSION = 21;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -3007,7 +3017,7 @@ bool Career::load(const char* path) {
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
-    if (magic != SAVE_MAGIC || ver < 20 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
+    if (magic != SAVE_MAGIC || ver < 21 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }

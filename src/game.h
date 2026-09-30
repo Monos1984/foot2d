@@ -197,6 +197,7 @@ struct World {
     int firstClub = 0;
     int baseCount = 0;                  // nombre d'équipes générées automatiquement (hors éditeur)
     std::vector<int> leagueClubs[64];
+    std::vector<std::vector<int>> extLeagueClubs;   // clubs des championnats complémentaires (EXT_LEAGUES)
     std::vector<int> euroPool;          // clubs UEFA hors championnats simulés
     std::vector<int> worldPool;         // autres clubs du monde
     std::map<std::string, std::vector<int>> countryClubs; // clubs par pays (hors championnats simulés)

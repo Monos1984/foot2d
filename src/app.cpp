@@ -278,7 +278,7 @@ static std::string dateOf(double t, int year) {
 
 // ------------------------------------------------------------------ navigation / choix d'équipes
 enum NodeKind { K_ROOT, K_NATROOT, K_CONF, K_CLUBROOT, K_PYR, K_TIER, K_TIERREG, K_POOL, K_GROUP, K_EUROPOOL, K_DOMROOT, K_TEAM, K_DONE,
-                K_INTLLIST, K_COMP, K_WORLDPOOL, K_CREATE, K_EUROCOUNTRY, K_COACHCAT };
+                K_INTLLIST, K_COMP, K_WORLDPOOL, K_CREATE, K_EUROCOUNTRY, K_COACHCAT, K_CLUBCONF };
 enum PickMode { PM_FRIENDLY_HOME, PM_FRIENDLY_AWAY, PM_CAREER, PM_INTL, PM_BROWSE, PM_CUSTOM, PM_EDIT, PM_FICHE, PM_INVITE, PM_TRAIN };
 static int g_trainTeam = -1;
 static int g_intlFormat = 0;
@@ -362,7 +362,16 @@ static std::vector<Item> buildItems(const Node& n) {
         for (int i = 0; i < (int)P.size(); i++) if (P[i].country == "FRA" && P[i].dom < 0) fr = i;
         if (fr >= 0) { Item x{ "France (pyramide complète)", "", K_PYR }; x.a = fr; it.push_back(x); }
         if (g_pickMode != PM_CAREER)   // la carrière est réservée au football français
-            for (int i = 0; i < (int)P.size(); i++) if (P[i].country != "FRA") { Item x{ P[i].name, "", K_PYR }; x.a = i; it.push_back(x); }
+        {
+            static const char* CFN[NUM_CONFEDS] = { "Europe (UEFA)", "Amérique du Sud (CONMEBOL)", "Amérique du Nord et centrale (CONCACAF)", "Afrique (CAF)", "Asie (AFC)", "Océanie (OFC)" };
+            int cnt[NUM_CONFEDS] = {};
+            for (int i = 0; i < (int)P.size(); i++) if (P[i].country != "FRA" && P[i].dom < 0) {
+                int nat = g_world.nationIndex(P[i].country.c_str());
+                if (nat >= 0) cnt[NATIONS[nat].conf]++;
+                else { Item x{ P[i].name, "", K_PYR }; x.a = i; it.push_back(x); }     // pyramides de jeunes
+            }
+            for (int c = 0; c < NUM_CONFEDS; c++) if (cnt[c]) { Item x{ CFN[c], fmt("%d championnats", cnt[c]), K_CLUBCONF }; x.a = c; it.push_back(x); }
+        }
         it.push_back({ "France - Outre-mer", "", K_DOMROOT });
         if (g_pickMode != PM_CAREER && g_pickMode != PM_BROWSE) {
             it.push_back({ "Autres clubs européens (par pays)", "", K_EUROPOOL });
@@ -372,6 +381,15 @@ static std::vector<Item> buildItems(const Node& n) {
             std::vector<int> cust; for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].custom) cust.push_back(i);
             if (!cust.empty()) { Item x{ "Clubs créés avec l'éditeur", fmt("%d", (int)cust.size()), K_COMP }; it.push_back(x); }
         }
+        break;
+    }
+    case K_CLUBCONF: {
+        for (int i = 0; i < (int)P.size(); i++) if (P[i].country != "FRA" && P[i].dom < 0) {
+            int nat = g_world.nationIndex(P[i].country.c_str());
+            if (nat < 0 || NATIONS[nat].conf != n.a) continue;
+            Item x{ P[i].name, P[i].tiers.empty() ? std::string() : fitText(P[i].tiers[0].name, 200, 10) + (P[i].tiers.size() > 1 ? fmt(" (+%d)", (int)P[i].tiers.size() - 1) : std::string()), K_PYR }; x.a = i; it.push_back(x);
+        }
+        std::stable_sort(it.begin(), it.end(), [](const Item& a, const Item& b) { return sortKey(a.label) < sortKey(b.label); });
         break;
     }
     case K_COMP: { std::vector<int> cust; for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].custom) cust.push_back(i); clubsOf(cust); break; }
@@ -2236,6 +2254,7 @@ static void screenComps() {
         if (g_compsCat == 2) { static const int M[4] = { 2, 5, 6, 7 }; L = M[g_compsSub & 3]; cupsOnly = true; }
         std::vector<int> v;
         int frp = -1; for (int i = 0; i < (int)g_career.pyramids.size(); i++) if (g_career.pyramids[i].country == "FRA" && g_career.pyramids[i].dom < 0) frp = i;
+        std::map<int, std::string> cpre;      // préfixe (pays) des compétitions listées
         switch (L) {
         case 0: for (int c : mine) v.push_back(c); break;
         case 1:
@@ -2250,16 +2269,43 @@ static void screenComps() {
             if (g_career.cdfNational < 0) for (int c : g_career.cdfRegional) v.push_back(c);
             break;
         case 3: v = { g_career.ucl, g_career.uel, g_career.uecl, g_career.intertoto, g_career.uefaSuper, g_career.youthPrelim, g_career.youthUcl }; break;
-        case 4:
+        case 4: {
+            // championnats étrangers par confédération, puis par pays (toutes divisions, coupe et supercoupe)
+            static const char* CF[NUM_CONFEDS] = { "UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC" };
+            static int cfSel = 0, cfCountry = 0;
+            int cw = (VW - 40) / NUM_CONFEDS;
+            DrawRectangle(10, y - 2, VW - 20, 18, Color{ 16, 26, 52, 255 });
+            for (int i = 0; i < NUM_CONFEDS; i++) if (button(20 + i * cw, y, cw - 4, 14, CF[i], cfSel == i)) { cfSel = i; cfCountry = 0; g_compsLW = ListW(); }
+            y += 18;
+            std::vector<int> pys;
             for (int p = 0; p < (int)g_career.pyramids.size(); p++) {
                 const Pyramid& P = g_career.pyramids[p];
-                if (P.country == "FRA" || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
-                for (auto& pl : P.pools) if (pl.tier <= 1) for (int c : pl.comps) v.push_back(c);
+                if (P.dom >= 0 || P.country == "FRA" || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
+                int n = g_world.nationIndex(P.country.c_str());
+                if (n < 0 || NATIONS[n].conf != cfSel) continue;
+                pys.push_back(p);
             }
-            for (int c : g_career.nationalCups) v.push_back(c);
-            for (int c : g_career.superCups) if (S.comps[c].tag != frp) v.push_back(c);
-            for (int c = 0; c < (int)S.comps.size(); c++) if (S.comps[c].kind == 10 && S.comps[c].tag / 100 != frp) v.push_back(c);
+            std::stable_sort(pys.begin(), pys.end(), [](int a, int b) { return sortKey(g_career.pyramids[a].name) < sortKey(g_career.pyramids[b].name); });
+            int nOpt = (int)pys.size() + 1;          // 0 : toutes les premières divisions de la confédération
+            if (cfCountry >= nOpt) cfCountry = 0;
+            int nw = 300, nx = VW / 2 - nw / 2;
+            if (button(nx - 26, y, 22, 14, "<", false) || IN.left) cfCountry = (cfCountry + nOpt - 1) % nOpt, g_compsLW = ListW();
+            if (button(nx + nw + 4, y, 22, 14, ">", false) || IN.right) cfCountry = (cfCountry + 1) % nOpt, g_compsLW = ListW();
+            DrawRectangle(nx, y, nw, 14, C_ITEM);
+            drawTextCentered(cfCountry == 0 ? fmt("%s : toutes les premières divisions (%d pays)", CF[cfSel], (int)pys.size()) : g_career.pyramids[pys[cfCountry - 1]].name,
+                             VW / 2, y + 2, 10, C_HI, false);
+            y += 18;
+            for (int k = 0; k < (int)pys.size(); k++) {
+                if (cfCountry && k != cfCountry - 1) continue;
+                int p = pys[k];
+                for (auto& pl : g_career.pyramids[p].pools) if (pl.tier == 0 || cfCountry) for (int c : pl.comps) { v.push_back(c); if (!cfCountry) cpre[c] = g_career.pyramids[p].name + " - "; }
+                if (!cfCountry) continue;
+                for (int c : g_career.nationalCups) if (S.comps[c].tag == p) v.push_back(c);
+                for (int c : g_career.superCups) if (S.comps[c].tag == p) v.push_back(c);
+                for (int c = 0; c < (int)S.comps.size(); c++) if (S.comps[c].kind == 10 && S.comps[c].tag / 100 == p) v.push_back(c);
+            }
             break;
+        }
         case 5: case 6: {
             // sélecteur de ligue régionale / district (par défaut : celui du club)
             const int NMR = 13;
@@ -2350,7 +2396,7 @@ static void screenComps() {
             }
         }
         if (L == 8) items.push_back({ "Parcourir tous les championnats (France : national, régional, départemental... et étranger)", -1, 1 });
-        for (int c : v) if (c >= 0) items.push_back({ (mine.count(c) ? "* " : "") + S.comps[c].name, c, 0 });
+        for (int c : v) if (c >= 0) items.push_back({ (mine.count(c) ? "* " : "") + (cpre.count(c) ? cpre[c] : std::string()) + S.comps[c].name, c, 0 });
     } else {
         for (int c : mine) items.push_back({ "* " + S.comps[c].name, c, 0 });
         for (int c = 0; c < (int)S.comps.size(); c++) if (!mine.count(c)) items.push_back({ S.comps[c].name, c, 0 });
@@ -3896,7 +3942,7 @@ void appTestStart(const char* mode) {
         int p, q, gg; g_career.tierOfTeam(user, &p, &q, &gg);
         openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2;
     }
-    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "compsfr" || m == "table1" || m == "market" || m == "market4" || m == "market5" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
+    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "compsfr" || m == "compsworld" || m == "table1" || m == "market" || m == "market4" || m == "market5" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
         int user = -1;
         for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Lavallois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true;
@@ -3912,6 +3958,7 @@ void appTestStart(const char* mode) {
         if (m == "scorers") { openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2; }
         if (m == "market" || m == "nego") openMarket();
         if (m == "compsfr") { g_screen = SC_COMPS; g_compsCat = 1; g_compsSub = 0; }
+        if (m == "compsworld") { g_screen = SC_COMPS; g_compsCat = 4; }
         if (m == "table1") { int p, q, g; for (int i = 0; i < (int)g_career.pyramids.size(); i++) if (g_career.pyramids[i].country == "FRA" && g_career.pyramids[i].dom < 0) { int qq = g_career.pyramids[i].poolIndex(0, 0); openCompView(g_career.pyramids[i].pools[qq].comps[0], 0, 0); g_cvMode = 0; } (void)p; (void)q; (void)g; }
         if (m == "market4" || m == "market5") { openMarket(); g_mkTab = m == "market4" ? 3 : 4; std::string e; g_career.loanIn(g_world.teams[g_world.nationIndex("FRA")].squad.empty() ? -1 : -1, e); }
         if (m == "nego" && !g_mkList.empty()) { MkRow r = g_mkList[0]; g_nego = Nego(); g_nego.active = true; g_nego.team = r.team; g_nego.pid = r.pid; g_nego.ask = askingPrice(r.team, r.idx); g_nego.fee = g_nego.ask * 8 / 10; g_nego.demand = wageDemand(g_world.teams[r.team].squad[r.idx], g_career.userTeam); g_nego.wage = g_nego.demand; g_nego.last = "Test : refus du club"; }

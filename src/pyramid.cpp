@@ -484,16 +484,16 @@ static void buildForeign(World& w) {
         { "ESP", { { "ESP1", 3, 0, 0, TB_H2H }, { "ESP2", 0, 2, 2, TB_H2H }, {}, {} } },
         { "ITA", { { "ITA1", 3, 0, 0, TB_H2H }, { "ITA2", 0, 2, 2, TB_H2H }, {}, {} } },
         { "GER", { { "GER1", 2, 0, 0, TB_GD }, { "GER2", 2, 2, 1, TB_GD }, { "GER3", 0, 2, 1, TB_GD }, {} } },
-        { "POR", { { "POR1", 0, 0, 0, TB_H2H }, {}, {}, {} } }, { "NED", { { "NED1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "BEL", { { "BEL1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "SCO", { { "SCO1", 0, 0, 0, TB_ENG }, {}, {}, {} } },
-        { "TUR", { { "TUR1", 0, 0, 0, TB_H2H }, {}, {}, {} } }, { "AUT", { { "AUT1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "SUI", { { "SUI1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "DEN", { { "DEN1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "NOR", { { "NOR1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "SWE", { { "SWE1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "POL", { { "POL1", 0, 0, 0, TB_H2H }, {}, {}, {} } }, { "ROU", { { "ROU1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
+        { "POR", { { "POR1", 2, 0, 0, TB_H2H }, {}, {}, {} } }, { "NED", { { "NED1", 2, 0, 0, TB_GD }, {}, {}, {} } },
+        { "BEL", { { "BEL1", 2, 0, 0, TB_GD }, {}, {}, {} } }, { "SCO", { { "SCO1", 1, 0, 0, TB_ENG }, {}, {}, {} } },
+        { "TUR", { { "TUR1", 3, 0, 0, TB_H2H }, {}, {}, {} } }, { "AUT", { { "AUT1", 1, 0, 0, TB_GD }, {}, {}, {} } },
+        { "SUI", { { "SUI1", 1, 0, 0, TB_GD }, {}, {}, {} } }, { "DEN", { { "DEN1", 2, 0, 0, TB_GD }, {}, {}, {} } },
+        { "NOR", { { "NOR1", 2, 0, 0, TB_GD }, {}, {}, {} } }, { "SWE", { { "SWE1", 2, 0, 0, TB_GD }, {}, {}, {} } },
+        { "POL", { { "POL1", 3, 0, 0, TB_H2H }, {}, {}, {} } }, { "ROU", { { "ROU1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
         { "IRL", { { "IRL1", 0, 0, 0, TB_GD }, {}, {}, {} } },
         { "USA", { { "USA1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "ARG", { { "ARG1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "BRA", { { "BRA1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "KSA", { { "KSA1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
-        { "KOR", { { "KOR1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "CHN", { { "CHN1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
+        { "BRA", { { "BRA1", 4, 0, 0, TB_GD }, {}, {}, {} } }, { "KSA", { { "KSA1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
+        { "KOR", { { "KOR1", 1, 0, 0, TB_GD }, {}, {}, {} } }, { "CHN", { { "CHN1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
         { "AUS", { { "AUS1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "IND", { { "IND1", 0, 0, 0, TB_GD }, {}, {}, {} } },
     };
     for (auto& d : DEFS) {
@@ -514,9 +514,45 @@ static void buildForeign(World& w) {
             for (int c : p.clubs) w.teams[c].lastTier = lvl;
             P.pools.push_back(p);
         }
-        // les barrages de l'Allemagne : 16e contre 3e
-        formGroups(P);
         g_basePyramids.push_back(P);
+    }
+    // championnats complémentaires : divisions inférieures des pays existants, puis nouveaux pays (toutes confédérations)
+    auto addTier = [&](Pyramid& P, int l) {
+        const ExtLeagueDef& L = EXT_LEAGUES[l];
+        TierConf t; t.name = sanitize(L.name); t.scope = SC_NATIONAL; t.groupsPerPool = 1;
+        t.groupSize = (int)w.extLeagueClubs[l].size(); t.down = L.down; t.tb = TB_GD;
+        int lvl = (int)P.tiers.size();
+        P.tiers.push_back(t);
+        Pool p; p.tier = lvl; p.key = 0; p.nGroups = 1; p.size = t.groupSize; p.clubs = w.extLeagueClubs[l];
+        for (int c : p.clubs) w.teams[c].lastTier = lvl;
+        P.pools.push_back(p);
+    };
+    for (int tier = 1; tier <= 4; tier++)
+        for (int l = 0; l < NUM_EXT_LEAGUES; l++) {
+            if (EXT_LEAGUES[l].tier != tier || w.extLeagueClubs[l].size() < 4) continue;
+            Pyramid* P = nullptr;
+            for (auto& B : g_basePyramids) if (B.country == EXT_LEAGUES[l].country && B.dom < 0) P = &B;
+            if (!P && tier > 1) continue;   // division inférieure sans élite connue
+            if (!P) {
+                Pyramid N; N.country = EXT_LEAGUES[l].country;
+                int nat = w.nationIndex(EXT_LEAGUES[l].country);
+                N.name = nat >= 0 ? w.teams[nat].name : N.country;
+                g_basePyramids.push_back(N);
+                P = &g_basePyramids.back();
+            }
+            if ((int)P->tiers.size() != tier - 1) continue;
+            addTier(*P, l);
+        }
+    // liaisons montée / relégation : le nombre de promus d'une division = relégués de la division supérieure
+    for (auto& P : g_basePyramids) {
+        if (P.country == "FRA" || P.dom >= 0 || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
+        for (int k = 0; k < (int)P.tiers.size(); k++) {
+            TierConf& T = P.tiers[k];
+            if (k + 1 >= (int)P.tiers.size()) T.down = 0;
+            if (k == 0) T.up = 0;
+            else if (T.up == 0 || T.up > P.tiers[k - 1].down) T.up = P.tiers[k - 1].down - (T.barrageUp == 2 && P.tiers[k - 1].down > 1 ? 1 : 0);
+        }
+        formGroups(P);
     }
 }
 
