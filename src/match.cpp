@@ -329,6 +329,8 @@ bool Match::trainingUpdate(float dt) {
 
 // avant-match : photo officielle (coupes), poignées de main, pile ou face avec le choix du coup d'envoi ou du côté
 static V2 lineSpot(int t, int s2) { return V2(PITCH_W / 2 - 13 + s2 * 2.4f, PITCH_L / 2 + (t ? 2.6f : -2.6f)); }
+// hymnes : les deux équipes côte à côte sur une seule ligne, face aux caméras (tribune principale), l'arbitre au centre
+V2 anthemSpot(int t, int s2) { return V2(PITCH_W / 2 + (t ? 1.8f + s2 * 2.2f : -1.8f - (10 - s2) * 2.2f), PITCH_L / 2 - 1.5f); }
 void Match::updateCeremony(float dt) {
     cerT += dt;
     if (msgT > 0) msgT -= dt;
@@ -339,7 +341,8 @@ void Match::updateCeremony(float dt) {
         if (anth) {   // hymnes : travelling le long de la ligne des joueurs, caméra rapprochée
             int tt = cerPhase - 10;
             float u = std::min(1.f, std::max(0.f, (cerT - 0.8f) / 8.5f));
-            f = V2(PITCH_W / 2 - 13 + u * 24.f, lineSpot(tt, 0).y * 0.5f + PITCH_L / 4);
+            float xa = anthemSpot(tt, 0).x, xb = anthemSpot(tt, 10).x;
+            f = V2(xa + u * (xb - xa), anthemSpot(tt, 0).y + 1.f);
         }
         camZoom = camZoom + ((anth ? 2.0f : 1.f) - camZoom) * std::min(1.f, dt * 1.8f);
         cam = cam + (f - cam) * std::min(1.f, dt * (anth ? 3.f : 1.5f));
@@ -375,7 +378,7 @@ void Match::updateCeremony(float dt) {
         for (int k = 0; k < 22; k++) {
             int tt = k / 11, s2 = k % 11;
             if (t < 0.6f + s2 * 0.45f) { allIn = false; continue; }
-            V2 tg = S.cupPhoto ? photoSpot(k) : lineSpot(tt, s2) + V2(tt && !S.anthems ? 30.f : 0.f, 0);
+            V2 tg = S.cupPhoto ? photoSpot(k) : S.anthems ? anthemSpot(tt, s2) : lineSpot(tt, s2) + V2(tt ? 30.f : 0.f, 0);
             V2 mid(1.5f + s2 * 0.2f, PITCH_L / 2 + (tt ? 1.f : -1.f));
             MPlayer& p = pl[k];
             bool out = p.pos.x > 0.8f;
@@ -390,8 +393,8 @@ void Match::updateCeremony(float dt) {
     }
     case 10: case 11: {   // hymnes nationaux : chaque équipe en ligne, travelling sur les joueurs
         int tt = cerPhase - 10;
-        for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], lineSpot(t2, k % 11), 3.f); pl[k].face = V2(0, t2 ? 1.f : -1.f); pl[k].state = PS_NORMAL; }
-        refPos = V2(PITCH_W / 2 - 16, PITCH_L / 2); refFace = V2(1, 0);
+        for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], anthemSpot(t2, k % 11), 3.f); pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
+        refPos = refPos + (V2(PITCH_W / 2, PITCH_L / 2 - 1.5f) - refPos) * std::min(1.f, dt * 2.f); refFace = V2(0, 1);
         if (t < dt * 1.5f) { anthemReq = tt; msg = "HYMNE NATIONAL"; msg2 = team(tt).name; msgT = 3.f; say("Les joueurs de " + team(tt).name + " entonnent leur hymne national.", 4.f, true); }
         if (t > 10.5f) { cerT = 0; if (tt == 0) cerPhase = 11; else { anthemReq = -2; cerPhase = S.cupPhoto ? 0 : 1; } }
         if (skip && t > 0.3f) toToss();

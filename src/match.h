@@ -154,6 +154,7 @@ struct MatchSetup;
 void matchKits(const MatchSetup& S, Kit kit[2]);     // 0 domicile, 1 extérieur, 2 troisième tenue
 
 
+V2 anthemSpot(int t, int s2);   // hymnes : place sur la ligne (match.cpp)
 struct Match {
     MatchSetup S;
     MPlayer pl[22];

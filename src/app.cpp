@@ -279,7 +279,7 @@ static std::string dateOf(double t, int year) {
 
 // ------------------------------------------------------------------ navigation / choix d'équipes
 enum NodeKind { K_ROOT, K_NATROOT, K_CONF, K_CLUBROOT, K_PYR, K_TIER, K_TIERREG, K_POOL, K_GROUP, K_EUROPOOL, K_DOMROOT, K_TEAM, K_DONE,
-                K_INTLLIST, K_COMP, K_WORLDPOOL, K_CREATE, K_EUROCOUNTRY, K_COACHCAT, K_CLUBCONF, K_WOMENROOT, K_WNATROOT };
+                K_INTLLIST, K_COMP, K_WORLDPOOL, K_CREATE, K_EUROCOUNTRY, K_COACHCAT, K_CLUBCONF, K_WOMENROOT, K_WNATROOT, K_MENROOT };
 enum PickMode { PM_FRIENDLY_HOME, PM_FRIENDLY_AWAY, PM_CAREER, PM_INTL, PM_BROWSE, PM_CUSTOM, PM_EDIT, PM_FICHE, PM_INVITE, PM_TRAIN };
 static int g_trainTeam = -1;
 static int g_intlFormat = 0;
@@ -366,29 +366,30 @@ static std::vector<Item> buildItems(const Node& n) {
     case K_CLUBROOT: {
         if (g_pickMode == PM_INVITE) { Item d{ fmt(">>> VALIDER (%d club%s invité%s) <<<", (int)g_inviteSel.size(), g_inviteSel.size() > 1 ? "s" : "", g_inviteSel.size() > 1 ? "s" : ""), "", K_DONE }; it.push_back(d); }
         if (g_pickMode == PM_CAREER) it.push_back({ "+ Créer mon propre club (débute en dernière division de son district)", "", K_CREATE });
-        int fr = -1;
-        for (int i = 0; i < (int)P.size(); i++) if (P[i].country == "FRA" && P[i].dom < 0) fr = i;
-        if (fr >= 0) { Item x{ "France (pyramide complète)", "", K_PYR }; x.a = fr; it.push_back(x); }
+        it.push_back({ "Football masculin", "France, puis par fédération", K_MENROOT });
         it.push_back({ "Football féminin", g_pickMode == PM_CAREER ? "carrière manager ou joueuse" : "", K_WOMENROOT });
-        if (g_pickMode != PM_CAREER)   // la carrière est réservée au football français
-        {
-            static const char* CFN[NUM_CONFEDS] = { "Europe (UEFA)", "Amérique du Sud (CONMEBOL)", "Amérique du Nord et centrale (CONCACAF)", "Afrique (CAF)", "Asie (AFC)", "Océanie (OFC)" };
-            int cnt[NUM_CONFEDS] = {};
-            for (int i = 0; i < (int)P.size(); i++) if (P[i].country != "FRA" && P[i].dom < 0) {
-                int nat = g_world.nationIndex(P[i].country.c_str());
-                if (nat >= 0) cnt[NATIONS[nat].conf]++;
-                else if (!isWomenPyramid(P[i])) { Item x{ P[i].name, "", K_PYR }; x.a = i; it.push_back(x); }     // pyramides de jeunes
-            }
-            for (int c = 0; c < NUM_CONFEDS; c++) if (cnt[c]) { Item x{ CFN[c], fmt("%d championnats", cnt[c]), K_CLUBCONF }; x.a = c; it.push_back(x); }
-        }
-        it.push_back({ "France - Outre-mer", "", K_DOMROOT });
-        if (g_pickMode != PM_CAREER && g_pickMode != PM_BROWSE) {
-            it.push_back({ "Autres clubs européens (par pays)", "", K_EUROPOOL });
-            it.push_back({ "Autres clubs du monde", "", K_WORLDPOOL });
-        }
         if (g_pickMode != PM_BROWSE) {
             std::vector<int> cust; for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].custom) cust.push_back(i);
             if (!cust.empty()) { Item x{ "Clubs créés avec l'éditeur", fmt("%d", (int)cust.size()), K_COMP }; it.push_back(x); }
+        }
+        break;
+    }
+    case K_MENROOT: {
+        int fr = -1;
+        for (int i = 0; i < (int)P.size(); i++) if (P[i].country == "FRA" && P[i].dom < 0) fr = i;
+        if (fr >= 0) { Item x{ "France (pyramide complète)", "Ligue 1 au district", K_PYR }; x.a = fr; it.push_back(x); }
+        it.push_back({ "France - Outre-mer", "", K_DOMROOT });
+        static const char* CFN[NUM_CONFEDS] = { "Europe (UEFA)", "Amérique du Sud (CONMEBOL)", "Amérique du Nord et centrale (CONCACAF)", "Afrique (CAF)", "Asie (AFC)", "Océanie (OFC)" };
+        int cnt[NUM_CONFEDS] = {};
+        for (int i = 0; i < (int)P.size(); i++) if (P[i].country != "FRA" && P[i].dom < 0) {
+            int nat = g_world.nationIndex(P[i].country.c_str());
+            if (nat >= 0) cnt[NATIONS[nat].conf]++;
+            else if (!isWomenPyramid(P[i]) && g_pickMode != PM_CAREER) { Item x{ P[i].name, "", K_PYR }; x.a = i; it.push_back(x); }     // pyramides de jeunes
+        }
+        for (int c = 0; c < NUM_CONFEDS; c++) if (cnt[c]) { Item x{ CFN[c], fmt("%d championnats", cnt[c]), K_CLUBCONF }; x.a = c; it.push_back(x); }
+        if (g_pickMode != PM_CAREER && g_pickMode != PM_BROWSE) {
+            it.push_back({ "Autres clubs européens (par pays)", "", K_EUROPOOL });
+            it.push_back({ "Autres clubs du monde", "", K_WORLDPOOL });
         }
         break;
     }
@@ -3465,95 +3466,115 @@ static void screenMain(float dt) {
     drawPlayerSprite((int)px - 40, 138, k2, 3, 0, 2, fr + 1, PS_NORMAL, false, 0, 2);
     DrawEllipse((int)px + 12, 138, 4, 1.5f, Color{ 0, 0, 0, 80 });
     DrawCircle((int)px + 12, 135, 3, WHITE);
-    std::vector<std::string> items = { "Match amical", "Compétitions internationales", "Carrière club (saisons)", "Carrière de joueur / joueuse", "Carrière de sélectionneur", "Championnat (1res divisions)", "Coupes d'Europe (C1 et C3)", "Compétition personnalisée",
-                                       "Charger une partie", "Entraînement", "Fiches des clubs", "Éditeurs (clubs, sponsors, managers)", "Options", "À propos", "Soutenir le jeu (Tipeee)", "Quitter" };
-    // familles de menus : couleur et description
-    static const int GRP[16] = { 0, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 3, 3, 3, 3 };
+    // menu principal à sous-menus : chaque entrée = (libellé, description, action, famille) ; action < 0 : ouvre le sous-menu -action
+    struct MI { const char* label; const char* desc; int act; int grp; };
+    static int sub = 0;
+    static const MI ROOT[] = {
+        { "Match amical", "Un match entre deux équipes au choix : clubs ou sélections (masculins ou féminins), stade, météo, durée, prolongation, tirs au but.", 1, 0 },
+        { "Championnat  >", "Mode foot : une saison de championnat avec plusieurs clubs contrôlés, sans gestion, et les Coupes d'Europe.", -1, 0 },
+        { "International  >", "Coupe du monde, Euro, CAN, Copa América, compétitions de jeunes et féminines, carrière de sélectionneur.", -2, 0 },
+        { "Carrière  >", "Carrière de club (jeu + manager, manager seul ou jeu seul), carrière de joueur / joueuse, carrière de sélectionneur.", -3, 1 },
+        { "Compétition personnalisée", "Créez votre tournoi : championnat, coupe ou groupes et phase finale, avec les équipes de votre choix.", 20, 0 },
+        { "Entraînement", "Tirs au but, coups francs, penalties et matchs d'entraînement pour prendre en main les commandes.", 21, 0 },
+        { "Éditeur  >", "Modifier ou créer des clubs, joueurs, sponsors et managers ; fiches complètes des clubs et sélections.", -4, 2 },
+        { "Options", "Durée des matchs, difficulté, terrain, son, musique, commentaires, clavier et manettes.", 30, 3 },
+        { "Charger une partie", "Reprendre une partie sauvegardée (emplacements et sauvegarde automatique).", 31, 2 },
+        { "À propos", "Crédits et informations sur le jeu.", 32, 3 },
+        { "Soutenir le jeu (Tipeee)", "Soutenir le développement du jeu sur Tipeee : fr.tipeee.com/le-bazar-de-monos (ouvre le navigateur).", 33, 3 },
+        { "Quitter", "Quitter Super Soccer World.", 34, 3 } };
+    static const MI SUB1[] = {
+        { "Championnat (mode foot)", "Choisissez un championnat (masculin ou féminin, toutes fédérations) : saison complète, 1 à 4 clubs contrôlés, sans gestion.", 2, 0 },
+        { "Coupes d'Europe (C1 et C3)", "Ligue des champions et Coupe UEFA (formule 2003) ou C1, Ligue Europa et Ligue Conférence (nouvelle formule).", 3, 0 },
+        { "< Retour", "Revenir au menu principal.", 0, 3 } };
+    static const MI SUB2[] = {
+        { "Compétitions internationales", "Coupe du monde, Euro, CAN, Copa América, Gold Cup... ; Espoirs, U19, U17, tournois olympiques ; Euro et Coupe du monde féminins.", 4, 0 },
+        { "Carrière de sélectionneur", "Dirigez une sélection (A, Espoirs, U19 ou U17) : convocations, Ligue des nations, qualifications, phases finales.", 5, 1 },
+        { "< Retour", "Revenir au menu principal.", 0, 3 } };
+    static const MI SUB3[] = {
+        { "Carrière club : JEU + MANAGER", "Vous gérez le club (effectif, mercato, finances, stade) et vous jouez les matchs. Championnats masculins et féminins du monde entier.", 6, 1 },
+        { "Carrière club : MANAGER", "Vous gérez le club, les matchs se déroulent sans vous (temps forts). Idéal pour enchaîner les saisons.", 7, 1 },
+        { "Carrière club : JEU", "Vous jouez les matchs de votre club saison après saison, sans la gestion.", 8, 1 },
+        { "Carrière de joueur / joueuse", "Créez votre joueur ou joueuse, choisissez un club et vivez sa carrière : temps de jeu, salaire, vie privée, paris...", 9, 1 },
+        { "Carrière de sélectionneur", "Dirigez une sélection (A, Espoirs, U19 ou U17) : convocations, Ligue des nations, qualifications, phases finales.", 5, 1 },
+        { "< Retour", "Revenir au menu principal.", 0, 3 } };
+    static const MI SUB4[] = {
+        { "Éditeurs (clubs, joueurs, sponsors, managers)", "Modifier ou créer des clubs, des joueurs et joueuses, des sponsors et des managers.", 10, 2 },
+        { "Fiches des clubs et sélections", "Fiches complètes des clubs et sélections : effectifs, stades, palmarès, archives.", 11, 2 },
+        { "< Retour", "Revenir au menu principal.", 0, 3 } };
+    const MI* M = sub == 1 ? SUB1 : sub == 2 ? SUB2 : sub == 3 ? SUB3 : sub == 4 ? SUB4 : ROOT;
+    int NM = sub == 1 ? 3 : sub == 2 ? 3 : sub == 3 ? 6 : sub == 4 ? 3 : 12;
     static const Color GC[4] = { { 60, 190, 90, 255 }, { 240, 190, 50, 255 }, { 80, 150, 240, 255 }, { 150, 160, 180, 255 } };
-    static const char* GN[4] = { "JOUER", "CARRIÈRES", "CLUBS ET DONNÉES", "SYSTÈME" };
-    static const char* DESC[16] = {
-        "Un match entre deux équipes au choix : clubs ou sélections, stade, météo, durée, prolongation, tirs au but.",
-        "Coupe du monde, Euro, CAN, Copa América... et les compétitions de jeunes : Euro Espoirs, U19, U17, tournoi olympique.",
-        "Prenez un club français, de la Ligue 1 au district, et menez-le saison après saison : gestion, mercato, stade.",
-        "Créez votre joueur ou joueuse, choisissez un club et vivez sa carrière : temps de jeu, salaire, vie privée, paris...",
-        "Dirigez une sélection (A, Espoirs, U19 ou U17) : convocations, Ligue des nations, qualifications, phases finales.",
-        "Les premières divisions : jusqu'à 4 clubs contrôlés, championnat, coupes nationales et coupes d'Europe.",
-        "Ligue des champions et Coupe UEFA (formule 2003) ou C1, Ligue Europa et Ligue Conférence (nouvelle formule).",
-        "Créez votre tournoi : championnat, coupe ou groupes et phase finale, avec les équipes de votre choix.",
-        "Reprendre une carrière sauvegardée (emplacements et sauvegarde automatique).",
-        "Tirs au but, coups francs, penalties et matchs d'entraînement pour prendre en main les commandes.",
-        "Fiches complètes des clubs et sélections : effectifs, stades, palmarès, archives.",
-        "Modifier ou créer des clubs, des joueurs, des sponsors et des managers.",
-        "Durée des matchs, difficulté, terrain, son, musique, commentaires, clavier et manettes.",
-        "Crédits et informations sur le jeu.",
-        "Soutenir le développement du jeu sur Tipeee : fr.tipeee.com/le-bazar-de-monos (ouvre le navigateur).",
-        "Quitter Super Soccer World." };
-    int mx = 34, mw = 300, my = 136, rh = 12;
-    DrawRectangle(mx - 6, my - 6, mw + 12, rh * 16 + 12, Color{ 6, 12, 28, 190 });
-    DrawRectangleLines(mx - 6, my - 6, mw + 12, rh * 16 + 12, Color{ 240, 200, 60, 180 });
-    int s = listRun(g_mainLW, (int)items.size(), mx, my, mw, (int)items.size(), rh, [&](int i, int x, int y, bool sel) {
-        Color gc = GC[GRP[i]];
-        DrawRectangle(x + 4, y + 2, 6, 7, sel ? Color{ 40, 30, 10, 255 } : gc);
-        drawTextPx(items[i], x + 16, y + 1, 10, sel ? BLACK : C_TXT);
-        if (i == 0 || GRP[i] != GRP[i - 1]) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 2, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ gc.r, gc.g, gc.b, 170 }); }
+    static const char* GN[4] = { "JOUER", "CARRIÈRES", "DONNÉES", "SYSTÈME" };
+    static const char* SUBN[5] = { "MENU PRINCIPAL", "CHAMPIONNAT", "INTERNATIONAL", "CARRIÈRE", "ÉDITEUR" };
+    int mx = 34, mw = 300, my = 136, rh = 16;
+    int boxH = 12 * rh + 12;
+    DrawRectangle(mx - 6, my - 18, mw + 12, boxH + 12, Color{ 6, 12, 28, 190 });
+    DrawRectangleLines(mx - 6, my - 18, mw + 12, boxH + 12, Color{ 240, 200, 60, 180 });
+    drawTextPx(SUBN[sub], mx, my - 14, 10, C_HI);
+    int s = listRun(g_mainLW, NM, mx, my, mw, NM, rh, [&](int i, int x, int y, bool sel) {
+        Color gc = GC[M[i].grp];
+        DrawRectangle(x + 4, y + 4, 6, 7, sel ? Color{ 40, 30, 10, 255 } : gc);
+        drawTextPx(M[i].label, x + 16, y + 3, 10, sel ? BLACK : C_TXT);
     });
     {   // panneau d'information sur l'entrée sélectionnée
-        int cur = std::max(0, std::min(15, g_mainLW.cur));
-        int px = mx + mw + 22, pw = VW - px - 20, py = my - 6, ph = rh * 16 + 12;
-        Color gc = GC[GRP[cur]];
+        int cur = std::max(0, std::min(NM - 1, g_mainLW.cur));
+        int px = mx + mw + 22, pw = VW - px - 20, py = my - 18, ph = boxH + 12;
+        Color gc = GC[M[cur].grp];
         DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
         DrawRectangle(px, py, pw, 16, Color{ gc.r, gc.g, gc.b, 230 });
-        drawTextPx(GN[GRP[cur]], px + 6, py + 3, 10, BLACK);
+        drawTextPx(GN[M[cur].grp], px + 6, py + 3, 10, BLACK);
         DrawRectangleLines(px, py, pw, ph, gc);
-        drawTextPx(fitText(items[cur], pw - 12, 10), px + 8, py + 24, 10, C_HI);
+        drawTextPx(fitText(M[cur].label, pw - 12, 10), px + 8, py + 24, 10, C_HI);
         DrawRectangle(px + 8, py + 37, pw - 16, 1, Color{ gc.r, gc.g, gc.b, 140 });
         int yy = py + 44;
-        for (auto& l : wrapText(DESC[cur], pw - 18)) { drawTextPx(l, px + 8, yy, 10, C_TXT); yy += 12; }
-        // petit ballon qui rebondit
+        for (auto& l : wrapText(M[cur].desc, pw - 18)) { drawTextPx(l, px + 8, yy, 10, C_TXT); yy += 12; }
         float b = std::fabs(std::sin(g_titleT * 3.f));
         int bx = px + pw / 2, by = py + ph - 18 - (int)(b * 22);
         DrawEllipse(bx, py + ph - 10, 7 - b * 3, 2, Color{ 0, 0, 0, 90 });
         DrawCircle(bx, by, 7, WHITE); DrawCircleLines(bx, by, 7, Color{ 40, 40, 40, 255 });
         DrawPoly(Vector2{ (float)bx, (float)by }, 5, 2.6f, g_titleT * 90, Color{ 30, 30, 30, 255 });
     }
-    drawFooter("Flèches / souris / manette   OK : valider   F9 : musique");
+    drawFooter(sub ? "Flèches / souris / manette   OK : valider   Retour : menu principal   F9 : musique" : "Flèches / souris / manette   OK : valider   F9 : musique");
     { std::string v = std::string("v") + GAME_VERSION + fmt(" build %d", GAME_BUILD); drawTextPx(v, VW - 8 - textWidth(v, 10), VH - 14, 10, Color{ 200, 210, 240, 200 }); }
-    if (s == 3) { g_careerActive = false; openLifeNew(); return; }
-    if (s >= 4) s--;              // entrées suivantes décalées d'un cran
-    if (s == 3) {
-        g_careerActive = false;
-        g_intlCandidates.clear();
-        for (int i = 0; i < NUM_NATIONS; i++) if (nationEligible(i)) g_intlCandidates.push_back(i);
-        g_intlSel.clear(); g_coachModePick = true; g_euroModePick = false; g_leagueModePick = false;
-        openPick(PM_INTL);
-        return;
-    }
-    switch (s) {
-    case 0:
+    if (sub && IN.back) { int from = sub; sub = 0; g_mainLW = ListW(); for (int i = 0; i < 12; i++) if (ROOT[i].act == -from) g_mainLW.cur = i; return; }
+    if (s < 0) return;
+    int act = M[s].act;
+    if (act < 0) { sub = -act; g_mainLW = ListW(); return; }
+    if (act == 0) { int from = sub; sub = 0; g_mainLW = ListW(); for (int i = 0; i < 12; i++) if (ROOT[i].act == -from) g_mainLW.cur = i; return; }
+    switch (act) {
+    case 1:
         g_careerActive = false;
         askConfirm("Type de match amical :", []() { g_frEnd = 0; openPick(PM_FRIENDLY_HOME); }, "Match complet", "Séance de tirs au but directe",
                    []() { g_frEnd = 5; openPick(PM_FRIENDLY_HOME); });
         g_confirm.backCancel = true;
         break;
-    case 1: g_screen = SC_INTL; break;
-    case 2: g_careerActive = false; openPick(PM_CAREER); break;
-    case 4: g_careerActive = false; g_lmLW = ListW(); g_screen = SC_LEAGUEMODE; break;
-    case 5: {
+    case 2: g_careerActive = false; g_lmLW = ListW(); g_screen = SC_LEAGUEMODE; break;
+    case 3: {
         g_careerActive = false;
         g_intlCandidates = Career::euroCandidates();
         g_intlSel.clear(); g_euroModePick = true; g_leagueModePick = true;
         openPick(PM_INTL);
         break;
     }
-    case 6: g_customLW = ListW(); g_screen = SC_CUSTOM; break;
-    case 7: g_slotSave = false; g_screen = SC_SLOTS; break;
-    case 8: g_careerActive = false; openPick(PM_TRAIN); break;
-    case 9: openPick(PM_FICHE); break;
+    case 4: g_screen = SC_INTL; break;
+    case 5:
+        g_careerActive = false;
+        g_intlCandidates.clear();
+        for (int i = 0; i < NUM_NATIONS; i++) if (nationEligible(i)) g_intlCandidates.push_back(i);
+        g_intlSel.clear(); g_coachModePick = true; g_euroModePick = false; g_leagueModePick = false;
+        openPick(PM_INTL);
+        break;
+    case 6: case 7: case 8: g_optMode = act == 6 ? 2 : act == 7 ? 1 : 0; g_careerActive = false; openPick(PM_CAREER); break;
+    case 9: g_careerActive = false; openLifeNew(); break;
     case 10: g_edMenuLW = ListW(); g_screen = SC_EDITMENU; break;
-    case 11: g_optBack = SC_MAIN; g_screen = SC_OPTIONS; break;
-    case 12: g_screen = SC_ABOUT; break;
-    case 13: OpenURL(TIPEEE_URL); toast("Merci pour votre soutien !"); break;
-    case 14: g_quit = true; break;
+    case 11: openPick(PM_FICHE); break;
+    case 20: g_customLW = ListW(); g_screen = SC_CUSTOM; break;
+    case 21: g_careerActive = false; openPick(PM_TRAIN); break;
+    case 30: g_optBack = SC_MAIN; g_screen = SC_OPTIONS; break;
+    case 31: g_slotSave = false; g_screen = SC_SLOTS; break;
+    case 32: g_screen = SC_ABOUT; break;
+    case 33: OpenURL(TIPEEE_URL); toast("Merci pour votre soutien !"); break;
+    case 34: g_quit = true; break;
     }
 }
 
@@ -3722,7 +3743,7 @@ void appTestStart(const char* mode) {
         if (m == "duel") g_setup.side[IN_KB1] = 0;
         launchMatch();
         Match& M = *g_match;
-        if (m == "anthem") { M.cerPhase = 10; M.cerT = 0; for (int k = 0; k < 22; k++) M.pl[k].pos = V2(PITCH_W / 2 - 13 + (k % 11) * 2.4f, PITCH_L / 2 + (k / 11 ? 2.6f : -2.6f)); return; }
+        if (m == "anthem") { M.cerPhase = 10; M.cerT = 0; for (int k = 0; k < 22; k++) M.pl[k].pos = anthemSpot(k / 11, k % 11); return; }
         M.ceremony = false; M.startPeriod(0); M.state = MS_PLAY;
         if (m == "duel") { M.fightLevel = 2; M.startFight(5, 16); M.duelHp[1] = 55; }
         if (m == "lap") { M.startPeriod(1); M.clock = 90; M.finishMatch(); g_trophyChecked = true; M.startLap(0); }

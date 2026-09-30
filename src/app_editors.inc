@@ -312,7 +312,7 @@ static void screenManagers() {
         if (ni >= 0) drawKitIcon(g_world.teams[ni].home, 476, 56, 2);
         if (g_mgTyping) {
             textEdit(g_mgField == 7 ? M.place : M.name, 40);
-            menuRun(g_mgLW, rows, 50, 400);
+            listRun(g_mgLW, (int)rows.size(), 40, 50, 400, (int)rows.size(), 18, [&](int i, int x, int y, bool sel) { drawTextPx(rows[i], x + 6, y + 4, 10, sel ? BLACK : C_TXT); }, false);
             if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || IsKeyPressed(KEY_ESCAPE)) { g_mgTyping = false; g_textMode = false; saveManagers(); }
             drawFooter("Tapez le nom   Entrée : valider");
             return;
