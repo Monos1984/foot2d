@@ -704,6 +704,7 @@ void Competition::onStageFinished() {
         return;
     }
     case FMT_TOURNAMENT: {
+        if (kind == 50 && legendStageFinished(*this, winners)) return;
         if (st.type == ST_LEAGUE && officialBracket(*this, cur, pairsTmp)) {
             cur = (int)stages.size();
             int n = (int)pairsTmp.size() * 2;

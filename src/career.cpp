@@ -3277,6 +3277,7 @@ void Career::sheetRules(int comp, int& sheet, int& subs, bool& rolling) const {
     const Competition& C = season.comps[comp];
     if (C.rollingSubs()) { sheet = 14; subs = 99; rolling = true; return; }
     if (C.kind == 12) { sheet = 18; subs = 5; return; }
+    if (C.kind == 50 && C.tag >= 0 && C.tag < NUM_LEGENDS) { legendSheet(C.tag, sheet, subs); return; }
     if (C.kind >= 40 && C.kind <= 44) { sheet = 20; subs = 5; return; }                 // football féminin : 20 joueuses, 5 remplacements
     if (C.kind == 15 || C.kind == 16 || C.kind == 19 || C.kind == 22 || C.kind == 20 || C.kind == 21) { sheet = 16; subs = 3; return; }
     if (C.kind == 1 && C.tag >= 0) {

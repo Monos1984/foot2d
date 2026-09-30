@@ -196,3 +196,27 @@ static void screenCompArch() {
     drawFooter(g_caSel >= 0 ? "Haut/Bas : défiler   Tab : affichage   Retour : liste des compétitions" : "OK : consulter   Tab : affichage   Retour");
     if (IN.back) { if (g_caSel >= 0) g_caSel = -1; else openHub(); }
 }
+
+// ---------------- légendes de la Coupe du monde : choix de l'édition
+static ListW g_lgLW;
+static void screenLegends() {
+    drawBackground("Légendes de la Coupe du monde");
+    drawTextCentered("Phases finales de 1930 à 2026 : joueurs, formule, stades et règles de l'époque (points, remplacements).", VW / 2, 32, 10, C_DIM);
+    int s = listRun(g_lgLW, NUM_LEGENDS, 20, 48, VW - 40, 22, 13, [&](int i, int x, int y, bool sel) {
+        const LegendEdition& E = LEGENDS[i];
+        drawTextPx(fmt("%d", E.year), x + 6, y + 1, 10, sel ? BLACK : C_HI);
+        drawTextPx(fitText(E.host, 170, 10), x + 46, y + 1, 10, sel ? BLACK : C_TXT);
+        drawTextPx(fitText(legendFormatName(i), 250, 10), x + 222, y + 1, 10, sel ? BLACK : C_DIM);
+        std::string r = fmt("%d pts / vict. - %s", E.ptsWin, E.subs ? fmt("%d rempl.", E.subs).c_str() : "sans rempl.");
+        drawTextPx(r, x + VW - 40 - 8 - textWidth(r, 10), y + 1, 10, sel ? BLACK : C_DIM);
+    });
+    drawFooter("OK : choisir vos sélections (1 à 4)   Retour");
+    if (IN.back) { g_screen = SC_MAIN; return; }
+    if (s < 0) return;
+    g_legendEd = s;
+    g_intlCandidates = legendTeams(s);
+    g_intlSel.clear();
+    g_euroModePick = false; g_leagueModePick = false; g_coachModePick = false;
+    openPick(PM_INTL);
+    g_stack.back().title = fmt("Coupe du monde %d : choisissez vos sélections (1 à 4)", LEGENDS[s].year);
+}

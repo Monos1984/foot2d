@@ -92,6 +92,13 @@ extern const int NUM_WOMEN_SQUADS;
 extern const WomenSquadDef WOMEN_NATIONS[];
 extern const int NUM_WOMEN_NATIONS;
 const char* womenCupName(const char* country);
+// mode « Légendes de la Coupe du monde » (data_legends.cpp)
+struct LegendEdition { int year; const char* host; const char* hostCode; int format; int ptsWin; int subs; const char* teams; const char* stadiums; const char* finalStadium; };
+struct LegendSquad { int year; const char* key; const char* players; };
+extern const LegendEdition LEGENDS[];
+extern const int NUM_LEGENDS;
+extern const LegendSquad LEGEND_SQUADS[];
+extern const int NUM_LEGEND_SQUADS;
 extern const ClubDef EURO_POOL[];
 extern const int NUM_EURO_POOL;
 extern const ClubDef WORLD_POOL[];

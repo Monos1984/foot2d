@@ -870,6 +870,14 @@ int jflMin(int team);
 void continentalStartSeason(Career& K);
 bool isContinentalKind(int k);
 int continentalWinner(const Career& K, int conf);
+// légendes de la Coupe du monde (legends.cpp)
+std::vector<int> legendTeams(int ed);
+void legendStart(Career& K, int ed, const std::vector<int>& ctrl);
+bool legendStageFinished(Competition& C, const std::vector<int>& winners);
+std::string legendVenue(int comp, int mi);
+void legendSheet(int ed, int& sheet, int& subs);
+bool legendGoldenGoal(int ed);
+const char* legendFormatName(int ed);
 bool isJfl(const Player& p, int team);
 int poolGroupCount(const Pyramid& P, const Pool& pool);
 int poolTarget(const Pyramid& P, const Pool& pool);

@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -284,6 +284,7 @@ enum PickMode { PM_FRIENDLY_HOME, PM_FRIENDLY_AWAY, PM_CAREER, PM_INTL, PM_BROWS
 static int g_trainTeam = -1;
 static int g_intlFormat = 0;
 static int seTab = 0;   // onglet du bilan de fin de saison
+static int g_legendEd = -1;              // légendes de la Coupe du monde : édition en cours de sélection
 static bool g_leagueModePick = false;   // choix des clubs du mode Championnat
 static bool g_euroModePick = false;     // choix des clubs du mode Coupes d'Europe
 static bool g_coachModePick = false;    // carrière de sélectionneur : choix de la sélection
@@ -536,6 +537,7 @@ static void screenPick() {
         else if (g_pickMode == PM_FRIENDLY_AWAY) { g_pickMode = PM_FRIENDLY_HOME; }
         else if (g_pickMode == PM_BROWSE) g_screen = SC_COMPS;
         else if (g_pickMode == PM_CAREER && g_lifePick) g_screen = SC_LIFENEW;
+        else if (g_pickMode == PM_INTL && g_legendEd >= 0) { g_screen = SC_LEGENDS; g_legendEd = -1; }
         else if (g_pickMode == PM_INTL) { g_screen = g_euroModePick || g_coachModePick ? SC_MAIN : g_leagueModePick ? SC_LEAGUEMODE : SC_INTL; g_leagueModePick = false; g_euroModePick = false; g_coachModePick = false; }
         else if (g_pickMode == PM_CUSTOM) g_screen = SC_CUSTOM;
         else if (g_pickMode == PM_EDIT) g_screen = SC_EDITMENU;
@@ -599,6 +601,15 @@ static void screenPick() {
         if (g_pickMode == PM_CUSTOM) { g_screen = SC_CUSTOM; return; }
         if (g_pickMode == PM_INVITE) { g_screen = SC_FRIENDLIES; return; }
         if (g_intlSel.empty()) { toast("Sélectionnez au moins une équipe"); return; }
+        if (g_legendEd >= 0) {
+            std::vector<int> ctrl = g_intlSel; if (ctrl.size() > 4) ctrl.resize(4);
+            int ed = g_legendEd; g_legendEd = -1;
+            legendStart(g_career, ed, ctrl);
+            g_careerActive = true; g_needAdvance = true;
+            g_hubNotice = g_career.custom.name;
+            openHub();
+            return;
+        }
         if (g_euroModePick) {
             std::vector<int> ctrl = g_intlSel; if (ctrl.size() > 4) ctrl.resize(4);
             auto go = [ctrl](int fmt) {
@@ -728,6 +739,12 @@ static void startSetup(int home, int away, bool career, int comp, int match) {
         if (cv != g_career.cupVenue.end() && !cv->second.empty()) g_setup.stadium = cv->second;
     }
     if (career && g_career.kind == CK_INTL) { std::string v = matchVenue(comp, match); if (!v.empty()) g_setup.stadium = v; }
+    if (career && g_career.kind == CK_CUSTOM && g_career.season.comps[comp].kind == 50) {       // légendes : stades de l'époque, but en or (1998, 2002)
+        std::string v = legendVenue(comp, match); if (!v.empty()) g_setup.stadium = v;
+        const Competition& LC = g_career.season.comps[comp];
+        if (LC.tag >= 0 && LC.tag < NUM_LEGENDS && legendGoldenGoal(LC.tag) && LC.matches[match].decisive) g_setup.goldenGoal = true;
+        g_setup.title = LC.name;
+    }
     if (career) { int sh, sb; bool rl; g_career.sheetRules(comp, sh, sb, rl); g_setup.benchSize = sh - 11; g_setup.maxSubs = rl ? -1 : sb; g_setup.rolling = rl; }
     ensureStadium(home);
     if (g_world.teams[home].sta.namingIncome > 0 && !g_setup.neutral) g_setup.stadium = g_world.teams[home].sta.sponsor;
@@ -2532,7 +2549,7 @@ static void buildScorers(const Competition& C, int comp) {
 // tableau d'une coupe à élimination directe (à partir des 8es de finale)
 static void drawCupBracket(const Competition& C, int y0) {
     std::vector<int> ks;
-    for (int s = 0; s < (int)C.stages.size(); s++) if (C.stages[s].type == ST_KO && !C.stages[s].ties.empty()) ks.push_back(s);
+    for (int s = 0; s < (int)C.stages.size(); s++) if (C.stages[s].type == ST_KO && !C.stages[s].ties.empty() && C.stages[s].name.find("3e place") == std::string::npos) ks.push_back(s);
     if (ks.empty()) return;
     int first = -1;
     for (int s : ks) if (C.stages[s].ties.size() <= 8) { first = s; break; }
@@ -3491,6 +3508,7 @@ static void screenMain(float dt) {
     static const MI SUB2[] = {
         { "Compétitions internationales", "Coupe du monde, Euro, CAN, Copa América, Gold Cup... ; Espoirs, U19, U17, tournois olympiques ; Euro et Coupe du monde féminins.", 4, 0 },
         { "Carrière de sélectionneur", "Dirigez une sélection (A, Espoirs, U19 ou U17) : convocations, Ligue des nations, qualifications, phases finales.", 5, 1 },
+        { "Légendes de la Coupe du monde", "Mode hors-série : rejouez les phases finales de 1930 à 2026 avec les joueurs, la formule, les stades et les règles de l'époque.", 12, 0 },
         { "< Retour", "Revenir au menu principal.", 0, 3 } };
     static const MI SUB3[] = {
         { "Carrière club : JEU + MANAGER", "Vous gérez le club (effectif, mercato, finances, stade) et vous jouez les matchs. Championnats masculins et féminins du monde entier.", 6, 1 },
@@ -3504,7 +3522,7 @@ static void screenMain(float dt) {
         { "Fiches des clubs et sélections", "Fiches complètes des clubs et sélections : effectifs, stades, palmarès, archives.", 11, 2 },
         { "< Retour", "Revenir au menu principal.", 0, 3 } };
     const MI* M = sub == 1 ? SUB1 : sub == 2 ? SUB2 : sub == 3 ? SUB3 : sub == 4 ? SUB4 : ROOT;
-    int NM = sub == 1 ? 3 : sub == 2 ? 3 : sub == 3 ? 6 : sub == 4 ? 3 : 12;
+    int NM = sub == 1 ? 3 : sub == 2 ? 4 : sub == 3 ? 6 : sub == 4 ? 3 : 12;
     static const Color GC[4] = { { 60, 190, 90, 255 }, { 240, 190, 50, 255 }, { 80, 150, 240, 255 }, { 150, 160, 180, 255 } };
     static const char* GN[4] = { "JOUER", "CARRIÈRES", "DONNÉES", "SYSTÈME" };
     static const char* SUBN[5] = { "MENU PRINCIPAL", "CHAMPIONNAT", "INTERNATIONAL", "CARRIÈRE", "ÉDITEUR" };
@@ -3570,6 +3588,7 @@ static void screenMain(float dt) {
     case 9: g_careerActive = false; openLifeNew(); break;
     case 10: g_edMenuLW = ListW(); g_screen = SC_EDITMENU; break;
     case 11: openPick(PM_FICHE); break;
+    case 12: g_screen = SC_LEGENDS; break;
     case 20: g_customLW = ListW(); g_screen = SC_CUSTOM; break;
     case 21: g_careerActive = false; openPick(PM_TRAIN); break;
     case 30: g_optBack = SC_MAIN; g_screen = SC_OPTIONS; break;
@@ -3630,6 +3649,7 @@ void appFrame(float dt) {
     case SC_LIFE: screenLife(); break;
     case SC_BRIBE: screenBribe(); break;
     case SC_SEASONSTART: screenSeasonStart(); break;
+    case SC_LEGENDS: screenLegends(); break;
     case SC_COMPARCH: screenCompArch(); break;
     case SC_MAIN: screenMain(dt); break;
     case SC_PICK: screenPick(); break;
@@ -3939,6 +3959,8 @@ void appTestStart(const char* mode) {
         if (m == "wtable") { auto& S = g_career.season; for (int k = 0; k < 400; k++) { auto pm = S.advance(true); if (pm.comp < 0) break; } int p, q, g; g_career.tierOfTeam(u, &p, &q, &g); openCompView(g_career.pyramids[p].pools[q].comps[g]); return; }
         openHub();
     }
+    else if (m == "legends") g_screen = SC_LEGENDS;
+    else if (m == "legend82") { auto t = legendTeams(12); legendStart(g_career, 12, { t[0] }); g_careerActive = true; auto& S = g_career.season; for (int k = 0; k < 20; k++) { auto pm = S.advance(true); if (pm.comp < 0) break; } openCompView(0); }
     else if (m == "about") g_screen = SC_ABOUT;
     else if (m == "sponsors") g_screen = SC_SPONSORS;
     else if (m == "managers") g_screen = SC_MANAGERS;
