@@ -1,0 +1,2 @@
+#include "../src/match.h"
+int main(){ g_world.build(); for (int k=0;k<5;k++){ Match m; MatchSetup s; s.home=g_world.nationIndex("FRA"); s.away=g_world.nationIndex("ITA"); for(int i=0;i<NUM_INPUTS;i++) s.side[i]=-1; s.pensOnly=true; s.decisive=true; s.noET=true; m.init(s); int f=0; while(!m.finished && f<60*60*20){ m.update(1.f/60); m.sfxN=0; f++; } printf("fin %d score %d-%d tab %d-%d shootout %d frames %d\n", m.finished, m.score[0], m.score[1], m.pens[0], m.pens[1], m.shootout, f);} }

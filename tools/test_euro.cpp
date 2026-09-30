@@ -19,6 +19,7 @@ int main(){
         for (int c: K.superCups) if (S.comps[c].tag==0 || S.comps[c].name.find("Troph")!=std::string::npos) dump(S.comps[c].name.c_str(), c);
         K.endSeason();
         printf("next: Q1 %zu Q2 %zu Q3 %zu GS %zu | QR %zu R1 %zu | IT %zu/%zu/%zu  honours %zu\n", E.uclQ1.size(),E.uclQ2.size(),E.uclQ3.size(),E.uclGS.size(),E.uefaQR.size(),E.uefaR1.size(),E.itR1.size(),E.itR2.size(),E.itR3.size(), K.honourLog.size());
+        { std::map<std::string,std::pair<int,int>> m; for(int t:E.uefaR1) m[g_world.teams[t].nation>=0?NATIONS[g_world.teams[t].nation].code:"?"].first++; for(int t:E.uefaQR) m[g_world.teams[t].nation>=0?NATIONS[g_world.teams[t].nation].code:"?"].second++; for(auto&x:m) printf("%s(%d) R1 %d QR %d | ",x.first.c_str(),K.uefaRank(x.first),x.second.first,x.second.second); printf("\n"); }
     }
     for (auto& h: K.honourLog) printf("  %s %d %s / %s\n", honourCompName(h.comp), h.year, h.winner>=0?g_world.teams[h.winner].name.c_str():"-", h.runner>=0?g_world.teams[h.runner].name.c_str():"-");
 }
