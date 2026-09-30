@@ -119,8 +119,9 @@ void Season::recordResult(int c, int mi) {
 }
 
 // ------------------------------------------------------------------ condition physique et moral
+static bool olympicSchedule() { return g_career.kind == CK_INTL && (g_career.intlType == IT_OLYMPICS || g_career.intlType == IT_OLY_W); }
 static float recoveryRate(int team) {
-    float r = 12.f;   // points par semaine
+    float r = olympicSchedule() ? 9.f : 12.f;   // points par semaine (JO : chaleur, voyages, un match tous les 3 jours)
     if (g_career.kind == CK_CLUB && team == g_career.userTeam) {
         r += 1.5f * g_career.staffLevel(SR_PHYSIO_PREP);
         r += g_career.mgr.trainInt == 0 ? 4.f : g_career.mgr.trainInt == 2 ? -4.f : 0.f;
@@ -151,6 +152,7 @@ void applyMatchLoad(int team, int result) {
         int mo = p.morale;
         if (started[i]) {
             float load = 11.f + (100 - p.stamina) * 0.1f + (float)(g_rng.next() % 5) + extra;
+            if (olympicSchedule()) load *= 1.3f;            // fatigue renforcée aux JO
             if (p.pos == POS_GK) load *= 0.45f;
             p.cond = (uint8_t)std::max(25, (int)(p.cond - load));
             mo += result > 0 ? 6 : result < 0 ? -5 : 1;

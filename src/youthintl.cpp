@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <cstring>
 
 int addCompPublic(Season& S, Competition c);
 std::vector<int>& intlQualifiedRef();
@@ -16,18 +17,29 @@ static const int QK_FINAL_Y = 100;
 enum { QY_U21_G = 120, QY_U21_PO, QY_Y_Q1, QY_Y_ELITE, QY_OLY_UEFA, QY_OLY_CAF, QY_OLY_AFC, QY_OLY_CSA, QY_OLY_CCF, QY_OLY_OFC };
 
 int youthCatOfType(int type) {
-    switch (type) { case IT_EURO21: return 1; case IT_EURO19: return 2; case IT_EURO17: return 3; case IT_OLYMPICS: return 4; default: return 0; }
+    switch (type) { case IT_EURO21: return 1; case IT_EURO19: return 2; case IT_EURO17: return 3; case IT_OLYMPICS: return 4;
+                    case IT_OLY_W: case IT_EURO_W: case IT_WC_W: return 5; default: return 0; }
 }
 int nationOfTeam(int team) { return team >= 0 && team < (int)g_world.teams.size() ? g_world.teams[team].nation : -1; }
 
-static const int YCODE[5] = { 0, 4, 1, 2, 5 };           // valeur de Team::youth pour chaque catégorie
-static const int YOFF[5] = { 0, 7, 12, 16, 5 };          // écart de niveau avec l'équipe A
-static const char* YSUF[5] = { "", " Espoirs", " U19", " U17", " olympique" };
-static const char* YSH[5] = { "", "-21", "-19", "-17", "-23" };
+static const int YCODE[6] = { 0, 4, 1, 2, 5, 6 };        // valeur de Team::youth pour chaque catégorie (6 : sélection féminine)
+static const int YOFF[6] = { 0, 7, 12, 16, 5, 0 };       // écart de niveau avec l'équipe A
+static const char* YSUF[6] = { "", " Espoirs", " U19", " U17", " olympique", " (F)" };
+static const char* YSH[6] = { "", "-21", "-19", "-17", "-23", "-F" };
+// niveau des sélections féminines (hiérarchie mondiale) ; les autres : d'après la sélection masculine
+static float womenRating(int nation) {
+    static const struct { const char* c; float r; } W[] = {
+        { "ESP", 88 }, { "USA", 88 }, { "ENG", 87 }, { "GER", 86 }, { "FRA", 85 }, { "SWE", 85 }, { "NED", 83 }, { "JPN", 83 }, { "CAN", 82 }, { "BRA", 82 },
+        { "PRK", 80 }, { "AUS", 80 }, { "DEN", 78 }, { "NOR", 78 }, { "ITA", 78 }, { "ISL", 76 }, { "CHN", 76 }, { "AUT", 76 }, { "KOR", 75 }, { "SUI", 75 },
+        { "BEL", 75 }, { "POR", 74 }, { "COL", 74 }, { "SCO", 73 }, { "IRL", 73 }, { "POL", 72 }, { "FIN", 72 }, { "NZL", 71 }, { "NGA", 72 }, { "MEX", 71 },
+        { "ARG", 70 }, { "WAL", 70 }, { "CZE", 70 }, { "UKR", 68 }, { "RSA", 69 }, { "ZAM", 68 }, { "MAR", 69 }, { "CRC", 67 }, { "JAM", 68 }, { "VIE", 64 } };
+    for (auto& w : W) if (strcmp(NATIONS[nation].code, w.c) == 0) return w.r;
+    return std::max(25.f, std::min(66.f, NATIONS[nation].rating * 0.8f));
+}
 
 int youthNationTeam(int nation, int cat) {
     if (nation < 0 || nation >= NUM_NATIONS) return -1;
-    if (cat <= 0 || cat > 4) return nation;
+    if (cat <= 0 || cat > 5) return nation;
     static std::map<int, int> cache;
     int key = nation * 8 + cat;
     auto it = cache.find(key);
@@ -43,7 +55,7 @@ int youthNationTeam(int nation, int cat) {
     Team t;
     t.name = A.name + YSUF[cat]; t.shortName = std::string(NATIONS[nation].code) + YSH[cat];
     t.kind = TK_NATION; t.nation = nation; t.youth = YCODE[cat];
-    t.rating = std::max(15.f, A.rating - YOFF[cat]);
+    t.rating = cat == 5 ? womenRating(nation) : std::max(15.f, A.rating - YOFF[cat]);
     t.home = A.home; t.away = A.away; t.culture = A.culture; t.stadium = A.stadium; t.town = A.town;
     t.seed = 0x9E3779B9u ^ (uint32_t)(nation * 131 + cat * 7919);
     t.squadGen = false; t.formation = A.formation;
@@ -135,8 +147,9 @@ static void createYouthFinals(Career& K) {
     std::vector<int> teams;
     for (int h : H) { int t = youthNationTeam(h, cat); if (t >= 0) teams.push_back(t); }
     for (int t : Q) if (std::find(teams.begin(), teams.end(), t) == teams.end()) teams.push_back(t);
+    bool uefaOnly = K.intlType == IT_EURO21 || K.intlType == IT_EURO19 || K.intlType == IT_EURO17 || K.intlType == IT_EURO_W;
     if ((int)teams.size() < N) {
-        std::vector<int> pool = natsOf(K.intlType == IT_OLYMPICS ? -1 : UEFA);
+        std::vector<int> pool = natsOf(uefaOnly ? UEFA : -1);
         byRating(pool);
         for (int n : pool) { if ((int)teams.size() >= N) break; int t = youthNationTeam(n, cat); if (std::find(teams.begin(), teams.end(), t) == teams.end()) teams.push_back(t); }
     }
@@ -147,14 +160,18 @@ static void createYouthFinals(Career& K) {
     c.format = FMT_TOURNAMENT; c.kind = QK_FINAL_Y; c.tb = TB_H2H; c.legs = 1;
     c.name = fmt("%s %d", INTL_NAMES[K.intlType], K.year); c.shortName = INTL_NAMES[K.intlType];
     c.host = hostTeam;
-    c.groupsAdvance = 2; c.bestThirds = K.intlType == IT_OLYMPICS ? 2 : 0; c.thirdPlace = K.intlType == IT_OLYMPICS;
+    bool oly = K.intlType == IT_OLYMPICS || K.intlType == IT_OLY_W;
+    c.groupsAdvance = 2; c.bestThirds = K.intlType == IT_OLY_W ? 2 : 0;          // JO féminins : 3 groupes, les 2 meilleurs 3es en quarts
+    c.thirdPlace = oly || K.intlType == IT_WC_W;
     double t0 = std::max(S.now + 3, finalsWeekY(K));
+    double sp = oly ? 3.0 / 7.0 : 0.6;                                              // JO : un match tous les 3 jours
     auto g = pots(teams, ng, hostTeam);
     // deuxième pays hôte : tête de série d'un autre groupe
     if (H.size() > 1 && ng > 1) { int h2 = youthNationTeam(H[1], cat); for (auto& gr : g) { auto it = std::find(gr.begin(), gr.end(), h2); if (it != gr.end() && &gr != &g[1]) { std::swap(*it, g[1][0]); break; } } }
-    c.addGroupStage(g, 1, { t0, t0 + 0.6, t0 + 1.2 }, "Phase de groupes");
-    for (int i = 0; i < 4; i++) c.koTimes.push_back(t0 + 2.0 + 0.7 * i);
+    c.addGroupStage(g, 1, { t0, t0 + sp, t0 + 2 * sp }, "Phase de groupes");
+    for (int i = 0; i < 5; i++) c.koTimes.push_back(t0 + 3 * sp + (oly ? sp : 0.7) * i + (oly ? 0 : 0.2));
     K.finalComp = addCompPublic(S, std::move(c));
+    if (oly) S.news.push_back(fmt("Jeux olympiques %d : le tournoi de football débute deux jours avant la cérémonie d'ouverture. Un match tous les trois jours : gérez la fatigue et faites tourner l'effectif !", K.year));
 }
 
 void youthNewIntl(Career& K, int type, bool withQual, const std::vector<int>& ctrl, int yr, const std::vector<int>& hosts) {
@@ -168,12 +185,13 @@ void youthNewIntl(Career& K, int type, bool withQual, const std::vector<int>& ct
     K.history.clear();
     K.finalComp = -1;
     int cat = youthCatOfType(type);
+    if (cat == 5) { withQual = false; K.intlWithQual = false; }        // compétitions féminines : phase finale directe
     auto& Q = intlQualifiedRef(); Q.clear();
     auto& H = intlHostsRef(); H = hosts.empty() ? defaultHosts(type) : hosts;
     H.erase(std::remove(H.begin(), H.end(), -1), H.end());
     K.intlHosts = H;
     K.year = yr > 0 ? yr : intlYear(type);
-    intlFinalTeamsRef() = type == IT_OLYMPICS ? 12 : type == IT_EURO21 ? 16 : 8;
+    intlFinalTeamsRef() = type == IT_OLYMPICS ? 16 : type == IT_OLY_W ? 12 : type == IT_WC_W ? 32 : type == IT_EURO21 || type == IT_EURO_W ? 16 : 8;
     int N = intlFinalTeamsRef();
     S.year = withQual && (type == IT_OLYMPICS || type == IT_EURO21) ? K.year - 2 : K.year - 1;
     S.controlled.clear();
@@ -183,7 +201,9 @@ void youthNewIntl(Career& K, int type, bool withQual, const std::vector<int>& ct
     auto Yv = [&](const std::vector<int>& nats) { std::vector<int> v; for (int n : nats) if (!isHost(n)) v.push_back(Y(n)); return v; };
     if (!withQual) {
         std::vector<std::pair<int, int>> quota;
-        if (type == IT_OLYMPICS) quota = { { UEFA, 3 }, { CAF, 2 }, { AFC, 2 }, { CONMEBOL, 2 }, { CONCACAF, 1 }, { OFC, 1 } };
+        if (type == IT_OLYMPICS) quota = { { UEFA, 3 }, { CAF, 3 }, { AFC, 3 }, { CONMEBOL, 2 }, { CONCACAF, 2 }, { OFC, 1 } };
+        else if (type == IT_OLY_W) quota = { { UEFA, 3 }, { CAF, 2 }, { AFC, 2 }, { CONMEBOL, 2 }, { CONCACAF, 1 }, { OFC, 1 } };
+        else if (type == IT_WC_W) quota = { { UEFA, 11 }, { AFC, 6 }, { CAF, 4 }, { CONCACAF, 4 }, { CONMEBOL, 3 }, { OFC, 1 } };
         else quota = { { UEFA, N - (int)H.size() } };
         for (auto& q : quota) {
             auto v = Yv(natsOf(q.first));
@@ -297,8 +317,8 @@ void youthQualify(Career& K, int comp) {
     }
     case QY_Y_ELITE: { auto pos = positions(C); for (auto& s : pos[0]) add(s.team); break; }
     case QY_OLY_UEFA: { auto p = podium(C); for (int i = 0; i < 3 && i < (int)p.size(); i++) addNat(p[i]); break; }
-    case QY_OLY_CAF: case QY_OLY_AFC: { auto p = podium(C); for (int i = 0; i < 2 && i < (int)p.size(); i++) addNat(p[i]); break; }
-    case QY_OLY_CCF: { auto p = podium(C); if (!p.empty()) addNat(p[0]); break; }
+    case QY_OLY_CAF: case QY_OLY_AFC: { auto p = podium(C); for (int i = 0; i < 3 && i < (int)p.size(); i++) addNat(p[i]); break; }
+    case QY_OLY_CCF: { auto p = podium(C); for (int i = 0; i < 2 && i < (int)p.size(); i++) addNat(p[i]); break; }
     case QY_OLY_CSA: { auto tb = C.table(0, 0); for (int i = 0; i < 2 && i < (int)tb.size(); i++) addNat(tb[i].team); break; }
     case QY_OLY_OFC: { auto tb = C.table(0, 0); if (!tb.empty()) addNat(tb[0].team); break; }
     default: return;

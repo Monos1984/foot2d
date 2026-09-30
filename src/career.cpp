@@ -10,7 +10,8 @@ float frTierBase(int tier);                                  // pyramid.cpp
 
 const char* INTL_NAMES[NUM_INTL] = { "Coupe du Monde", "Euro", "Coupe d'Afrique des Nations", "Copa América",
                                      "Coupe d'Asie", "Gold Cup", "Coupe d'Océanie",
-                                     "Tournoi olympique", "Euro Espoirs", "Euro U19", "Euro U17" };
+                                     "Tournoi olympique", "Euro Espoirs", "Euro U19", "Euro U17",
+                                     "Tournoi olympique féminin", "Euro féminin", "Coupe du Monde féminine" };
 
 bool nationEligible(int n) { return strcmp(NATIONS[n].code, "RUS") != 0; }
 
@@ -2356,7 +2357,8 @@ void youthQualify(Career& K, int comp);
 int intlYear(int type) {
     switch (type) { case IT_WORLDCUP: return 2030; case IT_EURO: return 2028; case IT_CAN: return 2027; case IT_COPA: return 2028;
                     case IT_ASIA: return 2027; case IT_GOLD: return 2027; case IT_OLYMPICS: return 2028;
-                    case IT_EURO21: case IT_EURO19: case IT_EURO17: return 2027; default: return 2028; }
+                    case IT_EURO21: case IT_EURO19: case IT_EURO17: return 2027;
+                    case IT_OLY_W: return 2028; case IT_EURO_W: return 2029; case IT_WC_W: return 2027; default: return 2028; }
 }
 
 std::vector<int> defaultHosts(int type) {
@@ -2372,6 +2374,9 @@ std::vector<int> defaultHosts(int type) {
     case IT_EURO21: return { N("ALB"), N("SRB") };            // Euro Espoirs 2027 : Albanie et Serbie
     case IT_EURO19: return { N("SVK") };
     case IT_EURO17: return { N("CRO") };
+    case IT_OLY_W: return { N("USA") };                       // Los Angeles 2028
+    case IT_EURO_W: return { N("GER") };                      // Euro féminin 2029
+    case IT_WC_W: return { N("BRA") };                        // Coupe du monde féminine 2027
     default: return { N("NZL") };
     }
 }

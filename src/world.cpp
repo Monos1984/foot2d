@@ -477,7 +477,20 @@ void World::generateSquad(Team& t) {
         generateFake(t, 20, fake);
         for (auto& p : fake) { if (!hasGk && p.pos == POS_GK) { t.squad.push_back(p); hasGk = true; continue; } if ((int)t.squad.size() < 20) t.squad.push_back(p); }
     }
-    if (t.youth) {   // équipe U19 : joueurs de 16 à 19 ans (U17 : 15 et 16 ans), fort potentiel ; sélections Espoirs (U21) et olympique (U23)
+    if (t.youth == 6) {   // équipe féminine : joueuses de 18 à 35 ans, prénoms féminins
+        int cu = t.culture >= 0 && t.culture < NUM_CULTURES ? t.culture : CU_FR;
+        std::vector<std::string> fn; { std::string s = FEMALE_FIRST[cu], w; for (char c : s) { if (c == ' ') { if (!w.empty()) fn.push_back(w); w.clear(); } else w += c; } if (!w.empty()) fn.push_back(w); }
+        for (auto& p : t.squad) {
+            p.gender = 1;
+            p.age = (uint8_t)r.range(18, 34);
+            if (t.kind == TK_NATION) p.nation = (int16_t)t.nation;
+            size_t sp = p.name.find(' ');
+            std::string last = sp == std::string::npos ? p.name : p.name.substr(sp + 1);
+            if (!fn.empty()) p.name = fn[r.range(0, (int)fn.size() - 1)] + " " + last;
+            p.pot = (uint8_t)std::min(99, p.overall() + std::max(0, 27 - p.age) + r.range(0, 4));
+            p.contract = 2;
+        }
+    } else if (t.youth) {   // équipe U19 : joueurs de 16 à 19 ans (U17 : 15 et 16 ans), fort potentiel ; sélections Espoirs (U21) et olympique (U23)
         int k = 0;
         for (auto& p : t.squad) {
             p.age = (uint8_t)(t.youth == 5 ? (k < 3 ? r.range(24, 31) : r.range(20, 23)) : t.youth == 4 ? r.range(18, 21) : t.youth == 3 ? r.range(13, 14) : t.youth == 2 ? r.range(15, 16) : r.range(16, 19));

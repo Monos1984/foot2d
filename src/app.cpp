@@ -2940,7 +2940,7 @@ static ListW g_intlLW;
 static int g_hostChoice = 0;   // 0 = organisateurs officiels, sinon index+1 dans la liste des nations éligibles
 static std::vector<int> intlHostCandidates(int type) {
     int conf = -1;
-    switch (type) { case IT_EURO: case IT_EURO21: case IT_EURO19: case IT_EURO17: conf = UEFA; break; case IT_CAN: conf = CAF; break; case IT_ASIA: conf = AFC; break;
+    switch (type) { case IT_EURO: case IT_EURO21: case IT_EURO19: case IT_EURO17: case IT_EURO_W: conf = UEFA; break; case IT_CAN: conf = CAF; break; case IT_ASIA: conf = AFC; break;
                     case IT_GOLD: conf = CONCACAF; break; case IT_OFC: conf = OFC; break; case IT_COPA: conf = CONMEBOL; break; default: break; }
     std::vector<int> v;
     for (int i = 0; i < NUM_NATIONS; i++) if (nationEligible(i) && (conf < 0 || NATIONS[i].conf == conf)) v.push_back(i);
@@ -2962,13 +2962,17 @@ static void screenIntl() {
     std::string fmtTxt = type == IT_WORLDCUP ? (bigFmt ? "48 équipes, format USA 2026 (12 groupes, 16es)" : "32 équipes (8 groupes, 8es de finale)") :
                          type == IT_EURO ? (bigFmt ? "24 équipes (6 groupes + 4 meilleurs 3es, 8es)" : "16 équipes (4 groupes, quarts)") :
                          type == IT_CAN || type == IT_ASIA ? "24 équipes" : type == IT_OFC ? "8 équipes" :
-                         type == IT_OLYMPICS ? "12 équipes U23 (+3 joueurs de plus de 23 ans), 3 groupes, quarts, médailles" :
+                         type == IT_OLYMPICS ? "16 équipes U23 (+3 joueurs de plus de 23 ans), 4 groupes, quarts, médailles" :
+                         type == IT_OLY_W ? "12 sélections féminines A, 3 groupes (+2 meilleures 3es), quarts, médailles" :
+                         type == IT_EURO_W ? "16 sélections féminines, 4 groupes, quarts" :
+                         type == IT_WC_W ? "32 sélections féminines, 8 groupes, 8es de finale" :
                          type == IT_EURO21 ? "16 équipes Espoirs (U21), 4 groupes, quarts" :
                          type == IT_EURO19 || type == IT_EURO17 ? "8 équipes, 2 groupes, demi-finales" : "16 équipes";
     if (canBig) fmtTxt += "  < >";
     items.push_back(fmt("Compétition : %s  (%d)", INTL_NAMES[type], intlYear(type)));
     items.push_back("Format de la phase finale : " + fmtTxt);
-    items.push_back(fmt("Qualifications : %s", g_intlQual && type != IT_COPA ? "OUI (toutes les éliminatoires)" : "NON (phase finale directe)"));
+    bool womenT = type == IT_OLY_W || type == IT_EURO_W || type == IT_WC_W;
+    items.push_back(fmt("Qualifications : %s", g_intlQual && type != IT_COPA && !womenT ? "OUI (toutes les éliminatoires)" : "NON (phase finale directe)"));
     items.push_back("Pays organisateur : " + hostTxt);
     items.push_back(">>> Choisir mes sélections <<<");
     int s = menuRun(g_intlLW, items, 60, 440);
@@ -2995,7 +2999,7 @@ static void screenIntl() {
     g_intlSel.clear();
     g_intlCandidates.clear();
     int conf = -1;
-    switch (type) { case IT_EURO: case IT_EURO21: case IT_EURO19: case IT_EURO17: conf = UEFA; break; case IT_CAN: conf = CAF; break; case IT_ASIA: conf = AFC; break; case IT_GOLD: conf = CONCACAF; break; case IT_OFC: conf = OFC; break; default: break; }
+    switch (type) { case IT_EURO: case IT_EURO21: case IT_EURO19: case IT_EURO17: case IT_EURO_W: conf = UEFA; break; case IT_CAN: conf = CAF; break; case IT_ASIA: conf = AFC; break; case IT_GOLD: conf = CONCACAF; break; case IT_OFC: conf = OFC; break; default: break; }
     for (int i = 0; i < NUM_NATIONS; i++) {
         if (!nationEligible(i)) continue;
         if (type == IT_COPA) { if (NATIONS[i].conf == CONMEBOL) g_intlCandidates.push_back(i); continue; }

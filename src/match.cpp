@@ -67,6 +67,7 @@ int Match::teamPlayersCount(int t) const {
 // ------------------------------------------------------------------ initialisation
 static void loadAttrs(MPlayer& p, const Player& P, float mult, int teamId) {
     mult *= 0.97f + 0.06f * P.morale / 100.f;       // moral
+    if (P.gender) mult *= 0.95f;                    // football féminin : physique adapté (vitesse et puissance de frappe)
     p.dribble = std::min(99.f, P.drib() * mult);
     p.heading = std::min(99.f, P.head() * mult);
     p.endur = P.stamina / 100.f;

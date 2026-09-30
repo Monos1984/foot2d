@@ -103,3 +103,4 @@ extern const FrClubDef FR_RESERVES_R1[]; extern const int NUM_FR_RESERVES_R1;
 // Noms de joueurs
 struct NamePool { const char* first; const char* last; };
 extern const NamePool NAME_POOLS[NUM_CULTURES];
+extern const char* FEMALE_FIRST[NUM_CULTURES];

@@ -850,7 +850,8 @@ int regionDeptCount(int region);
 std::string poolLabel(const Pyramid& P, const Pool& pl, int g);
 
 enum IntlType { IT_WORLDCUP = 0, IT_EURO, IT_CAN, IT_COPA, IT_ASIA, IT_GOLD, IT_OFC,
-                IT_OLYMPICS, IT_EURO21, IT_EURO19, IT_EURO17, NUM_INTL };      // tournoi olympique (U23), Euro Espoirs, Euro U19, Euro U17
+                IT_OLYMPICS, IT_EURO21, IT_EURO19, IT_EURO17,
+                IT_OLY_W, IT_EURO_W, IT_WC_W, NUM_INTL };      // féminines : tournoi olympique, Euro, Coupe du monde      // tournoi olympique (U23), Euro Espoirs, Euro U19, Euro U17
 int youthCatOfType(int type);                  // youthintl.cpp : 0 A, 1 Espoirs (U21), 2 U19, 3 U17, 4 olympique (U23)
 int youthNationTeam(int nation, int cat);      // sélection de jeunes d'une nation (créée à la demande)
 int nationOfTeam(int team);
