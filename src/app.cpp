@@ -3476,6 +3476,13 @@ void appFrame(float dt) {
     }
     if (g_screen == SC_HUB && IN.back) {}
     g_btnCountPrev = g_btnCount;
+    if (getenv("FOOT_SPRITES")) {   // test : planche des sprites de course (4 directions x 4 temps)
+        ClearBackground(Color{ 40, 110, 40, 255 });
+        Kit k; k.shirt = 0x1B2A63; k.shorts = 0xFFFFFF; k.socks = 0xE2001A;
+        int fr = (int)(GetTime() * 8);
+        for (int d = 0; d < 4; d++) for (int f = 0; f < 4; f++) drawPlayerSprite(60 + f * 70, 90 + d * 70, k, 1, 0, d, f, PS_NORMAL, false, 0, 5);
+        for (int d = 0; d < 4; d++) drawPlayerSprite(400 + d * 50, 200, k, 1, 0, d, fr, PS_NORMAL, false, 0, 3);
+    }
     if (g_toastT > 0) {
         g_toastT -= dt;
         int w = textWidth(g_toast, 10) + 20;

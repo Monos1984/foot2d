@@ -251,15 +251,16 @@ void renderShutdown() { for (int i = 0; i < 5; i++) if (g_pitchBuilt[i]) UnloadT
 // course en 4 temps : 0 et 2 appuis (jambes serrées), 1 et 3 foulées (bras et jambes opposés)
 static const char* SPR_DOWN[4][12] = {
     { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", "sSSSSSs", ".SSSSS.", ".PPPPP.", ".PP.PP.", ".kk.kk.", ".bb.bb." },
-    { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", "sSSSSS.", "sSSSSS.", ".PPPPP.", ".PP.PP.", ".kk.KK.", ".bb.bb." },
-    { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", ".SSSSS.", ".SSSSS.", ".PPPPP.", ".PP.PP.", ".kk.kk.", ".bb.bb." },
-    { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", ".SSSSSs", ".SSSSSs", ".PPPPP.", ".PP.PP.", ".KK.kk.", ".bb.bb." },
+    // foulée : jambe gauche en avant (pied plus bas), jambe droite levée ; bras opposés
+    { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", ".SSSSSs", ".SSSSS.", ".PPPPP.", ".PP.kk.", ".kk.bb.", ".bb...." },
+    { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", "sSSSSSs", ".SSSSS.", ".PPPPP.", ".PP.PP.", ".kk.kk.", ".bb.bb." },
+    { "..HhH..", ".hhhhh.", ".heseh.", "..tst..", "SSScSSS", "sSSSSSs", "sSSSSS.", ".SSSSS.", ".PPPPP.", ".kk.PP.", ".bb.kk.", "....bb." },
 };
 static const char* SPR_UP[4][12] = {
     { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", "sSSnSSs", ".SSnSS.", ".PPPPP.", ".PP.PP.", ".kk.kk.", ".bb.bb." },
-    { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", ".SSnSSs", ".SSnSSs", ".PPPPP.", ".PP.PP.", ".KK.kk.", ".bb.bb." },
-    { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", ".SSnSS.", ".SSnSS.", ".PPPPP.", ".PP.PP.", ".kk.kk.", ".bb.bb." },
-    { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", "sSSnSS.", "sSSnSS.", ".PPPPP.", ".PP.PP.", ".kk.KK.", ".bb.bb." },
+    { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", "sSSnSS.", ".SSnSS.", ".PPPPP.", ".kk.PP.", ".bb.kk.", "....bb." },
+    { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", "sSSnSSs", ".SSnSS.", ".PPPPP.", ".PP.PP.", ".kk.kk.", ".bb.bb." },
+    { "..HhH..", ".hhhhh.", ".hhhhh.", "..hhh..", "SSScSSS", "sSSSSSs", ".SSnSSs", ".SSnSS.", ".PPPPP.", ".PP.kk.", ".kk.bb.", ".bb...." },
 };
 static const char* SPR_RIGHT[4][12] = {
     { "..hhH..", ".hhhss.", ".hhses.", "..tss..", "..SSc..", "..SsS..", "..SsS..", "..SSS..", "..PPP..", "..PPP..", "..kk...", "..bbb.." },
@@ -464,10 +465,9 @@ static void drawCoin(int cx, int cy, float r, float w, int face) {
     // tranche (épaisseur) : visible quand la pièce est presque de profil
     float thick = std::max(0.f, r * 0.16f * (1.f - aw));
     if (thick >= 1.f) {
+        // tranche : ellipses décalées (épouse la forme de la pièce, pas de barre qui dépasse)
         int tw = (int)thick + 1;
-        DrawRectangle(cx - rx - tw / 2, cy - (int)r + 2, tw, (int)(2 * r) - 4, edgeD);
-        for (int yy = cy - (int)r + 4; yy < cy + (int)r - 4; yy += 3) DrawRectangle(cx - rx - tw / 2, yy, tw, 1, dark);
-        DrawEllipse(cx - tw / 2, cy, (float)rx, r, edgeD);
+        for (int o = tw; o >= 1; o--) DrawEllipse(cx - o, cy, (float)rx, r, (o & 1) ? edgeD : dark);
     }
     // disque : dégradé concentrique
     DrawEllipse(cx, cy, (float)rx, r, edgeD);

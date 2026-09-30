@@ -881,6 +881,14 @@ bool isNonEU(const Player& p, int team) {
     int nat = p.nation >= 0 ? p.nation : (team >= 0 && team < (int)g_world.teams.size() ? g_world.teams[team].nation : -1);
     if (nat < 0 || nat >= NUM_NATIONS) return false;
     for (auto c : EU) if (strcmp(NATIONS[nat].code, c) == 0) return false;
+    // accord de Cotonou : les joueurs des pays ACP (Afrique, Caraïbes, Pacifique) sont assimilés aux communautaires
+    int cf = NATIONS[nat].conf;
+    if (cf == CAF || cf == OFC) return false;
+    if (cf == CONCACAF) {
+        static const char* NOT_ACP[] = { "USA", "CAN", "MEX", "CRC", "SLV", "GUA", "HON", "NCA", "PAN", "PUR", "VIR", "BER", "CAY", "TCA", "VGB", "AIA", "MSR", "ARU", "CUW" };
+        for (auto c : NOT_ACP) if (strcmp(NATIONS[nat].code, c) == 0) return true;
+        return false;
+    }
     return true;
 }
 // feuille de match : L1 4, L2 2, National 3, National 2 / 3, Régional et District 2 (clubs français en carrière)
