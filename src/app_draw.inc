@@ -41,6 +41,30 @@ static void drawBall(int x, int y, int r, Color c) {
     DrawCircle(x - r / 3, y - r / 3, (float)std::max(1, r / 3), Color{ 255, 255, 255, 140 });
 }
 
+// urne en verre : boules qui tournent, étiquette dessous
+static void drawBowl(int x, int y, const std::string& label, int nballs, float t, Color ballC) {
+    DrawEllipse(x, y + 30, 26, 5, Color{ 0, 0, 0, 90 });
+    DrawRectangle(x - 6, y + 20, 12, 10, Color{ 150, 150, 165, 255 });            // pied
+    DrawRectangle(x - 14, y + 28, 28, 3, Color{ 120, 120, 135, 255 });
+    DrawCircle(x, y, 22, Color{ 190, 215, 255, 55 });
+    for (int k = 0; k < std::min(14, nballs); k++) {
+        float an = t * (1.6f + k * 0.23f) + k * 1.7f;
+        drawBall(x + (int)(std::cos(an) * (5 + (k % 3) * 5)), y + 5 + (int)(std::sin(an * 1.3f) * 7), 4, k % 2 ? Color{ 235, 235, 245, 255 } : ballC);
+    }
+    DrawCircleLines(x, y, 22, Color{ 225, 235, 255, 190 });
+    DrawRectangle(x - 9, y - 23, 18, 3, Color{ 225, 235, 255, 160 });              // col de l'urne
+    DrawCircle(x - 9, y - 9, 3, Color{ 255, 255, 255, 110 });                        // reflet
+    drawTextCentered(label, x + (x < VW / 2 ? -62 : 62), y - 4, 10, C_DIM, false);
+}
+// boule qui s'ouvre et révèle le nom (animation 0..1)
+static void drawOpening(int x, int y, float u, Color c) {
+    if (u < 0.5f) { drawBall(x, y, 5, c); return; }
+    int d = (int)((u - 0.5f) * 16);
+    DrawCircleSector(Vector2{ (float)(x - d), (float)y }, 5, 90, 270, 8, c);
+    DrawCircleSector(Vector2{ (float)(x + d), (float)y }, 5, -90, 90, 8, c);
+    DrawRectangle(x - d + 1, y - 2, 2 * d - 2, 4, Color{ 250, 245, 225, 255 });      // papier
+}
+
 static void screenDraw(float dt) {
     if (g_drawQueue.empty()) { openHub(); return; }
     Season& S = g_career.season;
@@ -91,7 +115,7 @@ static void screenDraw(float dt) {
         int ng = (int)st.groups.size();
         int per = 0; for (auto& g : st.groups) per = std::max(per, (int)g.size());
         int total = ng * per;
-        int shown = std::min(total, (int)(g_drawT / 0.18f));
+        int shown = std::min(total, (int)(g_drawT / 0.35f));
         done = shown >= total;
         int cols = std::min(4, ng), rowsG = (ng + cols - 1) / cols;
         int gw = (VW - 20) / cols, gh = 14 + per * 12;
@@ -105,6 +129,7 @@ static void screenDraw(float dt) {
                 int idx = k * ng + g;      // ordre de tirage : chapeau k, groupe g
                 if (idx >= shown) continue;
                 int t = st.groups[g][k];
+                if (idx == shown - 1 && !done) { DrawRectangle(gx + 1, gy + 13 + k * 12, gw - 8, 11, Color{ 240, 200, 60, 90 }); drawBall(gx + gw - 16, gy + 18 + k * 12, 4, Color{ 240, 200, 60, 255 }); }
                 drawKitIcon(g_world.teams[t].home, gx + 4, gy + 14 + k * 12, 1);
                 drawTextPx(fitText(g_world.teams[t].name, gw - 30, 10), gx + 18, gy + 14 + k * 12, 10, S.isControlled(t) ? C_GOOD : C_TXT);
             }
@@ -134,15 +159,14 @@ static void screenDraw(float dt) {
             for (int k : ord) if (std::find(feat.begin(), feat.end(), k) == feat.end()) rest.push_back(k);
             ord = feat; for (int k : rest) ord.push_back(k);
         }
-        // urne
-        int ux = VW / 2, uy = 70;
-        DrawCircle(ux, uy, 24, Color{ 200, 220, 255, 60 });
-        DrawCircleLines(ux, uy, 24, Color{ 220, 230, 255, 160 });
-        int left = std::max(0, 2 * n - (int)(g_drawT / 0.8f));
-        for (int k = 0; k < std::min(12, std::max(2, left)); k++) {
-            float an = g_drawT * (2.f + k * 0.3f) + k;
-            drawBall(ux + (int)(std::cos(an) * (6 + k % 3 * 5)), uy + 6 + (int)(std::sin(an * 1.3f) * 8), 4, k % 2 ? Color{ 230, 230, 240, 255 } : Color{ 240, 200, 60, 255 });
-        }
+        // deux urnes : équipes qui reçoivent (à gauche) et adversaires (à droite)
+        int ux = VW / 2, uy = 60;
+        int leftB = std::max(0, n - (int)(g_drawT / 1.7f));
+        drawBowl(ux - 130, uy, "Équipe 1", std::max(2, leftB), g_drawT, Color{ 240, 200, 60, 255 });
+        drawBowl(ux + 130, uy, "Équipe 2", std::max(2, leftB), g_drawT + 1.3f, Color{ 90, 170, 255, 255 });
+        // table du tirage
+        DrawRectangle(ux - 70, uy + 22, 140, 6, Color{ 60, 40, 30, 255 });
+        DrawRectangle(ux - 70, uy + 21, 140, 2, Color{ 120, 90, 60, 255 });
         const float D = 1.7f, T0 = 0.4f;
         float tFeat = T0 + F * D;
         // arrêt sur le match du club : le joueur valide avant la suite du tirage
@@ -168,7 +192,7 @@ static void screenDraw(float dt) {
             if (lt > 0.5f) {
                 drawKitIcon(g_world.teams[h].home, 60, y + 12, 2);
                 drawTextPx(fitText(nameLvl(h), 220, 10), 88, y + 14, 10, S.isControlled(h) ? C_GOOD : C_TXT);
-            } else drawBall(ux - (int)(lt / 0.5f * 120), uy + 24 + (int)(lt / 0.5f * 20), 5, C_HI);
+            } else { float u = lt / 0.5f; drawOpening(ux - 130 + (int)(u * 60), uy - 10 + (int)(u * u * 40), u, Color{ 240, 200, 60, 255 }); }
             drawTextCentered(a < 0 ? "" : "contre", VW / 2, y + 16, 10, C_DIM, false);
             if (a < 0 && lt > 0.5f) drawTextCentered("exempté : qualifié directement pour le tour suivant", VW / 2, y + 30, 10, C_HI, false);
             if (a >= 0 && lt > 1.1f) {
@@ -177,7 +201,7 @@ static void screenDraw(float dt) {
                 drawTextPx(nm, VW - 92 - textWidth(nm, 10), y + 14, 10, S.isControlled(a) ? C_GOOD : C_TXT);
                 std::string info = st.legs == 2 ? "Match aller à " + g_world.teams[h].name + ", retour à " + g_world.teams[a].name : (C.matches[T.m1].neutral ? "Terrain neutre" : "Match à " + (g_world.teams[h].stadium.empty() ? g_world.teams[h].name : g_world.teams[h].stadium));
                 drawTextCentered(fitText(info, VW - 100, 10), VW / 2, y + 32, 10, C_DIM, false);
-            } else if (a >= 0 && lt > 0.6f) drawBall(ux + (int)((lt - 0.6f) / 0.5f * 120), uy + 24 + (int)((lt - 0.6f) / 0.5f * 20), 5, C_HI);
+            } else if (a >= 0 && lt > 0.6f) { float u = (lt - 0.6f) / 0.5f; drawOpening(ux + 130 - (int)(u * 60), uy - 10 + (int)(u * u * 40), u, Color{ 90, 170, 255, 255 }); }
         } else if (g_drawT >= tFeat && !myTies.empty()) {
             const Tie& T = st.ties[myTies[0]];
             int h = T.a, a = T.b;
