@@ -1,6 +1,6 @@
 // ------------------------------------------------------------------ messagerie, éditeurs de sponsors et de managers, à propos, mode championnat
 static const char* GAME_VERSION = "00.02.01";
-static const int GAME_BUILD = 4;          // incrémenté à chaque livraison
+static const int GAME_BUILD = 5;          // incrémenté à chaque livraison
 
 // ---------------- messagerie : lire, effacer, non lus
 static int g_newsOpen = -1;           // index (dans season.news) du message ouvert
@@ -361,19 +361,22 @@ static void screenManagers() {
 static void screenAbout() {
     drawBackground("À propos");
     int y = 50;
-    drawTextCentered("FRANCE FOOT 2D", VW / 2, y, 20, C_HI); y += 26;
+    drawTextCentered("SUPER SOCCER WORLD", VW / 2, y, 20, C_HI); y += 22;
+    drawTextCentered("Jouez. Gérez. Vivez le football", VW / 2, y, 10, C_TXT); y += 14;
     drawTextCentered(std::string("Version ") + GAME_VERSION + fmt("  -  build %d", GAME_BUILD), VW / 2, y, 10, C_DIM); y += 20;
     const char* L[] = { "Jeu gratuit réalisé par l'IA Claude,", "piloté par Jean Monos pour Offgame.", "",
                         "Jeu non licencié : fan jeu, sans lien avec les ligues, fédérations et clubs cités.",
                         "Musiques et sons originaux synthétisés par le jeu.", "",
-                        "Données : EA SPORTS FC 26 DataHub (joueurs), INSEE (communes), Wikipédia (palmarès)." };
+                        "Données : EA SPORTS FC 26 DataHub (joueurs), INSEE (communes), Wikipédia (palmarès).", "",
+                        "Soutenir le jeu : fr.tipeee.com/le-bazar-de-monos  (touche T)" };
     for (auto l : L) { drawTextCentered(l, VW / 2, y, 10, C_TXT); y += 14; }
     // petit joueur qui jongle
     static float t = 0; t += GetFrameTime();
     Kit k; k.shirt = 0x1B2A63; k.shorts = 0xFFFFFF; k.socks = 0xE2001A;
     drawPlayerSprite(VW / 2, VH - 50, k, 1, 0, 0, (int)(t * 6), PS_NORMAL, false, 0, 3);
     DrawCircle(VW / 2 + 4, VH - 60 - (int)(std::fabs(std::sin(t * 5)) * 18), 3, WHITE);
-    drawFooter("Retour");
+    drawFooter("Retour    T : ouvrir la page Tipeee");
+    if (IsKeyPressed(KEY_T)) OpenURL(TIPEEE_URL);
     if (IN.back || IN.ok) g_screen = SC_MAIN;
 }
 

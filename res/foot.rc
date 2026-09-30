@@ -6,8 +6,8 @@ BEGIN
  BEGIN
   BLOCK "040C04B0"
   BEGIN
-   VALUE "FileDescription", "France Foot 2D"
-   VALUE "ProductName", "France Foot 2D"
+   VALUE "FileDescription", "Super Soccer World"
+   VALUE "ProductName", "Super Soccer World"
    VALUE "FileVersion", "1.0"
   END
  END

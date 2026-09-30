@@ -1,5 +1,6 @@
 // Déroulement chronologique d'une saison (toutes compétitions confondues)
 #include "game.h"
+#include "crashlog.h"
 
 void onCompetitionDoneHook(int comp); // career.cpp
 void onStageDoneHook(int comp, int stage);

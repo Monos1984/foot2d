@@ -1,8 +1,9 @@
-// France Foot 2D - point d'entrée
+// Super Soccer World - point d'entrée
 #include "render.h"
 #include "input.h"
 #include "audio.h"
 #include "icon_data.h"
+#include "crashlog.h"
 
 void appInit();
 void appFrame(float dt);
@@ -13,8 +14,9 @@ void appTestStart(const char* mode);
 extern bool g_quit;
 
 int main() {
+    crashLogInit();
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
-    InitWindow(1280, 720, "France Foot 2D");
+    InitWindow(1280, 720, "Super Soccer World");
     {
         Image ic = GenImageColor(32, 32, BLANK);
         memcpy(ic.data, ICON32, sizeof ICON32);

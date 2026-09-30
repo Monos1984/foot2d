@@ -4,6 +4,7 @@
 #include "audio.h"
 #include "game.h"
 #include "match.h"
+#include "crashlog.h"
 #include <memory>
 #include <functional>
 #include <map>
@@ -14,16 +15,17 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH };
 static void openPlayer(int team, int idx, Screen back);
 
-static Screen g_screen = SC_MAIN;
+static Screen g_screen = SC_SPLASH;
 static MenuInput IN;
 static Controls CTL[NUM_INPUTS];
 static std::unique_ptr<Match> g_match;
 static bool g_careerActive = false;
 static std::string g_toast; static float g_toastT = 0;
 bool g_quit = false;
+static const char* TIPEEE_URL = "https://fr.tipeee.com/le-bazar-de-monos";
 
 // contexte du match en cours
 struct MatchCtx { bool career = false; int comp = -1, match = -1; Screen back = SC_MAIN; };
@@ -66,7 +68,7 @@ static bool button(int x, int y, int w, int h, const std::string& label, bool se
 }
 
 static bool g_noBackBtn = false;
-// bouton rapide : musique marche / arrêt (aussi touche M hors saisie de texte, ou F9)
+// bouton rapide : musique marche / arrêt (aussi touche F9)
 static void toggleMusic();
 static void drawMusicButton(int x, int y) {
     bool on = g_settings.music;
@@ -97,7 +99,7 @@ static void drawBackground(const std::string& title) {
     drawMusicButton(VW - 116, 4);
     if (g_noBackBtn) {
         DrawRectangle(VW - 88, 6, 80, 14, Color{ 200, 30, 40, 255 });
-        drawTextPx("FRANCE FOOT 2D", VW - 86, 8, 10, WHITE);
+        drawTextPx("SUPER SOCCER", VW - 86, 8, 10, WHITE);
     } else {
         // bouton « page précédente »
         bool hover = IN.mouse.x >= VW - 92 && IN.mouse.x < VW - 6 && IN.mouse.y >= 4 && IN.mouse.y < 22;
@@ -109,7 +111,7 @@ static void drawBackground(const std::string& title) {
 }
 
 // ------------------------------------------------------------------ boîte de confirmation
-struct Confirm { bool active = false; std::string text, yes, no; std::function<void()> onYes, onNo; int sel = 0; };
+struct Confirm { bool active = false; bool backCancel = false; std::string text, yes, no; std::function<void()> onYes, onNo; int sel = 0; };
 static Confirm g_confirm;
 static float g_confirmT = 0;     // anti-rebond (manette) à l'ouverture
 static void askConfirm(const std::string& text, std::function<void()> onYes, const std::string& yes = "Oui", const std::string& no = "Non", std::function<void()> onNo = nullptr) {
@@ -753,7 +755,7 @@ static void screenSetup() {
     static const char* KITN[] = { "automatique", "domicile", "extérieur", "troisième" };
     static const char* SEVN[] = { "selon l'arbitre", "clément", "normal", "sévère", "très sévère" };
     static const int SEVV[] = { -1, 35, 60, 80, 95 };
-    static const char* ENDN[] = { "match nul possible", "prolongation (nul possible)", "prolongation, but en or, puis TAB", "tirs au but directs", "prolongation puis tirs au but", "SÉANCE DE TIRS AU BUT SEULEMENT" };
+    static const char* ENDN[] = { "match nul possible", "prolongation (nul possible)", "prolongation, but en or, puis TAB", "tirs au but directs", "prolongation puis tirs au but", "séance de tirs au but directe" };
     static const char* TIMEN[] = { "13h00", "15h00", "17h00", "18h00", "20h45", "21h00" };
     bool friendly = !g_mctx.career || (g_mctx.comp >= 0 && g_career.season.comps[g_mctx.comp].kind == 12);
     std::vector<std::string> stadiums = { H.stadium, A.stadium, "Stade de France (Saint-Denis)", "Parc des Princes (Paris)", "Stade Vélodrome (Marseille)", "Wembley (Londres)",
@@ -1606,6 +1608,7 @@ static void screenHub() {
         }
     }
     if (g_needAdvance && !g_confirm.active) {
+        crashMark("carrière : avance du calendrier (saison %d)", g_career.year);
         g_pending = S.advance(false);
         g_needAdvance = false;
         g_career.mgrTick();
@@ -3047,64 +3050,125 @@ static void screenHelp() {
 // ------------------------------------------------------------------ menu principal
 static ListW g_mainLW;
 static float g_titleT = 0;
-static void screenMain(float dt) {
-    g_titleT += dt;
-    ClearBackground(Color{ 10, 16, 36, 255 });
-    // ciel nocturne en dégradé
-    for (int y = 0; y < 120; y += 4) {
-        unsigned char k = (unsigned char)(y / 4);
-        DrawRectangle(0, y, VW, 4, Color{ (unsigned char)(10 + k / 2), (unsigned char)(16 + k), (unsigned char)(36 + k * 2), 255 });
+static int g_titleVar = -1;          // écran titre tiré au hasard à chaque lancement
+static const int NUM_TITLE_VARS = 4;
+static uint32_t titleHash(uint32_t h) { h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15; return h; }
+
+// écrans de démarrage : Offgame puis mention légale
+static float g_splashT = 0; static int g_splashPhase = 0;
+static void screenSplash(float dt) {
+    g_splashT += dt;
+    const float DUR[2] = { 2.6f, 6.0f };
+    bool skip = IN.ok || IN.back || IN.click || IN.start || (IN.anyKey && g_splashT > 0.4f);
+    if (skip || g_splashT >= DUR[g_splashPhase]) {
+        g_splashPhase++; g_splashT = 0;
+        if (g_splashPhase >= 2) { g_titleVar = -1; g_titleT = 0; g_screen = SC_MAIN; return; }
     }
-    // tribunes : gradins et public (flashs d'appareils photo)
-    DrawRectangle(0, 92, VW, 34, Color{ 28, 30, 46, 255 });
+    float t = g_splashT, d = DUR[g_splashPhase];
+    float a = std::min(1.f, std::min(t / 0.5f, (d - t) / 0.5f)); a = std::max(0.f, a);
+    unsigned char al = (unsigned char)(255 * a);
+    ClearBackground(BLACK);
+    if (g_splashPhase == 0) {
+        // logo Offgame : manette stylisée et nom
+        int cx = VW / 2, cy = VH / 2 - 26;
+        DrawRectangleRounded(Rectangle{ (float)cx - 44, (float)cy - 20, 88, 40 }, 0.6f, 8, Color{ 230, 60, 60, al });
+        DrawRectangle(cx - 30, cy - 3, 18, 6, Color{ 255, 255, 255, al }); DrawRectangle(cx - 24, cy - 9, 6, 18, Color{ 255, 255, 255, al });
+        DrawCircle(cx + 20, cy - 5, 5, Color{ 255, 220, 60, al }); DrawCircle(cx + 30, cy + 5, 5, Color{ 60, 140, 255, al });
+        const char* O = "OFFGAME";
+        int w = textWidth(O, 40);
+        drawTextPx(O, cx - w / 2 + 2, cy + 34, 40, Color{ 80, 20, 20, al });
+        drawTextPx(O, cx - w / 2, cy + 32, 40, Color{ 255, 255, 255, al });
+        drawTextCentered("présente", cx, cy + 82, 10, Color{ 180, 190, 220, al }, false);
+    } else {
+        const char* L[] = { "Jeu gratuit non licencié par la FIFA, l'UEFA, la FFF",
+                            "ou toute autre instance officielle.", "",
+                            "Sigames, EA Sports, Konami et Capcom produisent",
+                            "de très bons jeux de football (parmi d'autres)." };
+        int y = VH / 2 - 44;
+        drawTextCentered("AVERTISSEMENT", VW / 2, y - 24, 10, Color{ 255, 225, 90, al }, false);
+        for (auto l : L) { drawTextCentered(l, VW / 2, y, 10, Color{ 235, 240, 255, al }, false); y += 16; }
+    }
+    drawTextCentered("OK / clic : passer", VW / 2, VH - 16, 10, Color{ 90, 100, 130, al }, false);
+}
+
+// décor de l'écran titre : 0 nuit, 1 plein jour, 2 coucher de soleil, 3 nuit enneigée
+static void drawTitleScene(int var) {
+    struct Sky { Color top, bot; };
+    static const Sky SK[NUM_TITLE_VARS] = { { { 10, 16, 36, 255 }, { 40, 46, 96, 255 } }, { { 70, 140, 230, 255 }, { 170, 210, 250, 255 } },
+                                            { { 60, 30, 90, 255 }, { 250, 140, 60, 255 } }, { { 16, 20, 34, 255 }, { 60, 66, 90, 255 } } };
+    ClearBackground(SK[var].top);
+    DrawRectangleGradientV(0, 0, VW, 120, SK[var].top, SK[var].bot);
+    if (var == 1) {          // soleil et nuages
+        DrawCircle(VW - 110, 40, 18, Color{ 255, 240, 160, 255 }); DrawCircle(VW - 110, 40, 26, Color{ 255, 240, 160, 60 });
+        for (int k = 0; k < 5; k++) {
+            float cx = std::fmod(k * 150.f + g_titleT * (8 + k * 2), (float)VW + 120) - 60; int cy = 20 + (k * 37) % 50;
+            DrawEllipse((int)cx, cy, 26, 7, Color{ 255, 255, 255, 220 }); DrawEllipse((int)cx + 14, cy - 4, 16, 7, Color{ 255, 255, 255, 220 });
+        }
+    } else if (var == 2) {   // soleil couchant
+        DrawCircle(VW / 2 + 150, 104, 34, Color{ 255, 200, 90, 255 });
+        for (int i = 0; i < 4; i++) DrawRectangle(0, 70 + i * 9, VW, 2, Color{ 255, 190, 120, 60 });
+    } else {                 // étoiles
+        for (int k = 0; k < 40; k++) { uint32_t h = titleHash(k * 7919u + 13); if ((h >> 20) % 5 || std::sin(g_titleT * 2 + k) > -0.6f) DrawPixel((int)(h % VW), (int)((h >> 10) % 86), Color{ 255, 255, 230, 200 }); }
+        if (var == 0) { DrawCircle(90, 30, 10, Color{ 240, 240, 220, 255 }); DrawCircle(94, 27, 9, SK[0].top); }
+    }
+    // tribunes : gradins et public
+    Color stand = var == 1 ? Color{ 90, 96, 116, 255 } : var == 2 ? Color{ 60, 40, 60, 255 } : Color{ 28, 30, 46, 255 };
+    DrawRectangle(0, 92, VW, 34, stand);
     for (int row = 0; row < 8; row++) {
         int yy = 94 + row * 4;
-        DrawRectangle(0, yy + 3, VW, 1, Color{ 20, 22, 34, 255 });
+        DrawRectangle(0, yy + 3, VW, 1, Color{ (unsigned char)(stand.r * 3 / 4), (unsigned char)(stand.g * 3 / 4), (unsigned char)(stand.b * 3 / 4), 255 });
         for (int x = (row % 2) * 2; x < VW; x += 4) {
-            uint32_t h = (uint32_t)(x * 2654435761u) ^ (uint32_t)(row * 40503u);
-            h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15;
+            uint32_t h = titleHash((uint32_t)(x * 2654435761u) ^ (uint32_t)(row * 40503u));
             static const Color CR[] = { { 180, 40, 50, 255 }, { 220, 220, 230, 255 }, { 40, 70, 160, 255 }, { 200, 170, 60, 255 }, { 90, 90, 110, 255 }, { 60, 40, 30, 255 } };
-            Color c = CR[h % 6];
-            int bob = (int)(std::sin(g_titleT * 5 + (h % 17)) > 0.8f ? 1 : 0);
-            DrawRectangle(x, yy - bob, 2, 2, c);
+            int bob = std::sin(g_titleT * 5 + (h % 17)) > 0.8f ? 1 : 0;
+            DrawRectangle(x, yy - bob, 2, 2, CR[h % 6]);
         }
     }
-    for (int k = 0; k < 3; k++) {
-        uint32_t h = (uint32_t)((int)(g_titleT * 7) * 7919 + k * 104729);
-        h ^= h >> 13; h *= 0x5bd1e995;
+    if (var != 1) for (int k = 0; k < 3; k++) {   // flashs d'appareils photo
+        uint32_t h = titleHash((uint32_t)((int)(g_titleT * 7) * 7919 + k * 104729));
         if (h % 3 == 0) DrawRectangle((int)(h % VW), 94 + (int)((h >> 8) % 30), 2, 2, WHITE);
     }
-    // projecteurs
+    // projecteurs (allumés la nuit)
     for (int k = 0; k < 2; k++) {
         int px = k ? VW - 40 : 28;
         DrawRectangle(px + 5, 40, 2, 56, Color{ 70, 74, 90, 255 });
         DrawRectangle(px - 4, 30, 20, 12, Color{ 50, 54, 70, 255 });
-        for (int i = 0; i < 4; i++) for (int j = 0; j < 2; j++) DrawRectangle(px - 2 + i * 5, 32 + j * 5, 4, 4, Color{ 255, 250, 210, 255 });
-        float pulse = 0.85f + 0.15f * std::sin(g_titleT * 3 + k);
-        DrawCircle(px + 6, 36, 20, Color{ 255, 250, 200, (unsigned char)(40 * pulse) });
-        DrawTriangle(Vector2{ (float)px + 6, 40 }, Vector2{ (float)(k ? px - 160 : px - 40), 360 }, Vector2{ (float)(k ? px + 40 : px + 160), 360 }, Color{ 255, 250, 210, 14 });
+        bool lit = var != 1;
+        for (int i = 0; i < 4; i++) for (int j = 0; j < 2; j++) DrawRectangle(px - 2 + i * 5, 32 + j * 5, 4, 4, lit ? Color{ 255, 250, 210, 255 } : Color{ 150, 150, 140, 255 });
+        if (lit) {
+            float pulse = 0.85f + 0.15f * std::sin(g_titleT * 3 + k);
+            DrawCircle(px + 6, 36, 20, Color{ 255, 250, 200, (unsigned char)(40 * pulse) });
+            DrawTriangle(Vector2{ (float)px + 6, 40 }, Vector2{ (float)(k ? px - 160 : px - 40), 360 }, Vector2{ (float)(k ? px + 40 : px + 160), 360 }, Color{ 255, 250, 210, 14 });
+        }
     }
-    // pelouse rayée avec lignes
-    for (int i = 0; i < 12; i++) DrawRectangle(0, 126 + i * 20, VW, 10, Color{ 40, 116, 40, 255 });
-    for (int i = 0; i < 12; i++) DrawRectangle(0, 136 + i * 20, VW, 10, Color{ 34, 102, 34, 255 });
+    // pelouse rayée (enneigée sur les bords en variante 3)
+    Color g1 = var == 2 ? Color{ 60, 110, 40, 255 } : Color{ 40, 116, 40, 255 }, g2 = var == 2 ? Color{ 52, 96, 34, 255 } : Color{ 34, 102, 34, 255 };
+    for (int i = 0; i < 12; i++) { DrawRectangle(0, 126 + i * 20, VW, 10, g1); DrawRectangle(0, 136 + i * 20, VW, 10, g2); }
     DrawRectangle(0, 126, VW, 2, Color{ 240, 240, 240, 200 });
     DrawLine(0, 240, VW, 240, Color{ 240, 240, 240, 180 });
     DrawCircleLines(VW / 2, 240, 40, Color{ 240, 240, 240, 180 });
+    if (var == 3) {
+        for (int k = 0; k < 90; k++) {
+            uint32_t h = titleHash(k * 104729u + 7);
+            float fx = std::fmod((float)(h % VW) + std::sin(g_titleT + k) * 10.f, (float)VW);
+            float fy = std::fmod((float)((h >> 9) % VH) + g_titleT * (20 + (h % 30)), (float)VH);
+            DrawRectangle((int)fx, (int)fy, 1 + (int)(h % 2), 1 + (int)(h % 2), Color{ 255, 255, 255, 210 });
+        }
+    }
     // panneaux publicitaires
-    static const char* ADS[] = { "FRANCE FOOT 2D", "SUPER BUT", "PIXEL COLA", "AMIGOAL", "STADE TV", "GOAL FM" };
+    static const char* ADS[] = { "SUPER SOCCER WORLD", "OFFGAME", "PIXEL COLA", "AMIGOAL", "STADE TV", "GOAL FM" };
     static const Color ADC[] = { { 214, 40, 40, 255 }, { 247, 127, 0, 255 }, { 42, 157, 143, 255 }, { 106, 76, 147, 255 }, { 29, 53, 87, 255 }, { 38, 70, 83, 255 } };
     int off = (int)(g_titleT * 20) % 110;
     for (int i = -1; i < VW / 110 + 2; i++) {
         int bx = i * 110 - off;
         DrawRectangle(bx, 116, 108, 10, ADC[(i + 12) % 6]);
-        drawTextPx(ADS[(i + 12) % 6], bx + 6, 116, 10, WHITE);
+        drawTextPx(fitText(ADS[(i + 12) % 6], 100, 10), bx + 4, 116, 10, WHITE);
     }
     // titre
-    const char* T = "FOOT 2D";
-    int w = textWidth(T, 60);
-    // « FRANCE » en bleu-blanc-rouge au-dessus du titre
+    static const Color TC[NUM_TITLE_VARS][2] = { { { 255, 220, 60, 255 }, { 220, 40, 40, 255 } }, { { 255, 255, 255, 255 }, { 20, 60, 160, 255 } },
+                                                 { { 255, 230, 120, 255 }, { 150, 30, 60, 255 } }, { { 200, 240, 255, 255 }, { 40, 90, 170, 255 } } };
     {
-        const char* F = "FRANCE";
+        const char* F = "SUPER SOCCER";
         int fw = textWidth(F, 20);
         int fx = VW / 2 - fw / 2;
         drawTextPx(F, fx + 2, 6, 20, Color{ 0, 0, 0, 200 });
@@ -3113,8 +3177,16 @@ static void screenMain(float dt) {
         DrawRectangle(fx + fw / 3, 26, fw / 3, 3, WHITE);
         DrawRectangle(fx + 2 * fw / 3, 26, fw - 2 * fw / 3, 3, Color{ 226, 0, 26, 255 });
     }
-    for (int k = 0; k < 3; k++) drawTextPx(T, VW / 2 - w / 2 + 3 - k, 24 + 3 - k, 60, k == 2 ? Color{ 255, 220, 60, 255 } : (k == 1 ? Color{ 220, 40, 40, 255 } : Color{ 0, 0, 0, 200 }));
-    drawTextCentered("le football français façon 16 bits", VW / 2, 84, 10, C_DIM);
+    const char* T = "WORLD";
+    int w = textWidth(T, 60);
+    for (int k = 0; k < 3; k++) drawTextPx(T, VW / 2 - w / 2 + 3 - k, 24 + 3 - k, 60, k == 2 ? TC[var][0] : (k == 1 ? TC[var][1] : Color{ 0, 0, 0, 200 }));
+    drawTextCentered("Jouez. Gérez. Vivez le football", VW / 2, 84, 10, var == 1 ? WHITE : C_DIM);
+}
+
+static void screenMain(float dt) {
+    g_titleT += dt;
+    if (g_titleVar < 0) g_titleVar = getenv("FOOT_TITLE") ? atoi(getenv("FOOT_TITLE")) % NUM_TITLE_VARS : GetRandomValue(0, NUM_TITLE_VARS - 1);
+    drawTitleScene(g_titleVar);
     // joueurs qui courent
     Kit k1; k1.shirt = 0x1B2A63; k1.shorts = 0xFFFFFF; k1.socks = 0xE2001A;
     Kit k2; k2.shirt = 0xFFFFFF; k2.shirt2 = 0xE2001A; k2.shorts = 0xE2001A; k2.pattern = KP_VSTRIPES; k2.socks = 0xFFFFFF;
@@ -3125,12 +3197,12 @@ static void screenMain(float dt) {
     DrawEllipse((int)px + 12, 138, 4, 1.5f, Color{ 0, 0, 0, 80 });
     DrawCircle((int)px + 12, 135, 3, WHITE);
     std::vector<std::string> items = { "Match amical", "Compétitions internationales", "Carrière club (saisons)", "Carrière de sélectionneur", "Championnat (1res divisions)", "Coupes d'Europe (C1 et C3)", "Compétition personnalisée",
-                                       "Charger une partie", "Entraînement", "Fiches des clubs", "Éditeurs (clubs, sponsors, managers)", "Options", "À propos", "Quitter" };
+                                       "Charger une partie", "Entraînement", "Fiches des clubs", "Éditeurs (clubs, sponsors, managers)", "Options", "À propos", "Soutenir le jeu (Tipeee)", "Quitter" };
     // familles de menus : couleur et description
-    static const int GRP[14] = { 0, 0, 1, 1, 1, 1, 0, 2, 0, 2, 2, 3, 3, 3 };
+    static const int GRP[15] = { 0, 0, 1, 1, 1, 1, 0, 2, 0, 2, 2, 3, 3, 3, 3 };
     static const Color GC[4] = { { 60, 190, 90, 255 }, { 240, 190, 50, 255 }, { 80, 150, 240, 255 }, { 150, 160, 180, 255 } };
     static const char* GN[4] = { "JOUER", "CARRIÈRES", "CLUBS ET DONNÉES", "SYSTÈME" };
-    static const char* DESC[14] = {
+    static const char* DESC[15] = {
         "Un match entre deux équipes au choix : clubs ou sélections, stade, météo, durée, prolongation, tirs au but.",
         "Coupe du monde, Euro, CAN, Copa América... et les compétitions de jeunes : Euro Espoirs, U19, U17, tournoi olympique.",
         "Prenez un club français, de la Ligue 1 au district, et menez-le saison après saison : gestion, mercato, stade.",
@@ -3144,19 +3216,20 @@ static void screenMain(float dt) {
         "Modifier ou créer des clubs, des joueurs, des sponsors et des managers.",
         "Durée des matchs, difficulté, terrain, son, musique, commentaires, clavier et manettes.",
         "Crédits et informations sur le jeu.",
-        "Quitter France Foot 2D." };
-    int mx = 34, mw = 300, my = 138, rh = 14;
-    DrawRectangle(mx - 6, my - 6, mw + 12, rh * 14 + 12, Color{ 6, 12, 28, 190 });
-    DrawRectangleLines(mx - 6, my - 6, mw + 12, rh * 14 + 12, Color{ 240, 200, 60, 180 });
+        "Soutenir le développement du jeu sur Tipeee : fr.tipeee.com/le-bazar-de-monos (ouvre le navigateur).",
+        "Quitter Super Soccer World." };
+    int mx = 34, mw = 300, my = 136, rh = 13;
+    DrawRectangle(mx - 6, my - 6, mw + 12, rh * 15 + 12, Color{ 6, 12, 28, 190 });
+    DrawRectangleLines(mx - 6, my - 6, mw + 12, rh * 15 + 12, Color{ 240, 200, 60, 180 });
     int s = listRun(g_mainLW, (int)items.size(), mx, my, mw, (int)items.size(), rh, [&](int i, int x, int y, bool sel) {
         Color gc = GC[GRP[i]];
         DrawRectangle(x + 4, y + 3, 6, 7, sel ? Color{ 40, 30, 10, 255 } : gc);
-        drawTextPx(items[i], x + 16, y + 2, 10, sel ? BLACK : C_TXT);
+        drawTextPx(items[i], x + 16, y + 1, 10, sel ? BLACK : C_TXT);
         if (i == 0 || GRP[i] != GRP[i - 1]) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 2, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ gc.r, gc.g, gc.b, 170 }); }
     });
     {   // panneau d'information sur l'entrée sélectionnée
-        int cur = std::max(0, std::min(13, g_mainLW.cur));
-        int px = mx + mw + 22, pw = VW - px - 20, py = my - 6, ph = rh * 14 + 12;
+        int cur = std::max(0, std::min(14, g_mainLW.cur));
+        int px = mx + mw + 22, pw = VW - px - 20, py = my - 6, ph = rh * 15 + 12;
         Color gc = GC[GRP[cur]];
         DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
         DrawRectangle(px, py, pw, 16, Color{ gc.r, gc.g, gc.b, 230 });
@@ -3173,7 +3246,7 @@ static void screenMain(float dt) {
         DrawCircle(bx, by, 7, WHITE); DrawCircleLines(bx, by, 7, Color{ 40, 40, 40, 255 });
         DrawPoly(Vector2{ (float)bx, (float)by }, 5, 2.6f, g_titleT * 90, Color{ 30, 30, 30, 255 });
     }
-    drawFooter("Flèches / souris / manette   OK : valider   M ou F9 : musique");
+    drawFooter("Flèches / souris / manette   OK : valider   F9 : musique");
     { std::string v = std::string("v") + GAME_VERSION + fmt(" build %d", GAME_BUILD); drawTextPx(v, VW - 8 - textWidth(v, 10), VH - 14, 10, Color{ 200, 210, 240, 200 }); }
     if (s == 3) {
         g_careerActive = false;
@@ -3184,7 +3257,12 @@ static void screenMain(float dt) {
         return;
     }
     switch (s) {
-    case 0: g_careerActive = false; openPick(PM_FRIENDLY_HOME); break;
+    case 0:
+        g_careerActive = false;
+        askConfirm("Type de match amical :", []() { g_frEnd = 0; openPick(PM_FRIENDLY_HOME); }, "Match complet", "Séance de tirs au but directe",
+                   []() { g_frEnd = 5; openPick(PM_FRIENDLY_HOME); });
+        g_confirm.backCancel = true;
+        break;
     case 1: g_screen = SC_INTL; break;
     case 2: g_careerActive = false; openPick(PM_CAREER); break;
     case 4: g_careerActive = false; g_lmLW = ListW(); g_screen = SC_LEAGUEMODE; break;
@@ -3202,7 +3280,8 @@ static void screenMain(float dt) {
     case 10: g_edMenuLW = ListW(); g_screen = SC_EDITMENU; break;
     case 11: g_optBack = SC_MAIN; g_screen = SC_OPTIONS; break;
     case 12: g_screen = SC_ABOUT; break;
-    case 13: g_quit = true; break;
+    case 13: OpenURL(TIPEEE_URL); toast("Merci pour votre soutien !"); break;
+    case 14: g_quit = true; break;
     }
 }
 
@@ -3242,10 +3321,15 @@ void appFrame(float dt) {
         g_settings.fullscreen = !g_settings.fullscreen; ToggleBorderlessWindowed(); g_settings.save();
         IN.ok = IN.start = false;
     }
-    if (IsKeyPressed(KEY_F9) || (IsKeyPressed(KEY_M) && !g_textMode && g_screen != SC_MATCH)) toggleMusic();
-    g_noBackBtn = g_screen == SC_MAIN || g_screen == SC_JOBS;
+    if (IsKeyPressed(KEY_F9)) toggleMusic();
+    {   // fil d'Ariane pour debug.log : changement d'écran
+        static int markScreen = -1;
+        if ((int)g_screen != markScreen) { crashMark("écran %d", (int)g_screen); markScreen = (int)g_screen; }
+    }
+    g_noBackBtn = g_screen == SC_MAIN || g_screen == SC_JOBS || g_screen == SC_SPLASH;
     audioMusic(g_screen != SC_MATCH && g_screen != SC_HALFTIME && g_screen != SC_TVINTRO && g_screen != SC_SETUP && g_screen != SC_STUDIO);
     switch (g_screen) {
+    case SC_SPLASH: screenSplash(dt); break;
     case SC_MAIN: screenMain(dt); break;
     case SC_PICK: screenPick(); break;
     case SC_SETUP: screenSetup(); break;
@@ -3325,7 +3409,7 @@ void appFrame(float dt) {
         bool yes = button(VW / 2 - 150, y + h - 24, 140, 16, g_confirm.yes, g_confirm.sel == 0);
         bool no = button(VW / 2 + 10, y + h - 24, 140, 16, g_confirm.no, g_confirm.sel == 1);
         if (IN.ok) { if (g_confirm.sel == 0) yes = true; else no = true; }
-        if (IN.back) no = true;
+        if (IN.back) { if (g_confirm.backCancel) { g_confirm.active = false; IN.back = false; } else no = true; }
         if (yes) { auto f = g_confirm.onYes; g_confirm.active = false; if (f) f(); }
         else if (no) { auto f = g_confirm.onNo; g_confirm.active = false; if (f) f(); }
     }

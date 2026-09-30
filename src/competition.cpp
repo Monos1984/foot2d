@@ -1,6 +1,7 @@
 // Moteur de compétitions : championnats (règles de départage), coupes, phases de groupes,
 // Ligue des champions / Coupe UEFA format 2000-2001, barrages
 #include "game.h"
+#include "crashlog.h"
 #include <functional>
 #include <cstring>
 #include <map>
@@ -435,6 +436,7 @@ float clubSeed(int team) {
 }
 
 void Competition::koRound(const std::vector<int>& teams, int lg, double time, const std::string& nm, bool fin) {
+    crashMark("tirage au sort : %s - %s (%d équipes)", name.c_str(), nm.c_str(), (int)teams.size());
     std::vector<int> s = teams;
     // tirage intégral (sans tête de série, sans restriction de pays) : C1 dès les quarts, C3 dès les 8es
     bool freeDraw = (format == FMT_UCL2000 || format == FMT_UEFA2000 || format == FMT_INTERTOTO) &&
@@ -573,6 +575,7 @@ static std::vector<std::vector<int>> drawGroupsUCL(std::vector<int> teams, int n
 }
 
 void Competition::onStageFinished() {
+    crashMark("fin de tour : %s - étape %d / %d", name.c_str(), cur, (int)stages.size());
     Stage& st = stages[cur];
     st.finished = true;
     std::vector<int> winners, losers;
@@ -791,6 +794,7 @@ int Competition::stageOfMatch(int mi) const {
 }
 
 void Competition::cupRound(int k, const std::vector<int>& pool) {
+    crashMark("tirage au sort (coupe) : %s - tour %d (%d équipes)", name.c_str(), k + 1, (int)pool.size());
     int n = (int)pool.size();
     int target = (n + 1) / 2;
     if (k < (int)koTargets.size() && koTargets[k] > 0) target = std::min(koTargets[k], n);
