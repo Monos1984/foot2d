@@ -36,7 +36,7 @@ std::string Career::windowText() const {
     int m = monthOf(season.now);
     if (m == 0) return "Mercato d'été ouvert (jusqu'à fin août)";
     if (m == 5) return "Mercato d'hiver ouvert (janvier)";
-    if (m < 5) return "Mercato fermé (réouverture en janvier)";
+    if (m < 5) return jokerAvailable() ? "Mercato fermé : 1 joueur joker autorisé" : "Mercato fermé (réouverture en janvier)";
     return "Mercato fermé (réouverture l'été prochain)";
 }
 
@@ -98,6 +98,22 @@ void Career::mgrInit() {
     }
     if (!g_world.teams[userTeam].sponsor.empty() && mgr.sponsorIncome == 0) { mgr.sponsorIncome = std::max<int64_t>(2, mgr.incomeBase / 12); if (mgr.sponsorYears == 0) mgr.sponsorYears = 1 + (int)(hashStr(g_world.teams[userTeam].name) % 3); }
     if (!mgr.managerMode) mgr.noSack = true;
+    mgr.mercatoFlags = 0; mgr.jokerUsed = 0;
+    {   // DNCG (clubs français de L1 à National 1) : masse salariale encadrée selon les revenus et la santé financière
+        int t0 = tierOfTeam(userTeam);
+        bool fr0 = pyramids[p].country == "FRA" && pyramids[p].dom < 0;
+        mgr.wageCapK = 0;
+        if (fr0 && t0 >= 0 && t0 <= 3 && mgr.managerMode) {
+            int64_t cap = mgr.incomeBase * 75 / 100 + std::max<int64_t>(0, mgr.budget) / 3;
+            if (mgr.dncg > 0) cap = cap * 85 / 100;
+            mgr.wageCapK = std::max<int64_t>(cap, wageBill(userTeam));
+            season.news.push_back("DNCG : masse salariale encadrée à " + money(mgr.wageCapK) + " par an pour la saison" + (mgr.dncg > 0 ? " (club sous surveillance : recrutements payants interdits)." : "."));
+        }
+    }
+    if (mgr.fpfBan) {   // fair-play financier : exclusion des coupes d'Europe
+        mgr.fpfBan = 0;
+        for (int c : { ucl, uel, uecl, intertoto }) if (c >= 0 && withdrawFromCup(c, userTeam)) season.news.push_back("Fair-play financier : le club est exclu de " + season.comps[c].name + " cette saison.");
+    }
     season.news.push_back("Objectif du président : " + objectiveText() + ".");
     mgr.offers.clear();
     if (mgr.managerMode) genOffers(g_rng.range(0, 2));
@@ -606,12 +622,12 @@ static void logTransfer(Career& K, const Player& p, int from, int to, int fee) {
 }
 
 bool Career::buyPlayer(int pid, int fee, std::string& err) {
-    if (!transferWindow()) { err = "Le mercato est fermé."; return false; }
+    if (!transferWindow() && !jokerAvailable()) { err = "Le mercato est fermé."; return false; }
     int idx; int src = g_world.findPlayer(pid, &idx);
     if (src < 0) { err = "Joueur introuvable."; return false; }
     if (src == userTeam) { err = "Ce joueur est déjà au club."; return false; }
     Team& U = g_world.teams[userTeam];
-    if (U.squad.size() >= 32) { err = "Effectif complet (32 joueurs maximum)."; return false; }
+    if (U.squad.size() >= 99) { err = "Effectif complet (99 numéros de maillot)."; return false; }
     if (fee > mgr.budget) { err = "Budget insuffisant."; return false; }
     if (mgr.dncg > 0 && fee > 0) { err = "DNCG : recrutements payants interdits."; return false; }
     const Player& P = g_world.teams[src].squad[idx];
@@ -625,6 +641,7 @@ bool Career::buyPlayer(int pid, int fee, std::string& err) {
     mgr.budget -= fee; mgr.seasonTransfers -= fee;
     logTransfer(*this, copy, src, userTeam, fee);
     season.news.push_back("Mercato : " + copy.name + " rejoint " + U.name + " (" + g_world.teams[src].name + (fee > 0 ? ", " + money(fee) : ", libre") + ").");
+    if (!transferWindow()) mgr.jokerUsed = 1;
     return true;
 }
 
@@ -645,18 +662,19 @@ bool Career::sellPlayer(int pid, int to, int fee, std::string& err) {
 
 // ------------------------------------------------------------------ négociation : le club vendeur, puis le joueur
 int Career::signPlayer(int pid, int fee, int wage, int years, std::string& msg) {
-    if (!transferWindow()) { msg = "Le mercato est fermé."; return -2; }
+    if (!transferWindow() && !jokerAvailable()) { msg = "Le mercato est fermé."; return -2; }
     int idx; int src = g_world.findPlayer(pid, &idx);
     if (src < 0) { msg = "Joueur introuvable."; return -2; }
     if (src == userTeam) { msg = "Ce joueur est déjà au club."; return -2; }
     Team& U = g_world.teams[userTeam];
-    if (U.squad.size() >= 32) { msg = "Effectif complet (32 joueurs maximum)."; return -2; }
+    if (U.squad.size() >= 99) { msg = "Effectif complet (99 numéros de maillot)."; return -2; }
     const Player& P = g_world.teams[src].squad[idx];
     bool freeP = g_world.teams[src].freeAgents;
     bool ownReserve = g_world.teams[src].parent == userTeam;
     int bonus = U.status == CS_AMATEUR ? 0 : std::max(0, wage * years / 10);          // prime à la signature : 10 % du contrat
     if (mgr.dncg > 0 && fee > 0) { msg = "DNCG : le club est sous surveillance, seuls les joueurs libres peuvent être recrutés."; return -2; }
     if (fee + bonus > mgr.budget) { msg = "Budget insuffisant (indemnité + prime à la signature)."; return -2; }
+    if (mgr.wageCapK > 0 && U.status != CS_AMATEUR && wageBill(userTeam) + wage > mgr.wageCapK) { msg = "DNCG : masse salariale encadrée (" + money(mgr.wageCapK) + " / an), ce contrat la ferait dépasser."; return -2; }
     // le club vendeur
     if (!freeP && !ownReserve) {
         int ask = (int)(P.value() * 1.1);
@@ -689,6 +707,7 @@ int Career::signPlayer(int pid, int fee, int wage, int years, std::string& msg) 
     logTransfer(*this, copy, src, userTeam, fee);
     season.news.push_back("Mercato : " + copy.name + " rejoint " + U.name + " (" + (freeP ? std::string("joueur libre") : g_world.teams[src].name + (fee > 0 ? ", " + money(fee) : ", libre")) + fmt(", contrat de %d an%s, ", copy.years, copy.years > 1 ? "s" : "") + money(wage) + " / an" + (bonus ? ", prime à la signature " + money(bonus) : std::string()) + ").");
     msg = copy.name + " signe au club !";
+    if (!transferWindow()) { mgr.jokerUsed = 1; msg += " (joueur joker)"; season.news.push_back("Joueur joker : " + copy.name + " signe hors mercato."); }
     return 1;
 }
 
@@ -841,5 +860,180 @@ void Career::aiTransfers(int n) {
             copy.years = 0;
             addToSquad(a, copy, fa);
         }
+    }
+}
+
+// ------------------------------------------------------------------ build 5 : joker, extra-communautaires, prêts, numéros, presse du mercato, fair-play financier
+// joueur joker (L1, L2, Ligue 3) : un recrutement hors mercato entre la fermeture estivale et le mercato d'hiver
+bool Career::jokerAvailable() const {
+    if (kind != CK_CLUB || userTeam < 0 || mgr.jokerUsed || transferWindow()) return false;
+    int m = monthOf(season.now);
+    if (m < 1 || m > 4) return false;
+    int p, q, g;
+    int t = tierOfTeam(userTeam, &p, &q, &g);
+    return t >= 0 && t <= 2 && pyramids[p].country == "FRA" && pyramids[p].dom < 0;
+}
+
+// Union européenne, Espace économique européen, Suisse et micro-États associés
+bool isNonEU(const Player& p, int team) {
+    static const char* EU[] = { "FRA", "GER", "ITA", "ESP", "POR", "NED", "BEL", "LUX", "IRL", "DEN", "SWE", "FIN", "AUT", "GRE", "CYP", "MLT", "SVN", "SVK",
+                                "CZE", "POL", "HUN", "ROU", "BUL", "CRO", "EST", "LVA", "LTU", "NOR", "ISL", "LIE", "SUI", "AND", "SMR", "MON" };
+    int nat = p.nation >= 0 ? p.nation : (team >= 0 && team < (int)g_world.teams.size() ? g_world.teams[team].nation : -1);
+    if (nat < 0 || nat >= NUM_NATIONS) return false;
+    for (auto c : EU) if (strcmp(NATIONS[nat].code, c) == 0) return false;
+    return true;
+}
+// feuille de match : L1 4, L2 2, National 3, National 2 / 3, Régional et District 2 (clubs français en carrière)
+int nonEuLimit(int team) {
+    if (team < 0 || team >= (int)g_world.teams.size()) return 99;
+    const Team& T = g_world.teams[team];
+    if (T.kind != TK_CLUB || T.nation < 0 || strcmp(NATIONS[T.nation].code, "FRA") != 0) return 99;
+    int lv = teamLevel(team);
+    if (lv >= 99) return 99;
+    return lv == 0 ? 4 : lv == 1 ? 2 : lv == 2 ? 3 : 2;
+}
+
+// numéros : gardiens 1, 16, 30 ; défenseurs 2 à 6 ; milieux 6, 8, 10... ; attaquants 9, 7, 11... puis les suivants libres
+void autoNumbers(int team) {
+    Team& T = g_world.teams[team];
+    std::vector<int> order(T.squad.size());
+    for (size_t i = 0; i < order.size(); i++) order[i] = (int)i;
+    std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return T.squad[a].overall() > T.squad[b].overall(); });
+    static const int PREF[4][8] = { { 1, 16, 30, 40, 50, 60, 70, 99 }, { 2, 4, 5, 3, 6, 12, 13, 15 }, { 8, 6, 10, 14, 17, 18, 20, 21 }, { 9, 7, 11, 19, 22, 23, 24, 27 } };
+    std::vector<bool> used(100, false);
+    for (int i : order) {
+        Player& p = T.squad[i];
+        int n = 0;
+        for (int k = 0; k < 8 && !n; k++) if (!used[PREF[p.pos & 3][k]]) n = PREF[p.pos & 3][k];
+        if (!n) { n = 2; while (n < 99 && used[n]) n++; }
+        used[n] = true; p.num = (uint8_t)n;
+    }
+}
+
+// prêts : quotas selon la division (entrants / sortants)
+int Career::loansIn(int team) const { int n = 0; for (auto& l : loans) if (l.to == team) n++; return n; }
+int Career::loansOut(int team) const { int n = 0; for (auto& l : loans) if (l.from == team) n++; return n; }
+int Career::loanLimitIn(int team) const { int lv = teamLevel(team); return lv <= 1 ? 4 : lv == 2 ? 5 : 6; }
+int Career::loanLimitOut(int team) const { int lv = teamLevel(team); return lv <= 1 ? 8 : 6; }
+
+bool Career::loanIn(int pid, std::string& err) {
+    if (!transferWindow() && !jokerAvailable()) { err = "Le mercato est fermé."; return false; }
+    int idx; int src = g_world.findPlayer(pid, &idx);
+    if (src < 0 || src == userTeam) { err = "Joueur introuvable."; return false; }
+    Team& S = g_world.teams[src]; Team& U = g_world.teams[userTeam];
+    if (S.freeAgents) { err = "Joueur libre : signez-le directement."; return false; }
+    if (U.squad.size() >= 99) { err = "Effectif complet (99 numéros)."; return false; }
+    if (loansIn(userTeam) >= loanLimitIn(userTeam)) { err = fmt("Quota de prêts atteint pour votre division (%d joueurs prêtés au maximum).", loanLimitIn(userTeam)); return false; }
+    for (auto& l : loans) if (l.pid == pid) { err = "Ce joueur est déjà prêté."; return false; }
+    const Player& P = S.squad[idx];
+    // le club prêteur garde ses titulaires
+    std::vector<int> ov; for (auto& q : S.squad) ov.push_back(q.overall());
+    std::sort(ov.rbegin(), ov.rend());
+    if (ov.size() > 11 && P.overall() >= ov[10] && S.parent != userTeam) { err = S.name + " refuse de prêter un titulaire."; return false; }
+    if (P.overall() > teamReputation(userTeam) + 18) { err = P.name + " ne veut pas être prêté à un club de ce niveau."; return false; }
+    int wage = P.contract == 2 ? 0 : playerWage(P) / 2;       // salaire partagé à 50 %
+    if (mgr.wageCapK > 0 && wageBill(userTeam) + wage > mgr.wageCapK) { err = "DNCG : masse salariale encadrée, ce prêt la ferait dépasser."; return false; }
+    Player copy = P;
+    removeFromSquad(src, idx);
+    addToSquad(userTeam, copy, src);
+    Loan l; l.pid = pid; l.from = src; l.to = userTeam; l.year = (int16_t)year; loans.push_back(l);
+    if (!transferWindow()) { mgr.jokerUsed = 1; season.news.push_back("Joueur joker : " + copy.name + " arrive hors mercato."); }
+    logTransfer(*this, copy, src, userTeam, 0);
+    season.news.push_back("Mercato : " + copy.name + " est prêté par " + S.name + " jusqu'à la fin de la saison (salaire partagé).");
+    return true;
+}
+
+bool Career::loanOut(int pid, std::string& err) {
+    if (!transferWindow()) { err = "Le mercato est fermé."; return false; }
+    int idx; int src = g_world.findPlayer(pid, &idx);
+    if (src != userTeam) { err = "Ce joueur n'appartient pas au club."; return false; }
+    Team& U = g_world.teams[userTeam];
+    if (U.squad.size() <= 16) { err = "Effectif trop réduit (16 joueurs minimum)."; return false; }
+    for (auto& l : loans) if (l.pid == pid) { err = "Joueur déjà concerné par un prêt."; return false; }
+    if (loansOut(userTeam) >= loanLimitOut(userTeam)) { err = fmt("Quota de prêts sortants atteint (%d).", loanLimitOut(userTeam)); return false; }
+    const Player& P = U.squad[idx];
+    // un club d'une ou deux divisions en dessous, qui a besoin de ce poste
+    int lv = teamLevel(userTeam), best = -1; float bs = -1e9f;
+    for (int t = 0; t < (int)g_world.teams.size(); t++) {
+        const Team& T = g_world.teams[t];
+        if (t == userTeam || T.kind != TK_CLUB || T.parent >= 0 || T.freeAgents || T.custom) continue;
+        int l2 = teamLevel(t);
+        if (l2 >= 99 || l2 < lv || l2 > lv + 2 || T.nation != U.nation) continue;
+        if (loansIn(t) >= loanLimitIn(t)) continue;
+        float need = P.overall() - T.rating + g_rng.frange(0, 6) - (l2 - lv) * 2;
+        if (need > bs) { bs = need; best = t; }
+    }
+    if (best < 0) { err = "Aucun club intéressé par ce prêt."; return false; }
+    Player copy = P;
+    removeFromSquad(userTeam, idx);
+    g_world.ensureSquad(best);
+    addToSquad(best, copy, userTeam);
+    Loan l; l.pid = pid; l.from = userTeam; l.to = best; l.year = (int16_t)year; loans.push_back(l);
+    logTransfer(*this, copy, userTeam, best, 0);
+    season.news.push_back("Mercato : " + copy.name + " est prêté à " + g_world.teams[best].name + " pour la saison (temps de jeu).");
+    return true;
+}
+
+// fin de saison : les joueurs prêtés rentrent chez eux
+void Career::returnLoans(std::vector<std::string>& msgs) {
+    for (auto& l : loans) {
+        int idx; int at = g_world.findPlayer(l.pid, &idx);
+        if (at < 0 || l.from < 0 || l.from >= (int)g_world.teams.size() || at == l.from) continue;
+        Player p = g_world.teams[at].squad[idx];
+        g_world.teams[at].squad.erase(g_world.teams[at].squad.begin() + idx);
+        g_world.teams[at].xi.erase(std::remove(g_world.teams[at].xi.begin(), g_world.teams[at].xi.end(), p.id), g_world.teams[at].xi.end());
+        addToSquad(l.from, p, at);
+        if (l.from == userTeam || at == userTeam) msgs.push_back("Fin de prêt : " + p.name + " retourne à " + g_world.teams[l.from].name + ".");
+    }
+    loans.clear();
+}
+
+// presse : ouverture, dernier jour (rush) et clôture des mercatos d'été et d'hiver
+void Career::mercatoPress() {
+    if (kind != CK_CLUB || userTeam < 0) return;
+    double t = season.now;
+    struct Ev { double at; uint8_t bit; const char* txt; };
+    static const Ev EV[] = {
+        { 0.0, 1, "LE JOURNAL DU MERCATO : le mercato d'été est ouvert ! Les clubs ont jusqu'au 31 août pour boucler leurs recrutements." },
+        { 3.6, 2, "LE JOURNAL DU MERCATO : dernier jour du mercato d'été ! Rush des derniers transferts, les fax chauffent jusqu'à minuit." },
+        { 4.2, 4, "LE JOURNAL DU MERCATO : clôture du mercato d'été. Rendez-vous en janvier (joker possible en L1, L2 et Ligue 3)." },
+        { 21.0, 8, "LE JOURNAL DU MERCATO : ouverture du mercato d'hiver ! Un mois pour renforcer l'effectif." },
+        { 24.6, 16, "LE JOURNAL DU MERCATO : dernier jour du mercato d'hiver, les clubs s'activent pour les dernières signatures." },
+        { 25.2, 32, "LE JOURNAL DU MERCATO : clôture du mercato d'hiver. Plus aucun transfert avant l'été." } };
+    for (auto& e : EV) {
+        if (t < e.at || (mgr.mercatoFlags & e.bit)) continue;
+        mgr.mercatoFlags |= e.bit;
+        season.news.push_back(e.txt);
+        if (e.bit == 2 || e.bit == 16) {   // le rush : quelques transferts marquants de la journée
+            int shown = 0;
+            for (int k = (int)mgr.transfers.size() - 1; k >= 0 && shown < 3; k--) {
+                const TransferRec& r = mgr.transfers[k];
+                if (r.year != year || r.fee <= 0 || r.from < 0 || r.to < 0) continue;
+                season.news.push_back(std::string("Rush du mercato : ") + r.name + " (" + g_world.teams[r.from].shortName + " -> " + g_world.teams[r.to].name + ", " + money(r.fee) + ").");
+                shown++;
+            }
+        }
+    }
+}
+
+// fair-play financier de l'UEFA : clubs engagés en coupe d'Europe
+void Career::fpfCheck(std::vector<std::string>& msgs) {
+    if (kind != CK_CLUB || userTeam < 0) return;
+    bool euro = false;
+    for (int c : { ucl, uel, uecl, intertoto }) {
+        if (c < 0 || c >= (int)season.comps.size()) continue;
+        for (auto& m : season.comps[c].matches) if (m.home == userTeam || m.away == userTeam) { euro = true; break; }
+    }
+    if (!euro) { if (mgr.fpfStrikes > 0 && mgr.budget >= 0) mgr.fpfStrikes--; return; }
+    int64_t net = mgr.seasonIncome + mgr.seasonGate + mgr.seasonShop + mgr.seasonTransfers - mgr.seasonWages - mgr.seasonStadiumCost;
+    if (net < -mgr.incomeBase / 4) {
+        mgr.fpfStrikes++;
+        int64_t fine = std::max<int64_t>(50, mgr.incomeBase / 20);
+        mgr.budget -= fine;
+        msgs.push_back(fmt("FAIR-PLAY FINANCIER (UEFA) : déficit de %s sur la saison. Amende de %s", money(-net).c_str(), money(fine).c_str()) + (mgr.fpfStrikes >= 2 ? " et exclusion des coupes d'Europe la saison prochaine !" : " (avertissement)."));
+        if (mgr.fpfStrikes >= 2) { mgr.fpfBan = 1; mgr.fpfStrikes = 0; }
+    } else {
+        if (mgr.fpfStrikes > 0) mgr.fpfStrikes--;
+        msgs.push_back("Fair-play financier (UEFA) : comptes de la saison conformes.");
     }
 }

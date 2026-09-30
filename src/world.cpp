@@ -540,7 +540,13 @@ std::vector<int> World::pickLineup(int team, int formation) const {
     const Formation& F = FORMATIONS[formation];
     std::vector<int> out;
     std::vector<bool> used(t.squad.size(), false);
-    auto avail = [&](int i) { return !used[i] && t.squad[i].suspended <= 0 && t.squad[i].injured <= 0; };
+    // extra-communautaires : quota sur la feuille de match (clubs français)
+    int neLimit = nonEuLimit(team), neUsed = 0;
+    std::vector<bool> ne(t.squad.size(), false);
+    if (neLimit < 99) for (size_t i = 0; i < t.squad.size(); i++) ne[i] = isNonEU(t.squad[i], team);
+    auto availRaw = [&](int i) { return !used[i] && t.squad[i].suspended <= 0 && t.squad[i].injured <= 0; };
+    auto avail = [&](int i) { return availRaw(i) && (!ne[i] || neUsed < neLimit); };
+    auto take = [&](int i) { used[i] = true; if (ne[i]) neUsed++; };
     // valeur de sélection : niveau, pénalisé si le joueur est fatigué
     auto sv = [&](int i) { int c = playerCond(team, t.squad[i]); return t.squad[i].overall() * 4 - std::max(0, 72 - c); };
     auto best = [&](int pos) {
@@ -550,19 +556,20 @@ std::vector<int> World::pickLineup(int team, int formation) const {
         if (b < 0) for (int i = 0; i < (int)t.squad.size(); i++)
             if (avail(i) && sv(i) > bv && t.squad[i].pos != POS_GK) { bv = sv(i); b = i; }
         if (b < 0) for (int i = 0; i < (int)t.squad.size(); i++) if (!used[i]) { b = i; break; }
-        if (b >= 0) used[b] = true;
+        if (b >= 0) take(b);
         return b;
     };
     // titulaires choisis par l'entraîneur : on les place au poste le plus proche
     std::vector<int> manual;
     if (t.xi.size() == 11) {
-        for (int id : t.xi) for (int i = 0; i < (int)t.squad.size(); i++) if (t.squad[i].id == id && avail(i)) manual.push_back(i);
+        int mNe = 0;
+        for (int id : t.xi) for (int i = 0; i < (int)t.squad.size(); i++) if (t.squad[i].id == id && avail(i) && (!ne[i] || mNe++ < neLimit)) manual.push_back(i);
     }
     if (!manual.empty()) {
         // gardien
         int gk = -1;
         for (int i : manual) if (t.squad[i].pos == POS_GK) { gk = i; break; }
-        if (gk >= 0) used[gk] = true; else gk = best(POS_GK);
+        if (gk >= 0) take(gk); else gk = best(POS_GK);
         out.push_back(gk);
         std::vector<int> rest; for (int i : manual) if (i != gk && t.squad[i].pos != POS_GK) rest.push_back(i);
         std::vector<int> slot(10, -1);
@@ -570,7 +577,7 @@ std::vector<int> World::pickLineup(int team, int formation) const {
             for (int k = 0; k < 10; k++) {
                 if (slot[k] >= 0) continue;
                 int want = F.role[k] == 1 ? POS_DF : F.role[k] == 2 ? POS_MF : POS_FW;
-                for (int i : rest) if (!used[i] && (pass == 1 || t.squad[i].pos == want)) { slot[k] = i; used[i] = true; break; }
+                for (int i : rest) if (avail(i) && (pass == 1 || t.squad[i].pos == want)) { slot[k] = i; take(i); break; }
             }
         for (int k = 0; k < 10; k++) if (slot[k] < 0) slot[k] = best(F.role[k] == 1 ? POS_DF : F.role[k] == 2 ? POS_MF : POS_FW);
         for (int k = 0; k < 10; k++) out.push_back(slot[k]);
@@ -581,11 +588,11 @@ std::vector<int> World::pickLineup(int team, int formation) const {
     // remplaçants : 1 gardien + 8 meilleurs restants
     int gk = -1;
     for (int i = 0; i < (int)t.squad.size(); i++) if (avail(i) && t.squad[i].pos == POS_GK) { gk = i; break; }
-    if (gk >= 0) { used[gk] = true; out.push_back(gk); }
+    if (gk >= 0) { take(gk); out.push_back(gk); }
     std::vector<int> rest;
     for (int i = 0; i < (int)t.squad.size(); i++) if (avail(i)) rest.push_back(i);
     std::sort(rest.begin(), rest.end(), [&](int a, int b) { return t.squad[a].overall() > t.squad[b].overall(); });
-    for (int i = 0; i < (int)rest.size() && i < 8; i++) out.push_back(rest[i]);
+    for (int i = 0, n = 0; i < (int)rest.size() && n < 8; i++) if (avail(rest[i])) { out.push_back(rest[i]); take(rest[i]); n++; }
     return out;
 }
 

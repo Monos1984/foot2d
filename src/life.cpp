@@ -300,5 +300,5 @@ float lifeBribeDelta(const MatchRes& m) {
     return L.bribeTeam == m.away ? d : -d;
 }
 
-void Career::saveV17(Writer& w) const { w.pod(life); }
-void Career::loadV17(Reader& r) { r.pod(life); }
+void Career::saveV17(Writer& w) const { w.pod(life); w.vpod(loans); w.pod(mgr.mercatoFlags); w.pod(mgr.jokerUsed); w.pod(mgr.fpfStrikes); w.pod(mgr.fpfBan); w.pod(mgr.wageCapK); }
+void Career::loadV17(Reader& r) { r.pod(life); r.vpod(loans); r.pod(mgr.mercatoFlags); r.pod(mgr.jokerUsed); r.pod(mgr.fpfStrikes); r.pod(mgr.fpfBan); r.pod(mgr.wageCapK); }

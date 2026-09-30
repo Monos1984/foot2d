@@ -1667,7 +1667,7 @@ void Career::endSeason() {
         if (r.cup >= 0) prevCupWinner[pyramids[p].country] = r.cup;
     }
     std::vector<std::string> msgs;
-    if (kind == CK_CLUB && !euroOnly) mgrEndSeason(msgs);       // avant les montées/descentes : classement final réel
+    if (kind == CK_CLUB && !euroOnly) { mgrEndSeason(msgs); fpfCheck(msgs); returnLoans(msgs); }      // avant les montées/descentes : classement final réel
     computeUefaPoints(*this);
     computeEuro(*this, true);
     std::map<int, RankInfo> rank;
@@ -2886,7 +2886,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 17;
+static const unsigned SAVE_VERSION = 18;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -3000,7 +3000,7 @@ bool Career::load(const char* path) {
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
-    if (magic != SAVE_MAGIC || ver < 17 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
+    if (magic != SAVE_MAGIC || ver < 18 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }
@@ -3349,7 +3349,7 @@ void Career::resetV7() {
     euroOnly = false;
     intlFormat = 0; honourLog.clear(); honourVenue.clear(); uclFinalVenue.clear(); uefaFinalVenue.clear(); tdcVenue.clear(); intertoto = -1;
     managerName.clear(); managerNation = -1; managerSkin = 0; managerHair = 0; managerAge = 45; newsRead.clear(); retiring.clear(); mgr.boardRequests = 0;
-    life = PlayerLife();
+    life = PlayerLife(); loans.clear();
 }
 
 // aperçu des qualifiés européens sans modifier la carrière (bilan de fin de saison)

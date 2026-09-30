@@ -1648,6 +1648,7 @@ static void screenHub() {
         crashMark("carrière : avance du calendrier (saison %d)", g_career.year);
         g_pending = S.advance(false);
         g_needAdvance = false;
+        g_career.mercatoPress();
         lifeCheckPromotion();
         g_career.mgrTick();
         if (collectDraws()) { g_screen = SC_DRAW; return; }
@@ -3747,7 +3748,7 @@ void appTestStart(const char* mode) {
         int p, q, gg; g_career.tierOfTeam(user, &p, &q, &gg);
         openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2;
     }
-    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "market" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
+    else if (m == "table" || m == "cup" || m == "hub2" || m == "squad" || m == "fixtures" || m == "end" || m == "scorers" || m == "market" || m == "market4" || m == "market5" || m == "finance" || m == "minfo" || m == "groups" || m == "confirm" || m == "fiche3" || m == "stadium" || m == "stadium2" || m == "stadium3" || m == "stadium4" || m == "stadium6" || m == "stadium7" || m == "stadcrash" || m == "cuphub" || m == "nego" || m == "archive" || m == "finance3") {
         int user = -1;
         for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Lavallois") user = i;
         g_career.newClubCareer(user, 2026); g_careerActive = true;
@@ -3762,6 +3763,7 @@ void appTestStart(const char* mode) {
         if (m == "end") { S.advance(true); g_screen = SC_SEASONEND; }
         if (m == "scorers") { openCompView(g_career.pyramids[p].pools[q].comps[gg]); g_cvMode = 2; }
         if (m == "market" || m == "nego") openMarket();
+        if (m == "market4" || m == "market5") { openMarket(); g_mkTab = m == "market4" ? 3 : 4; std::string e; g_career.loanIn(g_world.teams[g_world.nationIndex("FRA")].squad.empty() ? -1 : -1, e); }
         if (m == "nego" && !g_mkList.empty()) { MkRow r = g_mkList[0]; g_nego = Nego(); g_nego.active = true; g_nego.team = r.team; g_nego.pid = r.pid; g_nego.ask = askingPrice(r.team, r.idx); g_nego.fee = g_nego.ask * 8 / 10; g_nego.demand = wageDemand(g_world.teams[r.team].squad[r.idx], g_career.userTeam); g_nego.wage = g_nego.demand; g_nego.last = "Test : refus du club"; }
         if (m == "archive") { while (!S.finished) S.advance(true); g_career.endSeason(); openFiche(user, SC_HUB); g_fichePage = 3; }
         if (m == "finance3") g_screen = SC_FINANCE;

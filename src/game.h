@@ -513,7 +513,15 @@ struct ManagerState {
     int bankrupt = 0;               // dépôt de bilan prononcé (appliqué à la fin de la saison)
     int sponsorYears = 0;           // version 15 : saisons restantes du contrat de sponsor maillot (0 = sans durée)
     int namingYears = 0;            // saisons restantes du contrat de nom du stade
+    // build 5 : mercato, joker, DNCG, fair-play financier (version 18)
+    uint8_t mercatoFlags = 0;       // annonces de presse déjà publiées (ouverture, dernier jour, clôture)
+    uint8_t jokerUsed = 0;          // joueur joker recruté hors mercato cette saison
+    uint8_t fpfStrikes = 0;         // infractions au fair-play financier de l'UEFA
+    uint8_t fpfBan = 0;             // exclusion des coupes d'Europe la saison suivante
+    int64_t wageCapK = 0;           // masse salariale maximale fixée par la DNCG (k€ / an, 0 = pas d'encadrement)
 };
+// prêt d'un joueur (retour au club d'origine en fin de saison)
+struct Loan { int32_t pid = -1, from = -1, to = -1; int16_t year = 0; uint8_t wagePct = 50, pad = 0; };
 
 enum CareerKind { CK_CLUB = 0, CK_INTL = 1, CK_CUSTOM = 2 };
 
@@ -737,6 +745,18 @@ struct Career {
     // manager
     bool transferWindow() const;       // mercato ouvert ?
     std::string windowText() const;
+    // build 5 : joker, extra-communautaires, prêts, numéros, DNCG, fair-play financier, presse du mercato
+    bool jokerAvailable() const;
+    std::vector<Loan> loans;
+    bool loanIn(int pid, std::string& err);
+    bool loanOut(int pid, std::string& err);
+    void returnLoans(std::vector<std::string>& msgs);
+    int loansIn(int team) const;
+    int loansOut(int team) const;
+    int loanLimitIn(int team) const;
+    int loanLimitOut(int team) const;
+    void mercatoPress();
+    void fpfCheck(std::vector<std::string>& msgs);
     void mgrInit();                    // budget / objectifs en début de saison
     void mgrTick();                    // mois écoulés : salaires, droits TV
     void mgrAfterMatch(int comp, int mi);
@@ -805,6 +825,9 @@ struct Career;
 void stadiumMonth(Career& K);
 std::string cdfEntryText(int region);
 int playerWage(const Player& p);
+bool isNonEU(const Player& p, int team);       // joueur extra-communautaire (hors UE / EEE / Suisse)
+int nonEuLimit(int team);                      // extra-communautaires autorisés sur la feuille de match (clubs français)
+void autoNumbers(int team);                    // attribution automatique des numéros (1 à 99)
 // économie (economy.cpp)
 int teamReputation(int team);
 void addReputation(int team, int delta);

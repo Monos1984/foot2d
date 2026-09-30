@@ -144,11 +144,13 @@ static void screenMarket() {
     Team& U = g_world.teams[g_career.userTeam];
     drawTextPx("Budget : " + money(M.budget), 12, 32, 10, M.budget >= 0 ? C_GOOD : C_BAD);
     drawTextPx(fmt("Effectif : %d joueurs", (int)U.squad.size()), 170, 32, 10, C_TXT);
-    drawTextPx(fitText(g_career.windowText(), 290, 10), 330, 32, 10, g_career.transferWindow() ? C_GOOD : C_BAD);
-    static const char* TABS[] = { "Acheter", "Vendre / libérer", "Transferts récents" };
-    for (int i = 0; i < 3; i++) if (button(12 + i * 130, 46, 126, 14, TABS[i], g_mkTab == i)) { g_mkTab = i; g_mkLW = ListW(); }
-    if (IN.pgUp) { g_mkTab = (g_mkTab + 2) % 3; g_mkLW = ListW(); }
-    if (IN.pgDn) { g_mkTab = (g_mkTab + 1) % 3; g_mkLW = ListW(); }
+    drawTextPx(fitText(g_career.windowText(), 290, 10), 330, 32, 10, g_career.transferWindow() || g_career.jokerAvailable() ? C_GOOD : C_BAD);
+    static const char* TABS[] = { "Acheter", "Vendre / libérer", "Transferts récents", "Numéros", "Prêts et quotas" };
+    for (int i = 0; i < 5; i++) if (button(12 + i * 124, 46, 120, 14, TABS[i], g_mkTab == i)) { g_mkTab = i; g_mkLW = ListW(); }
+    if (IN.pgUp) { g_mkTab = (g_mkTab + 4) % 5; g_mkLW = ListW(); }
+    if (IN.pgDn) { g_mkTab = (g_mkTab + 1) % 5; g_mkLW = ListW(); }
+    int neLim = nonEuLimit(g_career.userTeam), neCnt = 0;
+    for (auto& q : U.squad) if (isNonEU(q, g_career.userTeam)) neCnt++;
     int y = 64;
     if (g_mkTab == 0) {
         if (g_nego.active) { marketNegotiation(); return; }
@@ -176,7 +178,7 @@ static void screenMarket() {
         drawTextPx("P   Joueur", 16, y, 10, C_DIM); drawTextPx("Âge", 190, y, 10, C_DIM); drawTextPx("Note", 222, y, 10, C_DIM);
         drawTextPx("Club", 262, y, 10, C_DIM); drawTextPx("Prix", VW - 150, y, 10, C_DIM); drawTextPx("Salaire", VW - 76, y, 10, C_DIM);
         y += 12;
-        int sel = listRun(g_mkLW, (int)rows.size(), 12, y, VW - 24, (VH - 18 - y) / 12, 12, [&](int i, int x, int yy, bool s2) {
+        int sel = listRun(g_mkLW, (int)rows.size(), 12, y, VW - 24, (VH - 36 - y) / 12, 12, [&](int i, int x, int yy, bool s2) {
             const MkRow& r = g_mkList[rows[i]];
             const Team& T = g_world.teams[r.team];
             const Player& p = T.squad[r.idx];
@@ -192,8 +194,19 @@ static void screenMarket() {
             drawTextPx(price ? money(price) : "gratuit", x + VW - 162, yy + 1, 10, price <= M.budget ? c : C_BAD);
             drawTextPx(money(wageDemand(p, g_career.userTeam)), x + VW - 88, yy + 1, 10, c);
             if (T.freeAgents) drawTextPx("libre", x + 240, yy + 1, 10, s2 ? BLACK : C_GOOD);
+            if (neLim < 99 && isNonEU(p, g_career.userTeam)) DrawRectangle(x + 16, yy + 2, 3, 8, C_BAD);   // extra-communautaire
         });
         if (rows.empty()) drawTextCentered("Aucun joueur ne correspond", VW / 2, y + 20, 10, C_DIM);
+        {
+            int cur = g_mkLW.cur;
+            if (cur >= 0 && cur < (int)rows.size()) {
+                const MkRow& r = g_mkList[rows[cur]];
+                if (!g_world.teams[r.team].freeAgents && button(12, VH - 32, 200, 14, "Demander un prêt (salaire partagé)")) {
+                    std::string err; if (g_career.loanIn(r.pid, err)) { toast("Prêt conclu"); buildMarket(); } else toast(err);
+                }
+            }
+            if (neLim < 99) drawTextPx(fmt("Barre rouge : extra-communautaire (%d dans l'effectif, %d sur la feuille)", neCnt, neLim), 222, VH - 30, 10, neCnt > neLim ? C_HI : C_DIM);
+        }
         drawFooter("OK : négocier   LB/RB : onglet   Retour");
         if (sel >= 0) {
             MkRow r = g_mkList[rows[sel]];
@@ -226,6 +239,7 @@ static void screenMarket() {
             if (button(12, VH - 32, 110, 14, "Salaire +10 %")) { if (g_career.changeWage(pid, 10, msg)) toast(msg); else toast(msg.empty() ? "Impossible" : msg); }
             if (button(126, VH - 32, 110, 14, "Salaire -10 %")) { if (g_career.changeWage(pid, -10, msg)) toast(msg); else toast(msg.empty() ? "Impossible" : msg); }
             if (button(240, VH - 32, 130, 14, "Prolonger (+1 an)")) { if (g_career.extendContract(pid, msg)) toast(msg); else toast(msg); }
+            if (button(374, VH - 32, 62, 14, "Prêter")) { if (g_career.loanOut(pid, msg)) toast("Joueur prêté"); else toast(msg); }
         }
         if (cur >= 0 && cur < (int)U.squad.size() && button(VW - 200, VH - 32, 188, 14, "Libérer le joueur sélectionné")) {
             int pid = U.squad[cur].id; std::string nm = U.squad[cur].name;
@@ -242,7 +256,7 @@ static void screenMarket() {
             else askConfirm(g_world.teams[to].name + " (" + shortLevel(to) + ") propose " + (fee ? money(fee) : std::string("un transfert libre")) + " pour " + nm + ". Accepter ?",
                             [pid, to, fee]() { std::string err; if (g_career.sellPlayer(pid, to, fee, err)) toast("Joueur vendu"); else toast(err); }, "Accepter", "Refuser");
         }
-    } else {
+    } else if (g_mkTab == 2) {
         auto& tr = g_career.mgr.transfers;
         drawTextPx("Saison  Joueur", 16, y, 10, C_DIM); drawTextPx("Transfert", 230, y, 10, C_DIM); drawTextPx("Montant", VW - 80, y, 10, C_DIM);
         y += 12;
@@ -257,6 +271,56 @@ static void screenMarket() {
             drawTextPx(r.fee ? money(r.fee) : "libre", x + VW - 92, yy + 1, 10, c);
         });
         if (tr.empty()) drawTextCentered("Aucun transfert pour l'instant", VW / 2, y + 20, 10, C_DIM);
+        drawFooter("LB/RB : onglet   Retour");
+    } else if (g_mkTab == 3) {
+        // ---- numéros de maillot (1 à 99)
+        drawTextPx("N°   P   Joueur", 16, y, 10, C_DIM); drawTextPx("Note", 262, y, 10, C_DIM); drawTextPx("Nationalité", 310, y, 10, C_DIM);
+        y += 12;
+        std::vector<int> ord(U.squad.size()); for (size_t i = 0; i < ord.size(); i++) ord[i] = (int)i;
+        std::stable_sort(ord.begin(), ord.end(), [&](int a, int b) { return U.squad[a].num < U.squad[b].num; });
+        listRun(g_mkLW, (int)ord.size(), 12, y, VW - 24, (VH - 38 - y) / 12, 12, [&](int i, int x, int yy, bool s2) {
+            const Player& p = U.squad[ord[i]];
+            Color c = s2 ? BLACK : C_TXT;
+            bool dup = false; for (auto& q : U.squad) if (&q != &p && q.num == p.num) dup = true;
+            drawTextPx(fmt("%2d", p.num), x + 4, yy + 1, 10, dup ? C_BAD : s2 ? BLACK : C_HI);
+            drawTextPx(posName(p.pos), x + 30, yy + 1, 10, c);
+            drawTextPx(fitText(p.name, 190, 10), x + 48, yy + 1, 10, c);
+            drawTextPx(fmt("%d", p.overall()), x + 252, yy + 1, 10, c);
+            int nat = p.nation >= 0 ? p.nation : U.nation;
+            drawTextPx(fitText(nat >= 0 ? sanitize(NATIONS[nat].name) : std::string("-"), 200, 10), x + 298, yy + 1, 10, c);
+            if (neLim < 99 && isNonEU(p, g_career.userTeam)) drawTextPx("extra-communautaire", x + VW - 170, yy + 1, 10, s2 ? BLACK : C_BAD);
+        });
+        int cur = g_mkLW.cur;
+        if (cur >= 0 && cur < (int)ord.size()) {
+            Player& p = U.squad[ord[cur]];
+            auto step = [&](int d) { std::vector<bool> used(100, false); for (auto& q : U.squad) if (&q != &p) used[q.num] = true;
+                                     int n = p.num; for (int k = 0; k < 99; k++) { n = (n - 1 + d + 99) % 99 + 1; if (!used[n]) break; } p.num = (uint8_t)n; };
+            if (button(12, VH - 32, 60, 14, "N° -") || IN.left) step(-1);
+            if (button(76, VH - 32, 60, 14, "N° +") || IN.right) step(1);
+        }
+        if (button(150, VH - 32, 230, 14, "Attribution automatique des numéros")) { autoNumbers(g_career.userTeam); toast("Numéros attribués (gardiens 1-16-30, défense 2-5, milieu 6-8-10, attaque 7-9-11)"); }
+        drawFooter("Gauche/Droite : changer le numéro   LB/RB : onglet   Retour");
+    } else if (g_mkTab == 4) {
+        // ---- prêts en cours et quotas
+        int x = 16;
+        drawSection(12, y, VW - 24, "QUOTAS DE LA DIVISION"); y += 14;
+        drawTextPx(fmt("Prêts entrants : %d / %d      Prêts sortants : %d / %d", g_career.loansIn(g_career.userTeam), g_career.loanLimitIn(g_career.userTeam), g_career.loansOut(g_career.userTeam), g_career.loanLimitOut(g_career.userTeam)), x, y, 10, C_TXT); y += 12;
+        if (neLim < 99) { drawTextPx(fmt("Extra-communautaires sur la feuille de match : %d au maximum (effectif : %d)", neLim, neCnt), x, y, 10, neCnt > neLim ? C_HI : C_TXT); y += 12; }
+        if (M.wageCapK > 0) { drawTextPx("DNCG : masse salariale " + money(g_career.wageBill(g_career.userTeam)) + " / plafond " + money(M.wageCapK), x, y, 10, g_career.wageBill(g_career.userTeam) > M.wageCapK ? C_BAD : C_GOOD); y += 12; }
+        if (M.fpfStrikes) { drawTextPx(fmt("Fair-play financier UEFA : %d avertissement(s)", M.fpfStrikes), x, y, 10, C_BAD); y += 12; }
+        drawTextPx(std::string("Joueur joker (L1, L2, Ligue 3, hors mercato avant janvier) : ") + (M.jokerUsed ? "utilisé" : g_career.jokerAvailable() ? "DISPONIBLE" : "non disponible"), x, y, 10, g_career.jokerAvailable() ? C_GOOD : C_DIM); y += 16;
+        drawSection(12, y, VW - 24, "PRÊTS EN COURS (RETOUR EN FIN DE SAISON)"); y += 14;
+        int n = 0;
+        for (auto& l : g_career.loans) {
+            if (l.from != g_career.userTeam && l.to != g_career.userTeam) continue;
+            int idx; int at = g_world.findPlayer(l.pid, &idx);
+            std::string nm = at >= 0 ? g_world.teams[at].squad[idx].name : std::string("?");
+            bool in = l.to == g_career.userTeam;
+            drawTextPx(std::string(in ? "Arrivée : " : "Départ : ") + nm + (in ? " (prêté par " + g_world.teams[l.from].name + ")" : " (prêté à " + g_world.teams[l.to].name + ")"), x, y, 10, in ? C_GOOD : C_TXT);
+            y += 12; n++;
+            if (y > VH - 30) break;
+        }
+        if (!n) drawTextPx("Aucun prêt en cours.", x, y, 10, C_DIM);
         drawFooter("LB/RB : onglet   Retour");
     }
     if (IN.back) g_screen = SC_CLUBMENU;
