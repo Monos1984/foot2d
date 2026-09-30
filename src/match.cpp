@@ -396,9 +396,9 @@ void Match::updateCeremony(float dt) {
         // l'arbitre sort le premier et prend le ballon du match sur son présentoir
         if (ballStage == 1) {
             V2 tg = pedestal - V2(0.6f, 0.2f), d = tg - refPos;
-            if (d.len() > 0.15f) { refPos = refPos + d.norm() * std::min(3.2f * dt, d.len()); refFace = d.norm(); }
+            if (d.len() > 0.15f) refMove(tg, 3.2f, refFace, dt);
             else { ballStage = 2; say("L'arbitre récupère le ballon du match sur son présentoir.", 2.5f, true); }
-        } else { refPos = refPos + (V2(PITCH_W / 2 - 16, PITCH_L / 2) - refPos) * std::min(1.f, dt * 0.8f); refFace = V2(1, 0); }
+        } else refMove(V2(PITCH_W / 2 - 16, PITCH_L / 2), 3.4f, V2(1, 0), dt);
         if (t > 2.5f && t < 2.6f) { msg = "ENTRÉE DES JOUEURS"; msg2 = team(0).name + " - " + team(1).name; msgT = 3.f; }
         if (allIn || t > 16.f) { cerPhase = S.anthems ? 10 : S.cupPhoto ? 0 : 1; cerT = 0; }
         if (skip && t > 0.3f) toToss();
@@ -407,7 +407,7 @@ void Match::updateCeremony(float dt) {
     case 10: case 11: {   // hymnes nationaux : chaque équipe en ligne, travelling sur les joueurs
         int tt = cerPhase - 10;
         for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], anthemSpot(t2, k % 11), 3.f); pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
-        refPos = refPos + (V2(PITCH_W / 2, PITCH_L / 2 - 1.5f) - refPos) * std::min(1.f, dt * 2.f); refFace = V2(0, 1);
+        refMove(V2(PITCH_W / 2, PITCH_L / 2 - 1.5f), 3.4f, V2(0, 1), dt);
         if (t < dt * 1.5f) {
             anthemReq = tt; anthemDur = 10.5f; msg = "HYMNE NATIONAL"; msgT = 3.f;
             if (!S.anthemOnly.empty()) { msg2 = "La Marseillaise"; say("Le stade se lève : les deux équipes et le public entonnent La Marseillaise.", 4.5f, true); }
@@ -424,7 +424,7 @@ void Match::updateCeremony(float dt) {
     }
     case 12: {  // le président de la République sort du tunnel et serre la main de chaque joueur
         for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], anthemSpot(t2, k % 11), 3.f); pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
-        refPos = refPos + (V2(PITCH_W / 2, PITCH_L / 2 - 1.5f) - refPos) * std::min(1.f, dt * 2.f); refFace = V2(0, 1);
+        refMove(V2(PITCH_W / 2, PITCH_L / 2 - 1.5f), 3.4f, V2(0, 1), dt);
         if (t < dt * 1.5f) {
             vipOn = true; vipPos = V2(-2.5f, PITCH_L / 2);
             msg = "LE PRÉSIDENT DE LA RÉPUBLIQUE"; msg2 = "salue les joueurs"; msgT = 3.f;
@@ -453,7 +453,7 @@ void Match::updateCeremony(float dt) {
             if (allIn || t > 3.f) pl[k].face = V2(0, 1);
             pl[k].state = PS_NORMAL;
         }
-        refPos = V2(PITCH_W / 2, PITCH_L / 2 - 3.f); refFace = V2(0, 1);
+        refMove(V2(PITCH_W / 2, PITCH_L / 2 - 3.f), 3.6f, V2(0, 1), dt);
         if (t > 1.2f && t < 1.3f) { msg = "PHOTO OFFICIELLE"; msg2 = team(0).name + " - " + team(1).name; msgT = 3.f; say("Les deux équipes posent pour la photo officielle avant cette rencontre de coupe.", 3.5f, true); }
         if (t > 5.5f) { cerPhase = 1; cerT = 0; }
         if (skip && t > 0.3f) toToss();
@@ -486,7 +486,7 @@ void Match::updateCeremony(float dt) {
             MPlayer& h = pl[k]; MPlayer& a = pl[11 + s2];
             if (std::fabs(h.pos.x - a.pos.x) < 0.8f) { h.state = PS_HAND; a.state = PS_HAND; a.face = V2(0, -1); }
         }
-        refPos = V2(PITCH_W / 2 - 16, PITCH_L / 2); refFace = V2(1, 0);
+        refMove(V2(PITCH_W / 2 - 16, PITCH_L / 2), 4.f, V2(1, 0), dt);
         if (t > 1.2f && t < 1.3f) { msg = "LES JOUEURS SE SERRENT LA MAIN"; msg2 = ""; msgT = 2.5f; }
         if (t > 10.5f || (skip && t > 0.3f)) toToss();
         break;
@@ -499,7 +499,7 @@ void Match::updateCeremony(float dt) {
         }
         walkTo(pl[captain[0]], c + V2(-1.4f, 0.4f), 4.f); pl[captain[0]].face = V2(1, 0);
         walkTo(pl[captain[1]], c + V2(1.4f, 0.4f), 4.f); pl[captain[1]].face = V2(-1, 0);
-        refPos = refPos + (c + V2(0, -0.6f) - refPos) * std::min(1.f, dt * 3); refFace = V2(0, 1);
+        refMove(c + V2(0, -0.6f), 3.6f, V2(0, 1), dt);
         if (t > 1.5f && tossCall < 0) {
             if (humanSide(1)) {
                 tossUI = 1;
@@ -600,11 +600,37 @@ void Match::updateReferee(float dt) {
     }
     target.x = clampf(target.x, 2.f, PITCH_W - 2.f); target.y = clampf(target.y, 2.f, PITCH_L - 2.f);
     V2 d = target - refPos;
-    float sp = refCardT > 0 || fightT > 0 ? 7.f : 6.2f;
-    V2 want = d.len() > 1.0f ? d.norm() * std::min(sp, d.len() * 1.5f) : V2();
-    refVel = refVel + (want - refVel) * std::min(1.f, dt * 5);
+    float dl = d.len();
+    // allure naturelle : petites foulées près de l'action, course soutenue quand le jeu s'éloigne, sprint pour un carton ou une bagarre ;
+    // zone morte autour de la cible (pas de piétinement), accélération et freinage progressifs
+    bool urgent = refCardT > 0 || fightT > 0 || (pendCardOff >= 0 && state != MS_PLAY);
+    static const float DEAD = 2.2f;
+    float sp = 0;
+    if (dl > DEAD) sp = urgent ? 6.8f : dl > 14.f ? 6.f : dl > 7.f ? 4.4f : 2.8f;
+    V2 want = sp > 0 ? d * (std::min(sp, (dl - DEAD * 0.5f) * 1.6f) / dl) : V2();
+    float acc = want.len() > refVel.len() ? 3.2f : 4.5f;
+    refVel = refVel + (want - refVel) * std::min(1.f, dt * acc);
     refPos += refVel * dt;
-    if (refVel.len() > 0.3f) refFace = refVel.norm(); else refFace = (ball.pos - refPos).norm();
+    refAnim += refVel.len() * dt;
+    V2 f = refVel.len() > 0.6f ? refVel.norm() : (ball.pos - refPos).norm();
+    refFace = (refFace + (f - refFace) * std::min(1.f, dt * (refVel.len() > 0.6f ? 8.f : 4.f))).norm();
+    if (refFace.len2() < 0.5f) refFace = f.len2() > 0.5f ? f : V2(0, 1);
+}
+
+void Match::refMove(V2 tg, float spd, V2 faceIdle, float dt) {
+    V2 d = tg - refPos; float l = d.len();
+    if (l > 0.08f) {
+        float v = std::min(spd, 0.6f + l * 2.2f);             // freine en arrivant
+        V2 dir = d * (1.f / l);
+        refVel = dir * v;
+        refPos += dir * std::min(l, v * dt);
+        refAnim += std::min(l, v * dt);
+        refFace = (refFace + (dir - refFace) * std::min(1.f, dt * 10.f)).norm();
+        if (refFace.len2() < 0.5f) refFace = dir;
+    } else {
+        refVel = V2();
+        if (faceIdle.len2() > 0.5f) { refFace = (refFace + (faceIdle - refFace) * std::min(1.f, dt * 6.f)).norm(); if (refFace.len2() < 0.5f) refFace = faceIdle; }
+    }
 }
 
 // carton : l'arbitre court vers le joueur et le montre
@@ -3188,7 +3214,7 @@ void Match::update(float dt) {
             else { p.vel = V2(); p.pos = p.target; p.face = (ball.pos - p.pos).norm(); }
             p.state = PS_NORMAL;
         }
-        refPos = refPos + (V2(PITCH_W / 2 - 6, PITCH_L / 2 + 4) - refPos) * std::min(1.f, dt * 0.9f);
+        refMove(V2(PITCH_W / 2 - 6, PITCH_L / 2 + 4), 3.8f, (ball.pos - refPos).norm(), dt);
         if (all || walkT > 14.f) { state = MS_SETPIECE; stateT = 0; spT = 0; spReady = false; playSfx(SFX_WHISTLE); }
         break;
     }

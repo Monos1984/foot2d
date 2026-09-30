@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -3369,6 +3369,7 @@ static void screenIntl() {
     openPick(PM_INTL);
 }
 
+static void openCompEditor();
 #include "app_anthems.inc"
 #include "app_screens.inc"
 #include "app_manager.inc"
@@ -3376,6 +3377,7 @@ static void screenIntl() {
 #include "app_club2.inc"
 #include "app_draw.inc"
 #include "app_editors.inc"
+#include "app_compedit.inc"
 #include "app_players.inc"
 #include "app_coach.inc"
 #include "app_life.inc"
@@ -3800,6 +3802,7 @@ void appFrame(float dt) {
     case SC_FICHE: screenFiche(dt); break;
     case SC_EDITMENU: screenEditMenu(); break;
     case SC_ANTHEMS: screenAnthems(); break;
+    case SC_COMPEDIT: if (g_ceMode == 6) screenCompEditCup(); else screenCompEdit(); break;
     case SC_CLUBEDIT: screenClubEdit(); break;
     case SC_DEPTPICK: screenDeptPick(); break;
     case SC_CUSTOM: screenCustom(); break;
@@ -4153,6 +4156,7 @@ void appTestStart(const char* mode) {
     else if (m == "fiche2") { int u = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Rennais") u = i; openFiche(u, SC_MAIN); g_fichePage = 2; }
     else if (m == "editor") openClubEditor(-1, false, SC_MAIN);
     else if (m == "editmenu") g_screen = SC_EDITMENU;
+    else if (m == "compedit") { openCompEditor(); if (getenv("FOOT_PYR")) { for (int p = 0; p < (int)g_basePyramids.size(); p++) if (g_basePyramids[p].country == getenv("FOOT_PYR") && g_basePyramids[p].dom < 0 && g_cePyr < 0) g_cePyr = p; g_ceMode = getenv("FOOT_CEMODE") ? atoi(getenv("FOOT_CEMODE")) : 1; g_ceTier = 0; } }
     else if (m == "anthems") { g_screen = SC_ANTHEMS; if (getenv("FOOT_SEL")) g_anSel = g_world.nationIndex(getenv("FOOT_SEL")); }
     else if (m == "custom") { for (int i = 0; i < 12; i++) g_customSel.push_back(i); g_screen = SC_CUSTOM; }
     else if (m == "controls") g_screen = SC_CONTROLS;

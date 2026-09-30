@@ -373,16 +373,17 @@ static void screenEditMenu() {
     for (int i = 0; i < (int)g_world.teams.size(); i++) { if (g_world.teams[i].custom) nCustom++; else if (g_world.teams[i].edited) nEdited++; }
     drawTextCentered(fmt("%d club%s créé%s   -   %d club%s modifié%s", nCustom, nCustom > 1 ? "s" : "", nCustom > 1 ? "s" : "", nEdited, nEdited > 1 ? "s" : "", nEdited > 1 ? "s" : ""), VW / 2, 32, 10, C_DIM);
     // tuiles regroupées par thème : CLUBS / JOUEURS ET PERSONNES / PARTENAIRES
-    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Sponsors", "Hymnes nationaux", "Retour" };
-    static const int GRP[8] = { 0, 0, 0, 1, 1, 2, 2, 3 };
-    static const char* GN[3] = { "CLUBS", "PERSONNES", "SPONSORS, HYMNES" };
+    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Compétitions de carrière", "Sponsors", "Hymnes nationaux", "Retour" };
+    static const int GRP[9] = { 0, 0, 0, 1, 1, 2, 2, 2, 3 };
+    static const char* GN[3] = { "CLUBS", "PERSONNES", "COMPÉTITIONS" };
     static const Color GC[3] = { { 80, 150, 240, 255 }, { 60, 190, 90, 255 }, { 240, 190, 50, 255 } };
-    static const char* DESC[8] = {
+    static const char* DESC[9] = {
         "Nom, couleurs (domicile, extérieur, 3e maillot, 13 motifs), stade, district, président. Le club débute dans la dernière division de son district.",
         "Reprendre une carrière avec un club créé, le modifier ou le supprimer.",
         "Renommer un club, changer ses maillots (dont un 3e maillot), son stade et son président.",
         "Créer de nouveaux joueurs ou joueuses, modifier les caractéristiques, l'apparence (6 couleurs de peau) et le staff.",
         "Créer votre manager (obligatoire en carrière) : nom, nationalité, apparence, diplôme.",
+        "Divisions et coupes : règles (points, matchs, montées, relégations, départage, réserves), clubs de chaque division, ajout ou suppression de divisions.",
         "Ajouter des sponsors (nom et logo PNG/JPG) proposés aux clubs.",
         "Écouter les hymnes et associer à une sélection un fichier musical (OGG, MP3, WAV, FLAC) joué avant ses matchs.",
         "Revenir au menu principal." };
@@ -393,8 +394,8 @@ static void screenEditMenu() {
         if (GRP[i] < 3 && (i == 0 || GRP[i] != GRP[i - 1])) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 5, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ GC[GRP[i]].r, GC[GRP[i]].g, GC[GRP[i]].b, 170 }); }
     });
     {   // panneau de description
-        int cur = std::max(0, std::min(7, g_edMenuLW.cur));
-        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 8;
+        int cur = std::max(0, std::min(8, g_edMenuLW.cur));
+        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 9;
         Color gc = GRP[cur] < 3 ? GC[GRP[cur]] : Color{ 150, 160, 180, 255 };
         DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
         DrawRectangle(px, py, pw, 16, gc);
@@ -404,7 +405,7 @@ static void screenEditMenu() {
         int yy = py + 42;
         for (auto& l : wrapText(DESC[cur], pw - 18)) { drawTextPx(l, px + 8, yy, 10, C_TXT); yy += 12; }
     }
-    int y = my + rh * 8 + 14;
+    int y = my + rh * 9 + 14;
     const char* txt[] = {
         "Les clubs créés ou modifiés sont enregistrés dans clubs_perso.txt (à côté du jeu).",
         "Joueurs et présidents : joueurs_perso.txt ; staff : staff_perso.txt ; managers : managers.txt.",
@@ -412,9 +413,10 @@ static void screenEditMenu() {
     };
     for (auto l : txt) { drawTextCentered(l, VW / 2, y, 10, C_DIM, false); y += 13; }
     drawFooter("OK : valider   Retour");
-    if (IN.back || s == 7) { g_screen = SC_MAIN; return; }
-    if (s == 6) { g_anLW = ListW(); g_anSel = -1; g_screen = SC_ANTHEMS; return; }
-    if (s == 5) { g_screen = SC_SPONSORS; return; }
+    if (IN.back || s == 8) { g_screen = SC_MAIN; return; }
+    if (s == 5) { openCompEditor(); return; }
+    if (s == 7) { g_anLW = ListW(); g_anSel = -1; g_screen = SC_ANTHEMS; return; }
+    if (s == 6) { g_screen = SC_SPONSORS; return; }
     if (s == 4) { g_screen = SC_MANAGERS; return; }
     if (s == 0) openClubEditor(-1, false, SC_EDITMENU);
     else if (s == 1) g_screen = SC_CUSTOMLIST;

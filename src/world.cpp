@@ -346,6 +346,7 @@ void World::build() {
     addSmallLeagueClubs(*this);
     baseCount = (int)teams.size();
     loadCustomClubs();
+    loadCompEdits();
     assignDistricts(*this);
     applyPresidents();
 }

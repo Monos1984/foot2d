@@ -711,7 +711,8 @@ void Career::startSeason() {
                 if (!pro) { t0 = 2; t1 = n <= 10 ? 36 : 38; }
                 if (yth) { t0 = 3; t1 = pl.tier == 0 ? 35 : 36; c.yellowLimit = 3; }
                 if (fem) { t0 = 2; t1 = P.country == "F:FRA" && pl.tier == 0 ? 36 : 38; c.yellowLimit = P.country == "F:FRA" ? 3 : 5; }
-                c.setupLeague(pl.groups[g], 2, t0, t1, 1);
+                c.ptsWin = std::max(1, std::min(5, P.tiers[pl.tier].ptsWin));
+                c.setupLeague(pl.groups[g], std::max(1, std::min(4, P.tiers[pl.tier].legs)), t0, t1, 1);
                 if (pl.groups[g].size() < 2) { c.done = true; c.result = pl.groups[g]; for (auto& st : c.stages) st.finished = true; }   // poule vide : rien à jouer
                 pl.comps.push_back(addComp(S, std::move(c)));
             }
@@ -865,9 +866,12 @@ void Career::startSeason() {
         std::vector<int> t;
         for (auto& pl : P.pools) for (int x : pl.clubs) if (g_world.teams[x].parent < 0 && !g_world.teams[x].youth) t.push_back(x);
         if (t.size() < 4) continue;
+        CupRule cr = cupRuleFor(P.country);
+        if (!cr.enabled) continue;                 // éditeur : coupe nationale désactivée
         Competition c;
         c.name = cupNameFor(P.country); c.shortName = c.name; c.kind = 2; c.tag = p;
         simpleCup(c, t, 6, 39);
+        c.neutralFinal = cr.neutralFinal;
         int idx = addComp(S, std::move(c));
         S.comps[idx].cupRound(0, S.comps[idx].entrants[0]);
         nationalCups.push_back(idx);
@@ -2923,7 +2927,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 21;
+static const unsigned SAVE_VERSION = 22;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -3005,7 +3009,7 @@ bool Career::save(const char* path) const {
     for (auto& P : pyramids) {
         w.str(P.country); w.str(P.name); w.pod(P.barrageUp); w.pod(P.dom);
         unsigned n = (unsigned)P.tiers.size(); w.pod(n);
-        for (auto& t : P.tiers) { w.str(t.name); w.pod(t.scope); w.pod(t.groupsPerPool); w.pod(t.groupSize); w.pod(t.up); w.pod(t.down); w.pod(t.flexible); w.pod(t.noReserves); w.pod(t.tb); w.pod(t.barrageUp); }
+        for (auto& t : P.tiers) { w.str(t.name); w.pod(t.scope); w.pod(t.groupsPerPool); w.pod(t.groupSize); w.pod(t.up); w.pod(t.down); w.pod(t.flexible); w.pod(t.noReserves); w.pod(t.tb); w.pod(t.barrageUp); w.pod(t.ptsWin); w.pod(t.legs); }
         n = (unsigned)P.pools.size(); w.pod(n);
         for (auto& pl : P.pools) { w.pod(pl.tier); w.pod(pl.key); w.pod(pl.nGroups); w.pod(pl.size); w.pod(pl.upCap); w.pod(pl.terminal); w.vpod(pl.clubs); w.vvi(pl.groups); w.vpod(pl.comps); }
     }
@@ -3090,7 +3094,7 @@ bool Career::load(const char* path) {
         r.str(P.country); r.str(P.name); r.pod(P.barrageUp); r.pod(P.dom);
         unsigned n = 0; r.pod(n); if (!r.ok || n > 100) { fclose(f); return false; }
         P.tiers.resize(n);
-        for (auto& t : P.tiers) { r.str(t.name); r.pod(t.scope); r.pod(t.groupsPerPool); r.pod(t.groupSize); r.pod(t.up); r.pod(t.down); r.pod(t.flexible); r.pod(t.noReserves); r.pod(t.tb); r.pod(t.barrageUp); }
+        for (auto& t : P.tiers) { r.str(t.name); r.pod(t.scope); r.pod(t.groupsPerPool); r.pod(t.groupSize); r.pod(t.up); r.pod(t.down); r.pod(t.flexible); r.pod(t.noReserves); r.pod(t.tb); r.pod(t.barrageUp); if (ver >= 22) { r.pod(t.ptsWin); r.pod(t.legs); } }
         r.pod(n); if (!r.ok || n > 100000) { fclose(f); return false; }
         P.pools.resize(n);
         for (auto& pl : P.pools) { r.pod(pl.tier); r.pod(pl.key); r.pod(pl.nGroups); r.pod(pl.size); r.pod(pl.upCap); r.pod(pl.terminal); r.vpod(pl.clubs); r.vvi(pl.groups); r.vpod(pl.comps); }

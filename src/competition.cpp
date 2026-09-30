@@ -104,14 +104,16 @@ static std::vector<std::vector<std::pair<int, int>>> roundRobin(std::vector<int>
         }
         rounds.push_back(ms);
     }
-    if (legs == 2) {
-        // matchs retour : ordre décalé d'une journée pour éviter trois matchs de suite au même endroit
+    if (legs >= 2) {
+        // matchs retour : ordre décalé d'une journée pour éviter trois matchs de suite au même endroit ;
+        // 3 ou 4 confrontations (éditeur de compétitions) : cycles supplémentaires, domicile alterné
         int R = (int)rounds.size();
-        for (int i = 0; i < R; i++) {
-            std::vector<std::pair<int, int>> ms;
-            for (auto& p : rounds[(i + 1) % R]) ms.push_back({ p.second, p.first });
-            rounds.push_back(ms);
-        }
+        for (int cyc = 1; cyc < std::min(4, legs); cyc++)
+            for (int i = 0; i < R; i++) {
+                std::vector<std::pair<int, int>> ms;
+                for (auto& p : rounds[(i + cyc) % R]) ms.push_back(cyc % 2 ? std::make_pair(p.second, p.first) : p);
+                rounds.push_back(ms);
+            }
     }
     return rounds;
 }
@@ -227,7 +229,13 @@ Stage& Competition::addKOStage(const std::vector<std::pair<int, int>>& pairs, in
         MatchRes m; m.home = t.a; m.away = t.b; m.tie = (int16_t)st.ties.size();
         m.neutral = neutralFinal || (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && !isContinentalKind(kind));
         if (format == FMT_SINGLE || (penaltiesOnly() && (!neutralFinal || kind == 26 || kind == 27))) { m.noET = 1; }
-        if (kind == 2 && nm != "Finale" && g_career.kind == CK_CLUB && !g_career.opts.cdfET) m.noET = 1;   // option : Coupe de France sans prolongation (sauf la finale)   // supercoupes de région et Méga Coupe : TAB directs, finale comprise
+        if (kind == 2 && nm != "Finale" && g_career.kind == CK_CLUB) {     // prolongation : option Coupe de France / règle de la coupe nationale (éditeur)
+            bool et = g_career.opts.cdfET;
+            int self = (int)(this - g_career.season.comps.data());
+            if (self >= 0 && self < (int)g_career.season.comps.size() && std::find(g_career.nationalCups.begin(), g_career.nationalCups.end(), self) != g_career.nationalCups.end()
+                && tag >= 0 && tag < (int)g_career.pyramids.size()) et = cupRuleFor(g_career.pyramids[tag].country).et;
+            if (!et) m.noET = 1;
+        }   // option : Coupe de France sans prolongation (sauf la finale)   // supercoupes de région et Méga Coupe : TAB directs, finale comprise
         if (format == FMT_TOURNAMENT && host >= 0 && (t.a == host || t.b == host)) {
             m.neutral = false; if (t.b == host) { m.home = t.b; m.away = t.a; }
         }

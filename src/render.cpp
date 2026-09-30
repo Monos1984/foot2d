@@ -756,6 +756,7 @@ static void drawTrophy(int x, int y, int style, int s) {
     }
 }
 
+static float g_asVel[2] = { 0, 0 }, g_asAnim[2] = { 0, 0 };
 void renderMatch(const Match& m, bool radar) {
     rlDrawRenderBatchActive();
     rlPushMatrix();
@@ -936,7 +937,12 @@ void renderMatch(const Match& m, bool radar) {
         float t0 = bpos.y > PITCH_L / 2 ? std::max(bpos.y, hi) : bpos.y, t1 = bpos.y < PITCH_L / 2 ? std::min(bpos.y, lo) : bpos.y;
         t0 = std::min(t0, PITCH_L - 0.5f); t1 = std::max(t1, 0.5f);
         float k = std::min(1.f, GetFrameTime() * 4.f);
-        asY[0] += (t0 - asY[0]) * k; asY[1] += (t1 - asY[1]) * k;
+        float o0 = asY[0], o1 = asY[1];
+        // course le long de la ligne : vitesse limitée (pas de glissade), foulées selon la distance parcourue
+        auto stepTo = [&](float& y, float tg) { float d = tg - y, mx = 7.f * GetFrameTime(); y += std::max(-mx, std::min(mx, d * k)); };
+        stepTo(asY[0], t0); stepTo(asY[1], t1);
+        g_asVel[0] = (asY[0] - o0) / std::max(0.001f, GetFrameTime()); g_asVel[1] = (asY[1] - o1) / std::max(0.001f, GetFrameTime());
+        g_asAnim[0] += std::fabs(asY[0] - o0); g_asAnim[1] += std::fabs(asY[1] - o1);
         assist.push_back(V2(-1.1f, asY[0])); assist.push_back(V2(PITCH_W + 1.1f, asY[1]));
         if (m.S.goalAssist) { assist.push_back(V2(PITCH_W / 2 + 6.5f, -0.9f)); assist.push_back(V2(PITCH_W / 2 - 6.5f, PITCH_L + 0.9f)); }
         for (int a = 0; a < (int)assist.size(); a++) { items.push_back({ assist[a].y, 4, a }); DrawEllipse(SX(assist[a].x) + 1, SY(assist[a].y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
@@ -1002,9 +1008,14 @@ void renderMatch(const Match& m, bool radar) {
             V2 a = assist[it.idx];
             int ax = SX(a.x), ay = SY(a.y);
             bool line = it.idx < 2;
-            int dir = line ? (it.idx == 0 ? 2 : 3) : (it.idx == 2 ? 0 : 1);
+            int dir = line ? (it.idx == 0 ? 2 : 3) : (it.idx == 2 ? 0 : 1);        // face au terrain
+            int afr = 0;
+            if (line && std::fabs(g_asVel[it.idx]) > 0.5f) {                             // en mouvement : court dans le sens du jeu
+                afr = (int)(g_asAnim[it.idx] * 1.8f);
+                if (std::fabs(g_asVel[it.idx]) > 2.5f) dir = g_asVel[it.idx] > 0 ? 0 : 1;
+            }
             bool offs = line && m.msgT > 0 && m.msg == "HORS-JEU" && ((it.idx == 0) == (bpos.y > PITCH_L / 2));
-            drawPlayerSprite(ax, ay, rk, (it.idx * 3 + 1) % 4, (it.idx * 5 + 2) % 7, dir, 0, offs ? PS_CELEB : PS_NORMAL, false, 0, 1);
+            drawPlayerSprite(ax, ay, rk, (it.idx * 3 + 1) % 4, (it.idx * 5 + 2) % 7, offs ? (it.idx == 0 ? 2 : 3) : dir, offs ? 0 : afr, offs ? PS_CELEB : PS_NORMAL, false, 0, 1);
             if (line) {     // drapeau (rouge et jaune), levé en cas de hors-jeu
                 int fx = ax + (it.idx == 0 ? 3 : -5), fy = ay - (offs ? 16 : 8);
                 DrawRectangle(fx + 1, fy, 1, offs ? 7 : 5, Color{ 220, 220, 220, 255 });
@@ -1017,7 +1028,7 @@ void renderMatch(const Match& m, bool radar) {
             // arbitre (tenue noire)
             Kit rk; rk.shirt = 0x151515; rk.shirt2 = 0x151515; rk.shorts = 0x101010; rk.socks = 0x101010;
             int rx = SX(m.refPos.x), ry = SY(m.refPos.y);
-            int rframe = m.refVel.len() > 0.4f ? (int)(GetTime() * 9) : 0;
+            int rframe = m.refVel.len() > 0.4f ? (int)(m.refAnim * 1.8f) : 0;     // foulées au rythme de la course
             bool showCard = m.refCardT > 0 && m.refCardT < 1.8f;
             // coiffure : cheveux courts pour les arbitres hommes, longs (queue de cheval) pour les arbitres femmes
             bool fem = m.S.referee >= 0 && m.S.referee < NUM_REFEREES && REFEREES[m.S.referee].female;

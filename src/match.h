@@ -258,6 +258,8 @@ struct Match {
     // arbitre
     V2 refPos, refVel, refFace{ 0, 1 };
     float refCardT = 0; int refCardType = 0, refCardFor = -1;
+    float refAnim = 0;           // foulées de l'arbitre (distance parcourue)
+    void refMove(V2 tg, float spd, V2 faceIdle, float dt);   // l'arbitre court / marche vers un point (vitesse constante, freinage à l'arrivée)
     // bagarre
     int fightA = -1, fightB = -1; float fightT = 0; bool fightDone = false; int lastFoulOff = -1, lastFoulVic = -1; float lastFoulT = 99;
     // cérémonie d'avant-match

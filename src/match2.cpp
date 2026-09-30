@@ -190,7 +190,7 @@ bool Match::updateMiniToss(float dt) {
         else pl[k].vel = V2();
     };
     walk(captain[0], c + V2(-1.4f, 0.4f)); walk(captain[1], c + V2(1.4f, 0.4f));
-    refPos = refPos + (c + V2(0, -0.6f) - refPos) * std::min(1.f, dt * 3);
+    refMove(c + V2(0, -0.6f), 3.6f, V2(0, 1), dt);
     cam = cam + (c - cam) * std::min(1.f, dt * 2);
     const float FLIP = 2.4f;
     if (cerT > FLIP && tossWinner < 0) {

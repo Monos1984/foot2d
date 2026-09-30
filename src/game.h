@@ -396,6 +396,8 @@ struct TierConf {
     bool noReserves = false;  // les réserves ne peuvent pas y évoluer
     int tb = TB_FFF;
     int barrageUp = 0;        // nombre de barragistes qui jouent la montée
+    int ptsWin = 3;           // points pour une victoire (éditeur de compétitions)
+    int legs = 2;             // matchs contre chaque adversaire : 1 aller simple, 2 aller-retour, 3, 4
 };
 
 struct Pool {
@@ -854,6 +856,22 @@ extern const char* CONTRACT_NAMES[3];
 std::string money(int64_t k);        // montant en k€ -> texte
 extern Career g_career;
 extern std::vector<Pyramid> g_basePyramids;
+// éditeur de compétitions de carrière (compedit.cpp)
+struct CupRule { bool enabled = true, et = true, neutralFinal = true; };
+CupRule cupRuleFor(const std::string& country);
+void setCupRule(const std::string& country, const CupRule& r);
+bool pyrEditable(const Pyramid& P);
+bool pyrStructEditable(const Pyramid& P);
+bool tierClubsEditable(const Pyramid& P, int tier);
+bool pyrEdited(const std::string& country);
+void markPyrEdited(const std::string& country);
+void pyrRelink(Pyramid& P, int changedTier, bool fromDown);
+void pyrMoveClub(Pyramid& P, int club, int toTier);
+void pyrAddTier(Pyramid& P, int after, const std::string& name);
+bool pyrDeleteTier(Pyramid& P, int tier);
+bool pyrRestore(Pyramid& P);
+void saveCompEdits();
+void loadCompEdits();
 void formGroups(Pyramid& P);
 // football féminin (women.cpp)
 void buildWomen(World& w);
