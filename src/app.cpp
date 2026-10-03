@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -2149,6 +2149,7 @@ static void drawSection(int x, int y, int w, const std::string& t) {
     DrawRectangle(x + textWidth(t, 10) + 6, y + 5, w - textWidth(t, 10) - 8, 1, Color{ 240, 200, 60, 120 });
 }
 
+#include "app_press.inc"
 static void screenHub() {
     if(showSupporterParty(SC_HUB))return;
     if(g_career.sportingMode()){openSporting(0);return;}
@@ -2174,6 +2175,7 @@ static void screenHub() {
         g_pending = S.advance(false);
         g_needAdvance = false;
         g_career.mercatoPress();
+        monthlyAwards();
         lifeCheckPromotion();
         g_career.mgrTick();
         g_career.directorTick();
@@ -2238,7 +2240,8 @@ static void screenHub() {
             int tx = side ? bx + 4 : bx + 24;
             drawTextPx(fitText(g_world.teams[t].name, bw - 30, 10), tx, y + 18, 10, S.isControlled(t) ? C_HI : C_TXT);
             std::string lv = shortLevel(t);
-            if (!lv.empty()) drawTextPx(lv, tx, y + 30, 10, C_DIM);
+            if (!lv.empty()) drawTextPx(fitText(lv, bw - 100, 10), tx, y + 30, 10, C_DIM);
+            if (g_career.kind == CK_CLUB) { std::string f = teamForm(t); if (!f.empty()) drawForm(f, side ? bx + bw - 66 - 30 : bx + bw - 62, y + 30); }   // forme : 5 derniers matchs
             if (hover && IN.click) { openFiche(t, SC_HUB); return; }
         }
         const MatchRes* a = firstLegOf(C, g_pending.match);
@@ -2384,6 +2387,7 @@ static void screenHub() {
     switch (flat[act].id) {
     case 0: {
         const MatchRes& m = S.comps[g_pending.comp].matches[g_pending.match];
+        if (club && pressWanted(g_pending.comp, g_pending.match)) { openPress(g_pending.comp, g_pending.match); break; }   // conférence de presse
         startSetup(m.home, m.away, true, g_pending.comp, g_pending.match);
         break;
     }
@@ -4229,6 +4233,7 @@ void appFrame(float dt) {
     case SC_WALKMUSIC: screenWalkMusic(); break;
     case SC_TVADS: screenTvAds(); break;
     case SC_ADSEDIT: screenAdsEdit(); break;
+    case SC_PRESS: screenPress(); break;
     case SC_HELP: screenHelp(); break;
     case SC_FICHE: screenFiche(dt); break;
     case SC_EDITMENU: screenEditMenu(); break;
@@ -4422,7 +4427,13 @@ void appTestStart(const char* mode) {
     } else if (m == "hub") {
         int user = -1;
         for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") user = i;
-        g_career.newClubCareer(user, 2026); g_careerActive = true; g_needAdvance = true; openHub();
+        g_career.newClubCareer(user, 2026); g_careerActive = true; g_needAdvance = true;
+        if (getenv("FOOT_SIM")) {   // test : quelques journées jouées (matchs du joueur simulés)
+            for (int n = 0; n < atoi(getenv("FOOT_SIM")); n++) { PendingMatch pm = g_career.season.advance(false); if (pm.comp < 0) break; Competition& C = g_career.season.comps[pm.comp]; simulateMatch(C.matches[pm.match], &C); g_career.season.recordResult(pm.comp, pm.match); g_career.season.finishRoundOthers(pm.comp, pm.match); }
+            g_career.ballonTick(); for (auto& e : g_career.ballonEditions) e.presented = 1; g_needAdvance = true;
+        }
+        openHub();
+        if (getenv("FOOT_PRESS")) { g_pending = g_career.season.advance(false); g_needAdvance = false; if (g_pending.comp >= 0) openPress(g_pending.comp, g_pending.match); }
     } else if (m == "coach" || m == "callup" || m == "hosts" || m == "coachlog" || m == "coachend") {
         g_career.newCoachCareer(g_world.nationIndex("FRA")); g_careerActive = true; g_needAdvance = true;
         if (m == "coach") { openHub(); return; }

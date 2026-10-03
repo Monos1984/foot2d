@@ -96,12 +96,32 @@ static void screenPlayer() {
         (void)xx;
     }, false);
     if (H.empty()) drawTextPx("Pas encore d'historique (les saisons jouées en carrière s'ajoutent ici).", 16, hy + 2, 10, C_DIM);
-    drawTextPx(fmt("Total : %d matchs, %d buts, %d passes décisives, %d jaunes, %d rouges", ta, tb, tp, tj, tr), 16, VH - 32, 10, C_GOOD);
+    drawTextPx(fitText(fmt("Total : %d matchs, %d buts, %d passes décisives, %d jaunes, %d rouges", ta, tb, tp, tj, tr), g_careerActive ? 290 : VW - 180, 10), 16, VH - 32, 10, C_GOOD);
     if (!g_careerActive) {   // l'éditeur de joueurs n'est accessible qu'avant de lancer une carrière
         if (button(VW - 150, VH - 34, 138, 14, "Modifier (éditeur)")) { extern void openPlayerEditorFwd(); openPlayerEditorFwd(); return; }
         drawFooter("Tab : modifier le joueur   Retour");
         if (IN.tab) { extern void openPlayerEditorFwd(); openPlayerEditorFwd(); return; }
-    } else drawFooter(careerRules()?"Tab : postes puis personnalité   Retour":"Retour");
+    } else {
+        // carrière : discussion individuelle avec un joueur de son effectif (une fois par mois)
+        if (careerRules() && g_plTeam == g_career.userTeam && !g_career.life.isPlayer && g_career.kind == CK_CLUB) {
+            static std::map<int, int> talked;     // joueur -> mois de la dernière discussion
+            int month = (int)(g_career.season.now / 4.345) + g_career.year * 12;
+            bool can = talked.count(p.id) == 0 || talked[p.id] != month;
+            static const char* TALK[3] = { "Féliciter", "Encourager", "Recadrer" };
+            for (int k = 0; k < 3; k++) if (button(VW - 330 + k * 106, VH - 34, 100, 14, TALK[k], false, can)) {
+                int d = 0; std::string r;
+                bool inForm = p.goals + p.assists >= std::max(2, p.apps / 3) || p.morale >= 75;
+                if (k == 0) { d = inForm ? 6 : 1; r = inForm ? p.name + " apprécie vos félicitations, il est gonflé à bloc." : p.name + " est surpris : il sait qu'il peut mieux faire."; }
+                else if (k == 1) { d = p.morale < 50 ? 7 : 2; r = p.morale < 50 ? p.name + " reprend confiance grâce à votre soutien." : p.name + " vous remercie, il était déjà serein."; }
+                else { bool lazy = p.morale >= 70 && !inForm; d = lazy ? 1 : -7; r = lazy ? p.name + " a compris le message et redouble d'efforts." : p.name + " le prend mal, son moral baisse."; }
+                p.morale = (uint8_t)std::max(10, std::min(100, p.morale + d));
+                talked[p.id] = month;
+                toast(r + fmt(" (moral %+d)", d));
+                g_career.season.news.push_back("Vestiaire : " + r);
+            }
+        }
+        drawFooter(careerRules()?"Tab : postes puis personnalité   Retour":"Retour");
+    }
     if (IN.back) g_screen = g_plBack;
 }
 

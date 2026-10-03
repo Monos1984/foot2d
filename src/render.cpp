@@ -1285,7 +1285,7 @@ static void drawSceneInset(const Match& m, int kind, float t, int x, int y, int 
 static void drawMatchScenes(const Match& m) {
     static const Match* sm = nullptr; static float st = -1, wait = 0, lastClock = -100; static int kind = 0;
     if (sm != &m) { sm = &m; st = -1; wait = 0; lastClock = -100; }
-    bool stop = !m.S.training && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 &&
+    bool stop = !m.S.training && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.pendCardOff < 0 &&
                 (m.state == MS_STOP || (m.state == MS_SETPIECE && !m.spReady && m.sp != SP_KICKOFF));
     float dt = GetFrameTime();
     if (getenv("FOOT_SCENE")) { kind = atoi(getenv("FOOT_SCENE")) % 9; st = 1.f; stop = true; dt = 0; }
@@ -2164,8 +2164,36 @@ void renderMatch(const Match& m, bool radar) {
         drawTextPx("Entrée : passer", 4, MH - 12, 10, Color{ 200, 200, 210, 170 });
     }
     if(!m.S.training&&!replay){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);std::string label=std::string(supporterAtmosphereName(m.S.supporterAtmosphere,chant==CH_PROTEST?2:0))+" / "+supporterChantName(chant);int width=textWidth(label,5)+8;int chantY=m.S.tv&&!m.S.channel.empty()?17:3;DrawRectangle(MW-width-3,chantY,width,9,Color{8,14,28,200});drawTextPx(label,MW-width+1,chantY+1,5,chant==CH_PROTEST||chant==CH_WHISTLES?Color{255,130,80,255}:Color{255,220,100,255});if(m.S.supporterTifo>=0&&(m.clock<8||m.ceremony)){drawTextPx("TIFO : FIERTÉ DU CLUB",4,20,5,Color{255,230,130,255});}}
+    // grand « BUT ! » animé au moment du but
+    if (!replay && m.state == MS_GOAL && m.stateT < 1.8f && m.lastScorerTeam >= 0) {
+        float u = std::min(1.f, m.stateT / 0.35f);
+        int size = 10 + (int)(u * 30.f);
+        float tt = (float)GetTime();
+        int shake = m.stateT < 0.6f ? (((int)(tt * 30)) % 2 ? 1 : -1) : 0;
+        std::string b = "BUT !";
+        int w = textWidth(b, size);
+        Color tc = ((int)(tt * 8)) % 2 ? Color{ 255, 225, 90, 255 } : WHITE;
+        Color kc = hexc(m.kit[m.lastScorerTeam].shirt);
+        drawTextPx(b, MW / 2 - w / 2 + 2 + shake, 38 + 2, size, kc);
+        drawTextPx(b, MW / 2 - w / 2 + shake, 38, size, tc);
+    }
+    // habillage TV : bandeaux des remplacements et des cartons
+    if (!replay && m.S.tv && !m.S.training) {
+        auto band = [&](const std::string& top, const std::string& line, Color accent, float a) {
+            int w = std::max(textWidth(top, 5), textWidth(line, 5)) + 14, x = 4 - (int)((1.f - a) * (w + 10)), y = MH - 64;
+            DrawRectangle(x, y, w, 20, Color{ 10, 14, 30, 225 });
+            DrawRectangle(x, y, 3, 20, accent);
+            drawTextPx(top, x + 7, y + 2, 5, Color{ 255, 225, 90, 255 });
+            drawTextPx(line, x + 7, y + 11, 5, WHITE);
+        };
+        if (m.subBoardT <= 0 && m.refCardT > 0 && m.refCardFor >= 0 && m.refCardFor < 22) {
+            float a = std::min(1.f, m.refCardT * 4.f);
+            const MPlayer& cp = m.pl[m.refCardFor];
+            band(m.refCardType == 2 ? "CARTON ROUGE" : "CARTON JAUNE", m.playerName(m.refCardFor) + " (" + m.team(cp.team).shortName + ")", m.refCardType == 2 ? Color{ 230, 40, 40, 255 } : Color{ 255, 220, 0, 255 }, a);
+        }
+    }
     // messages
-    if (m.msgT > 0 && !m.msg.empty() && !replay && !(m.ceremony && m.tossUI > 0) && m.tossKind == 0 && !m.lapActive && !(m.duel && m.fightT > 0)) {
+    if (m.msgT > 0 && !m.msg.empty() && !replay && !(m.state == MS_GOAL && m.stateT < 1.8f) && !(m.ceremony && m.tossUI > 0) && m.tossKind == 0 && !m.lapActive && !(m.duel && m.fightT > 0)) {
         int y = 40;
         int w = std::max(textWidth(m.msg, 10), textWidth(m.msg2, 10)) + 16;
         DrawRectangle(MW / 2 - w / 2, y - 4, w, m.msg2.empty() ? 18 : 30, Color{ 0, 0, 30, 170 });
