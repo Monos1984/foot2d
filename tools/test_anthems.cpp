@@ -26,3 +26,4 @@ int main(int argc, char** argv) {
     if (bad) { printf("FAIL anthems: %d\n", bad); return 1; }
     printf("PASS anthems: %d rendered\n", n);
 }
+// (voir aussi test_crowd_audio.cpp)

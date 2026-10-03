@@ -28,6 +28,7 @@ int audioAnthemListIndex(int i);
 std::string audioAnthemListName(int i);
 std::string audioAnthemListCredit(int i);
 std::vector<float> audioRenderAnthem(int idx, int* sampleRate);
+std::vector<float> audioRenderCrowd(int what, int i);   // 0 chant i, 1 applaudissements, 2 sifflets
 bool audioAnthemPlaying();
 float audioAnthemSeconds();                       // durée de l'hymne en cours
 const char* audioAnthemName(const std::string& code);

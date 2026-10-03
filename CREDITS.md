@@ -36,3 +36,7 @@ Remerciement à **Thorn Atari**.
 ## Hymnes nationaux (build 24)
 
 Les débuts des hymnes nationaux sont joués à partir des notes du paquet npm **anthem-scores** (licence MIT pour le code ; les données gardent la licence de leur partition source). Les mélodies sont dans le domaine public ; les partitions dont elles sont extraites viennent de Wikipédia, Wikimedia Commons et Wikisource (CC BY-SA, CC0 ou domaine public). Les données dérivées sont dans `tools/anthems/` et `src/anthems_data.inc` (générées par `tools/gen_anthems.py`) ; elles sont partagées sous les mêmes conditions que leur source. La liste complète des sources, auteurs et licences, partition par partition, est dans `tools/anthems/CREDITS.md`.
+
+## La Marseillaise complète (build 25)
+
+Premier couplet et refrain « Aux armes, citoyens ! » joués d'après la partition piano et chant d'Alexis Jeandeau, dédiée au domaine public (CC0 1.0) : https://github.com/jeandeaual/lilypond-piano-la-marseillaise. Copie de la partition dans `tools/marseillaise/`, conversion par `tools/ly_to_notes.py` vers `src/marseillaise_data.inc`.

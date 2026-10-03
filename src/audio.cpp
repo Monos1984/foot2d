@@ -1,5 +1,6 @@
 // Sons synthétisés (aucun fichier externe)
 #include "audio.h"
+#include <cstring>
 #include "raylib.h"
 #include "match.h"
 #include <vector>
@@ -43,60 +44,142 @@ static std::vector<float> noise(float sec, float lp, float gain, float (*env)(fl
 }
 
 // ------------------------------------------------------------------ public : chœurs, tambours, clappements, sifflets
-// Une voix de supporter = fondamentale + harmoniques pondérées par deux formants (voyelle chantée).
-struct Vowel { float f1, f2; };
-static const Vowel V_A = { 750, 1250 }, V_E = { 420, 2000 }, V_O = { 480, 850 }, V_I = { 300, 2300 }, V_OU = { 330, 750 };
-static float formantGain(float f, const Vowel& v) {
-    float a = (f - v.f1) / 170.f, b = (f - v.f2) / 300.f;
-    return std::exp(-a * a) + 0.6f * std::exp(-b * b) + 0.06f;
+// Voix de la foule (build 25) : chaque supporter est une source glottale (dent de scie avec micro-variations de hauteur
+// et d'intensité), toute la foule passe dans trois formants qui suivent la voyelle chantée, avec consonnes
+// (sifflantes, occlusives), souffle, imprécision des attaques et de la justesse, puis l'acoustique du stade
+// (passe-bas, écho de la tribune d'en face, réverbération).
+struct Vowel { float f1, f2, f3; };
+static const Vowel V_A = { 760, 1150, 2500 }, V_E = { 480, 1900, 2550 }, V_O = { 520, 860, 2450 }, V_I = { 310, 2150, 2950 }, V_OU = { 330, 800, 2300 };
+struct Syll { float t0, len; int semi; const Vowel* v; float accent; char cons = 0; };   // cons : 's' sifflante, 'd' occlusive, 'l' attaque douce, 'h' souffle
+struct Biquad {   // passe-bande RBJ (gain 0 dB au centre)
+    float b0 = 0, b2 = 0, a1 = 0, a2 = 0, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    void setBP(float f, float q) { float w = 6.2831853f * f / SR, al = std::sin(w) / (2 * q), a0 = 1 + al; b0 = al / a0; b2 = -al / a0; a1 = -2 * std::cos(w) / a0; a2 = (1 - al) / a0; }
+    float run(float x) { float y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; }
+};
+static float urand() { return (float)rand() / RAND_MAX; }
+// acoustique du stade : passe-bas doux, écho de la tribune opposée, réverbération (peignes parallèles)
+static void stadiumSpace(std::vector<float>& v, float wetAmt, float lpCoef) {
+    float y = 0;
+    for (auto& x : v) { y += (x - y) * lpCoef; x = y; }
+    int n = (int)v.size(), echo = (int)(0.085f * SR);
+    std::vector<float> dry = v;
+    for (int k = echo; k < n; k++) v[k] += dry[k - echo] * 0.28f;
+    static const int D[4] = { 1687, 1601, 2053, 1931 };
+    std::vector<float> wet(n, 0.f);
+    for (int c = 0; c < 4; c++) { std::vector<float> buf(D[c], 0.f); int bi = 0; for (int k = 0; k < n; k++) { float o = buf[bi]; buf[bi] = v[k] + o * 0.72f; bi = (bi + 1) % D[c]; wet[k] += o * 0.25f; } }
+    for (int k = 0; k < n; k++) v[k] = v[k] * (1.f - wetAmt * 0.5f) + wet[k] * wetAmt;
 }
-struct Syll { float t0, len; int semi; const Vowel* v; float accent; };
-// chœur de nv voix légèrement désaccordées et décalées, sur une suite de syllabes ; base = fréquence du demi-ton 0
+// chœur de nv supporters sur une suite de syllabes ; base = fréquence du demi-ton 0
 static void addChoir(std::vector<float>& out, const std::vector<Syll>& song, float base, int nv, float gain, unsigned seed) {
     const float PI2 = 6.2831853f;
     srand(seed);
-    for (int v = 0; v < nv; v++) {
-        float det = std::pow(2.f, (frand() * 22.f) / 1200.f) * (v % 3 == 0 ? 0.5f : 1.f);   // un tiers chante à l'octave basse
-        float onset = (frand() * 0.5f + 0.5f) * 0.07f, vibF = 4.5f + frand() * 1.2f, vibA = 0.004f + 0.004f * std::fabs(frand());
-        float loud = 0.7f + 0.3f * std::fabs(frand()), ph = std::fabs(frand()) * PI2;
+    int n = (int)out.size();
+    std::vector<float> src(n, 0.f), env(n, 0.f), cons(n, 0.f);
+    nv = std::max(nv, 18) * 2;                                                  // une foule : beaucoup de voix
+    for (int vi = 0; vi < nv; vi++) {
+        float reg = vi % 4 == 0 ? 1.f : 0.5f;                                   // surtout des voix d'hommes (octave grave)
+        float vibF = 4.5f + urand() * 1.5f, vibA = 0.003f + 0.006f * urand(), loud = 0.55f + 0.45f * urand();
+        float rough = 0.002f + 0.004f * urand();                                // voix éraillée : instabilité de hauteur
+        float ph = urand(), jit = 0;
+        float lateBias = urand() * 0.06f;                                       // certains sont toujours un peu en retard
         for (const Syll& sy : song) {
-            int i0 = (int)((sy.t0 + onset) * SR), n = (int)(sy.len * SR);
-            float f0 = base * det * std::pow(2.f, sy.semi / 12.f);
-            float scoop = 1.f - 0.04f * std::fabs(frand());                     // attaque un peu en dessous de la note
-            float hg[10] = {}; int nh = 0;                                      // poids des harmoniques (voyelle), calculés une fois par syllabe
-            for (int h = 1; h <= 9 && f0 * h < 4500; h++, nh++) hg[h] = formantGain(f0 * h, *sy.v) / (0.6f + h * 0.4f);
-            for (int i = 0; i < n && i0 + i < (int)out.size(); i++) {
+            if (urand() < 0.07f) continue;                                      // il ne chante pas cette syllabe
+            float onset = lateBias + urand() * 0.07f;
+            int i0 = (int)((sy.t0 + onset) * SR), len = (int)(sy.len * SR * (0.85f + 0.25f * urand()));
+            float err = std::pow(2.f, (urand() + urand() - 1.f) * 55.f / 1200.f); // justesse approximative (± 55 cents)
+            float f0 = base * reg * err * std::pow(2.f, sy.semi / 12.f);
+            float scoop = 1.f - 0.05f * urand();
+            float att = sy.cons == 'l' || sy.cons == 'h' ? 14.f : 30.f;
+            for (int i = 0; i < len && i0 + i < n; i++) {
                 if (i0 + i < 0) continue;
-                float t = (float)i / SR, u = (float)i / n;
-                float env = std::min(1.f, t * 28.f) * (u > 0.7f ? (1 - u) / 0.3f : 1.f) * sy.accent * loud;
-                float f = f0 * (scoop + (1 - scoop) * std::min(1.f, t * 12.f)) * (1 + vibA * std::sin(PI2 * vibF * t));
-                ph += PI2 * f / SR; if (ph > PI2 * 64) ph -= PI2 * 64;
-                float smp = 0;
-                float s1 = std::sin(ph), c1 = std::cos(ph), sh = s1, ch = c1;     // sin(h·ph) par récurrence
-                for (int h = 1; h <= nh; h++) { smp += hg[h] * sh; float ns = sh * c1 + ch * s1; ch = ch * c1 - sh * s1; sh = ns; }
-                smp += frand() * 0.05f;                                             // souffle
-                out[i0 + i] += smp * env * gain / nv;
+                float t = (float)i / SR, u = (float)i / len;
+                jit += (urand() - 0.5f - jit) * 0.02f;
+                float f = f0 * (scoop + (1 - scoop) * std::min(1.f, t * 10.f)) * (1 + vibA * std::sin(PI2 * vibF * t) + jit * rough * 10.f);
+                ph += f / SR; ph -= std::floor(ph);
+                float e = std::min(1.f, t * att) * (u > 0.75f ? (1 - u) / 0.25f : 1.f) * sy.accent * loud * (0.9f + 0.1f * std::sin(PI2 * 11.f * t + vi));
+                float saw = 2.f * ph - 1.f;
+                src[i0 + i] += saw * e;
+                env[i0 + i] += e;
             }
         }
     }
+    // consonnes : bruit coloré juste avant la voyelle (sifflantes « s », « ch ») ou explosion brève (« d », « t »)
+    for (const Syll& sy : song) {
+        if (!sy.cons || sy.cons == 'l') continue;
+        float dur = sy.cons == 's' ? 0.11f : sy.cons == 'h' ? 0.09f : 0.03f;
+        int i0 = (int)((sy.t0 - (sy.cons == 's' ? 0.06f : 0.01f)) * SR), len = (int)(dur * SR);
+        Biquad bq; bq.setBP(sy.cons == 's' ? 5200.f : sy.cons == 'h' ? 1400.f : 2200.f, sy.cons == 's' ? 1.6f : 0.8f);
+        for (int i = 0; i < len + SR / 20 && i0 + i < n; i++) {
+            if (i0 + i < 0) continue;
+            float t = (float)i / SR;
+            float e = sy.cons == 'd' ? std::exp(-t * 90.f) : std::min(1.f, t * 40.f) * std::max(0.f, 1.f - t / (dur + 0.04f));
+            cons[i0 + i] += bq.run(urand() * 2.f - 1.f) * e * sy.accent * (sy.cons == 's' ? 0.5f : 0.7f);
+        }
+    }
+    // formants : ils glissent d'une voyelle à l'autre
+    std::vector<float> outv(n, 0.f);
+    Biquad F1, F2, F3; float cf1 = song.empty() ? 500 : song[0].v->f1, cf2 = song.empty() ? 1500 : song[0].v->f2, cf3 = 2500;
+    size_t si = 0; float breath = 0, body = 0;
+    for (int k = 0; k < n; k++) {
+        float t = (float)k / SR;
+        while (si + 1 < song.size() && song[si + 1].t0 <= t) si++;
+        if (k % 32 == 0 && !song.empty()) {
+            const Vowel& V = *song[si].v;
+            cf1 += (V.f1 - cf1) * 0.12f; cf2 += (V.f2 - cf2) * 0.12f; cf3 += (V.f3 - cf3) * 0.12f;
+            F1.setBP(cf1, 5.f); F2.setBP(cf2, 7.f); F3.setBP(cf3, 9.f);
+        }
+        breath += ((urand() * 2.f - 1.f) - breath) * 0.5f;
+        float x = src[k] + breath * env[k] * 0.35f;                             // souffle des voix (cris)
+        body += (x - body) * 0.09f;                                             // poitrine : fondamentale et premiers harmoniques
+        outv[k] = F1.run(x) * 1.0f + F2.run(x) * 0.75f + F3.run(x) * 0.4f + body * 0.22f + cons[k];
+    }
+    stadiumSpace(outv, 0.45f, 0.55f);
+    float g = gain * 2.2f / std::sqrt((float)nv);
+    for (int k = 0; k < n; k++) out[k] += outv[k] * g;
 }
 // grosse caisse du kop
 static void addDrum(std::vector<float>& out, float t0, float amp) {
     const float PI2 = 6.2831853f;
     int i0 = (int)(t0 * SR), n = (int)(0.35f * SR);
-    for (int i = 0; i < n && i0 + i < (int)out.size(); i++) { float t = (float)i / SR; out[i0 + i] += (std::sin(PI2 * (52 + 70 * std::exp(-t * 25)) * t) * 0.9f + frand() * 0.15f * std::exp(-t * 60)) * std::exp(-t * 9) * amp; }
+    for (int i = 0; i < n && i0 + i < (int)out.size(); i++) { if (i0 + i < 0) continue; float t = (float)i / SR; out[i0 + i] += (std::sin(PI2 * (52 + 70 * std::exp(-t * 25)) * t) * 0.9f + frand() * 0.15f * std::exp(-t * 60)) * std::exp(-t * 9) * amp; }
 }
-// clappements de milliers de mains : bruit filtré à attaque franche, légèrement étalé
+// applaudissements : banque de claquements de mains (bruit filtré à des fréquences variées), joués par des centaines de mains
+static std::vector<std::vector<float>>& clapBank() {
+    static std::vector<std::vector<float>> bank;
+    if (!bank.empty()) return bank;
+    unsigned keep = (unsigned)rand(); srand(977);
+    for (int k = 0; k < 24; k++) {
+        int len = (int)(0.07f * SR); std::vector<float> c(len);
+        Biquad bq, bq2; float fc = 700.f + urand() * 2100.f; bq.setBP(fc, 0.9f + urand() * 1.4f); bq2.setBP(fc * (1.6f + urand() * 0.6f), 1.2f);
+        float dec = 70.f + urand() * 90.f;
+        for (int i = 0; i < len; i++) { float t = (float)i / SR, x = urand() * 2.f - 1.f; float e = std::min(1.f, t * 2500.f) * std::exp(-t * dec); c[i] = (bq.run(x) + bq2.run(x) * 0.5f) * e * 2.5f; }
+        bank.push_back(c);
+    }
+    srand(keep);
+    return bank;
+}
+static void putClap(std::vector<float>& out, int i0, int proto, float g) {
+    auto& c = clapBank()[proto % clapBank().size()];
+    for (size_t i = 0; i < c.size() && i0 + (int)i < (int)out.size(); i++) if (i0 + (int)i >= 0) out[i0 + i] += c[i] * g;
+}
+// clappement collectif en rythme (« clap clap ») : des dizaines de mains, pas tout à fait ensemble
 static void addClap(std::vector<float>& out, float t0, float amp) {
-    int i0 = (int)(t0 * SR), n = (int)(0.16f * SR);
-    float y = 0, y2 = 0;
-    for (int i = 0; i < n && i0 + i < (int)out.size(); i++) {
-        float t = (float)i / SR;
-        float x = frand();
-        y += (x - y) * 0.55f; y2 += (y - y2) * 0.55f;
-        float hp = y - y2;                                                          // bande médium
-        float env = std::min(1.f, t * 300.f) * std::exp(-t * 26.f) * (1.f + 0.3f * std::exp(-t * 90.f));
-        out[i0 + i] += hp * env * amp * 2.2f;
+    for (int k = 0; k < 40; k++) {
+        float jit = (urand() + urand() + urand() - 1.5f) * 0.018f;
+        putClap(out, (int)((t0 + jit) * SR), rand(), amp * (0.25f + 0.5f * urand()) * 0.35f);
+    }
+}
+// applaudissements nourris : nClap personnes qui applaudissent chacune à son rythme, avec une enveloppe d'ensemble
+static void addApplause(std::vector<float>& out, float t0, float dur, int nClap, float amp) {
+    for (int p = 0; p < nClap; p++) {
+        float rate = 3.2f + urand() * 3.5f, t = t0 + urand() * 0.35f, dist = 0.3f + 0.7f * urand();
+        int proto = rand();
+        while (t < t0 + dur) {
+            float u = (t - t0) / dur;
+            float e = std::min(1.f, u * 6.f) * (u > 0.65f ? std::max(0.f, (1.f - u) / 0.35f) : 1.f);
+            if (urand() > 0.05f) putClap(out, (int)(t * SR), proto + (urand() < 0.3f ? 1 : 0), amp * dist * e * (0.7f + 0.3f * urand()) * 0.22f);
+            t += (1.f / rate) * (0.88f + 0.24f * urand());
+        }
     }
 }
 // rumeur de fond (foule)
@@ -104,24 +187,39 @@ static void addMurmur(std::vector<float>& out, float amp, float lp) {
     float y = 0, y2 = 0;
     for (size_t i = 0; i < out.size(); i++) { y += (frand() - y) * lp; y2 += (y - y2) * lp; out[i] += y2 * amp; }
 }
-// sifflets du public : des dizaines de sifflements aigus, glissés, qui démarrent et s'arrêtent au hasard
+// sifflets du public : des sifflements aux doigts (son pur + souffle filtré), par salves, montants, descendants ou « loup »
 static void addCrowdWhistles(std::vector<float>& out, int nw, float amp, unsigned seed) {
     const float PI2 = 6.2831853f;
     srand(seed);
     float total = (float)out.size() / SR;
+    std::vector<float> tmp(out.size(), 0.f);
     for (int w = 0; w < nw; w++) {
-        float f0 = 1900.f + std::fabs(frand()) * 1700.f, ph = 0;
-        float start = std::fabs(frand()) * total * 0.25f, len = total * (0.55f + 0.4f * std::fabs(frand()));
-        float glide = frand() * 300.f, wob = 3.f + std::fabs(frand()) * 6.f, finger = std::fabs(frand()) > 0.5f ? 1.f : 0.f;
-        int i0 = (int)(start * SR), n = (int)(len * SR);
-        for (int i = 0; i < n && i0 + i < (int)out.size(); i++) {
-            float t = (float)i / SR, u = (float)i / n;
-            float f = f0 + glide * u + 60.f * std::sin(PI2 * wob * t) * finger;
-            ph += PI2 * f / SR; if (ph > PI2) ph -= PI2;
-            float env = std::min(1.f, t * 15.f) * std::min(1.f, (1 - u) * 8.f) * (0.75f + 0.25f * std::sin(PI2 * 0.7f * t + w));
-            out[i0 + i] += (std::sin(ph) + 0.12f * std::sin(ph * 2)) * env * amp / std::sqrt((float)nw);
+        float f0 = 1900.f + urand() * 1500.f, dist = 0.35f + 0.65f * urand();
+        float t = urand() * total * 0.3f;
+        int bursts = 1 + (int)(urand() * 3);
+        for (int b = 0; b < bursts && t < total; b++) {
+            float len = 0.35f + urand() * 1.1f;
+            int shape = (int)(urand() * 4);                                     // 0 tenu, 1 montant, 2 descendant, 3 sifflet « loup »
+            float wob = 4.f + urand() * 4.f, ph = 0;
+            Biquad res; float lastF = -1;
+            int i0 = (int)(t * SR), n = (int)(len * SR);
+            for (int i = 0; i < n && i0 + i < (int)tmp.size(); i++) {
+                float tt = (float)i / SR, u = (float)i / n;
+                float f = f0;
+                if (shape == 1) f = f0 * (0.82f + 0.18f * std::min(1.f, tt * 6.f));
+                else if (shape == 2) f = f0 * (1.f - 0.15f * u);
+                else if (shape == 3) f = f0 * (u < 0.4f ? 0.8f + 0.5f * (u / 0.4f) : 1.3f - 0.55f * ((u - 0.4f) / 0.6f));
+                f *= 1.f + 0.008f * std::sin(PI2 * wob * tt);
+                if (std::fabs(f - lastF) > 15.f) { res.setBP(f, 30.f); lastF = f; }
+                ph += PI2 * f / SR; if (ph > PI2) ph -= PI2;
+                float e = std::min(1.f, tt * 25.f) * std::min(1.f, (1 - u) * 12.f) * (0.8f + 0.2f * std::sin(PI2 * 9.f * tt + w));
+                tmp[i0 + i] += (std::sin(ph) * 0.55f + res.run(urand() * 2.f - 1.f) * 2.2f) * e * dist;
+            }
+            t += len + 0.15f + urand() * 0.6f;
         }
     }
+    stadiumSpace(tmp, 0.35f, 0.7f);
+    for (size_t i = 0; i < out.size(); i++) out[i] += tmp[i] * amp / std::sqrt((float)nw) * 1.4f;
 }
 static void normalize(std::vector<float>& v, float peak, float fade) {
     float m = 0.0001f; for (float x : v) m = std::max(m, std::fabs(x));
@@ -132,6 +230,11 @@ static void normalize(std::vector<float>& v, float peak, float fade) {
         if ((int)(v.size() - i) < nf) g *= (float)(v.size() - i) / nf;
         v[i] *= g;
     }
+}
+static void addBrass(std::vector<float>& v, int i0, int len, float f, float amp);
+// fanfare des tribunes : trompettes qui jouent la mélodie du chant avec la foule
+static void addBand(std::vector<float>& v, const std::vector<Syll>& song, float base, float amp) {
+    for (auto& sy : song) { addBrass(v, (int)(sy.t0 * SR), (int)(sy.len * SR * 0.9f), base * 2.f * std::pow(2.f, sy.semi / 12.f), amp); addBrass(v, (int)(sy.t0 * SR), (int)(sy.len * SR * 0.9f), base * 2.f * std::pow(2.f, (sy.semi - 12) / 12.f), amp * 0.5f); }
 }
 // chants complets (boucles) : 0 « Allez ! », 1 sifflets, 2 contestation, 3 encouragements rythmés, 4 « Olé ! »
 static std::vector<float> renderChant(int kind) {
@@ -145,7 +248,7 @@ static std::vector<float> renderChant(int kind) {
         for (int r = 0; r < 2; r++) for (int k = 0; k < 6; k++) {
             float t0 = r * 6 * b * 2 + k * b * 2;
             song.push_back({ t0, b * 0.8f, MEL[(r * 6 + k) % 12], &V_A, 0.85f });
-            song.push_back({ t0 + b, b * 0.95f, MEL[(r * 6 + k) % 12] + 2, &V_E, 1.f });
+            song.push_back({ t0 + b, b * 0.95f, MEL[(r * 6 + k) % 12] + 2, &V_E, 1.f, 'l' });
         }
         addChoir(v, song, 196.f, 26, 1.2f, 11);
         for (float t = 0; t < len; t += b) addDrum(v, t, (int)(t / b + 0.5f) % 2 ? 0.25f : 0.45f);
@@ -161,9 +264,9 @@ static std::vector<float> renderChant(int kind) {
     case 2: {   // « Dé-mis-sion ! » scandé, clappements entre les mots
         for (int r = 0; r < 4; r++) {
             float t0 = r * b * 3.f;
-            song.push_back({ t0, b * 0.45f, 0, &V_E, 0.9f });
-            song.push_back({ t0 + b * 0.5f, b * 0.45f, 0, &V_I, 0.9f });
-            song.push_back({ t0 + b, b * 0.9f, -3, &V_O, 1.f });
+            song.push_back({ t0, b * 0.45f, 0, &V_E, 0.9f, 'd' });
+            song.push_back({ t0 + b * 0.5f, b * 0.45f, 0, &V_I, 0.9f, 'l' });
+            song.push_back({ t0 + b, b * 0.9f, -3, &V_O, 1.f, 's' });
             addClap(v, t0 + b * 2.f, 0.8f); addClap(v, t0 + b * 2.5f, 0.8f);
         }
         addChoir(v, song, 150.f, 24, 1.3f, 31);
@@ -178,7 +281,7 @@ static std::vector<float> renderChant(int kind) {
             addClap(v, t0 + b * 2.f, 1.f); addClap(v, t0 + b * 2.5f, 1.f); addClap(v, t0 + b * 3.f, 1.f);
             addDrum(v, t0, 0.5f); addDrum(v, t0 + b * 2.f, 0.4f);
             song.push_back({ t0 + b * 3.4f, b * 0.35f, 5, &V_A, 0.9f });
-            song.push_back({ t0 + b * 3.8f, b * 0.5f, 7, &V_E, 1.f });
+            song.push_back({ t0 + b * 3.8f, b * 0.5f, 7, &V_E, 1.f, 'l' });
         }
         addChoir(v, song, 196.f, 22, 1.1f, 37);
         addMurmur(v, 0.2f, 0.07f);
@@ -190,9 +293,10 @@ static std::vector<float> renderChant(int kind) {
         static const float L[8] = { 0.45f, 0.9f, 0.45f, 0.45f, 0.45f, 0.45f, 0.45f, 1.6f };
         for (int r = 0; r < 2; r++) for (int k = 0; k < 8; k++) {
             float t0 = r * b * 6.f + T[k] * b;
-            song.push_back({ t0, L[k] * b, N[k], k % 2 ? &V_E : &V_O, k == 7 ? 1.f : 0.9f });
+            song.push_back({ t0, L[k] * b, N[k], k % 2 ? &V_E : &V_O, k == 7 ? 1.f : 0.9f, k % 2 ? 'l' : (char)0 });
         }
         addChoir(v, song, 220.f, 30, 1.3f, 41);
+        addBand(v, song, 220.f, 0.35f);                                         // la fanfare du virage reprend l'air
         for (float t = 0; t < len; t += b) addDrum(v, t, 0.35f);
         addMurmur(v, 0.2f, 0.07f);
         break;
@@ -210,7 +314,7 @@ static std::vector<float> renderChant(int kind) {
         float t0 = 0.1f, gap = 1.5f;
         while (t0 < len - 0.3f) {
             addDrum(v, t0, 0.6f); addClap(v, t0 + 0.02f, 1.2f);
-            song.push_back({ t0 + 0.04f, 0.28f, 0, &V_OU, 1.f });
+            song.push_back({ t0 + 0.04f, 0.28f, 0, &V_OU, 1.f, 'h' });
             t0 += gap; gap = std::max(0.24f, gap * 0.8f);
         }
         addChoir(v, song, 130.f, 26, 1.4f, 47);
@@ -239,7 +343,7 @@ static std::vector<float> renderChant(int kind) {
     case 9: {   // « AUX ARMES ! » : un virage lance, l'autre répond, puis « Nous sommes les... et nous allons gagner ! »
         for (int r = 0; r < 2; r++) {
             float t0 = 0.1f + r * b * 2.2f;
-            std::vector<Syll> call = { { t0, b * 0.42f, 0, &V_O, 1.f }, { t0 + b * 0.5f, b * 0.42f, 0, &V_A, 1.f }, { t0 + b, b * 0.9f, -2, &V_E, 1.f } };
+            std::vector<Syll> call = { { t0, b * 0.42f, 0, &V_O, 1.f }, { t0 + b * 0.5f, b * 0.42f, 0, &V_A, 1.f, 'l' }, { t0 + b, b * 0.9f, -2, &V_E, 1.f, 'l' } };
             addChoir(v, call, r ? 150.f : 165.f, r ? 22 : 18, r ? 1.35f : 1.1f, 61 + r);   // réponse plus forte
             addDrum(v, t0, 0.6f); addDrum(v, t0 + b, 0.6f);
         }
@@ -258,6 +362,7 @@ static std::vector<float> renderChant(int kind) {
         static const float L[7] = { 1.4f, 0.45f, 0.7f, 0.7f, 0.45f, 1.9f, 1.9f };
         for (int r = 0; r < 2; r++) for (int k = 0; k < 7; k++) song.push_back({ 0.1f + r * b * 8.f + T[k] * b, L[k] * b, N[k], &V_O, k == 0 ? 1.f : 0.9f });
         addChoir(v, song, 165.f, 32, 1.35f, 71);
+        addBand(v, song, 165.f, 0.3f);
         for (float t = 0.1f; t < len; t += b) addDrum(v, t, 0.4f);
         addMurmur(v, 0.15f, 0.07f);
         break;
@@ -648,10 +753,12 @@ void audioInit() {
         addCrowdWhistles(v, 34, 1.f, 53); addMurmur(v, 0.15f, 0.1f);
         normalize(v, 0.8f, 0.25f);
         g_sfx[SFX_FANS_WHISTLE] = makeSound(v);
-        std::vector<float> c((size_t)(2.4f * SR), 0.f);
+        std::vector<float> c((size_t)(2.6f * SR), 0.f);
         srand(59);
-        for (int k = 0; k < 90; k++) addClap(c, std::fabs(frand()) * 2.1f, 0.35f + 0.3f * std::fabs(frand()));
-        normalize(c, 0.7f, 0.3f);
+        addApplause(c, 0.f, 2.5f, 220, 1.f);
+        addMurmur(c, 0.08f, 0.08f);
+        stadiumSpace(c, 0.3f, 0.75f);
+        normalize(c, 0.7f, 0.05f);
         g_sfx[SFX_CLAPS] = makeSound(c);
         // huées : « Hououou » grave, chœur d'hommes
         std::vector<float> bo((size_t)(1.8f * SR), 0.f);
@@ -762,6 +869,8 @@ struct RChord { float beat; int p[2]; float len; };
 struct RealAnthem { const char* codes; const char* title; const char* composer; const char* license; const char* source; float bpm; int tonic, minor; float lengthBeats, beatsPerBar;
                     const RNote* mel; int nm; const RNote* bass; int nb; const RChord* inner; int ni; };
 #include "anthems_data.inc"
+struct RChord4 { float beat; int p[4]; float len; };
+#include "marseillaise_data.inc"
 #define ANL(a) a, (int)(sizeof(a) / sizeof(a[0]))
 static const AnthemDef GENERIC_ANTHEMS[] = {
     { "", ANL(AN_GEN), 72.f, 349.23f, "Hymne de la sélection (marche)" },
@@ -874,7 +983,9 @@ static void addBass(std::vector<float>& v, int i0, int len, float f, float amp) 
         v[i0 + k] += (std::sin(PI2 * f * t) + 0.35f * std::sin(PI2 * f * 2 * t) + 0.12f * std::sin(PI2 * f * 3 * t)) * 0.075f * env * amp;
     }
 }
+static std::vector<float> renderMarseillaise();
 static std::vector<float> renderReal(const RealAnthem& A, int reps = 2) {
+    if (!strcmp(A.codes, "FRA")) return renderMarseillaise();
     const float PI2 = 6.2831853f;
     float bpm = A.bpm > 0 ? A.bpm : 84.f;
     if (A.lengthBeats * reps * 60.f / bpm < 14.f) reps = 3;                  // extrait très court : une reprise de plus
@@ -938,6 +1049,66 @@ static std::vector<float> renderReal(const RealAnthem& A, int reps = 2) {
         std::vector<float> wet(n, 0.f);
         for (int c = 0; c < 4; c++) { std::vector<float> buf(D[c], 0.f); int bi = 0; for (int k = 0; k < n; k++) { float o = buf[bi]; buf[bi] = v[k] + o * 0.78f; bi = (bi + 1) % D[c]; wet[k] += o * 0.25f; } }
         for (int k = 0; k < n; k++) v[k] = v[k] * 0.8f + wet[k] * 0.35f;
+    }
+    std::vector<float> out(SR + n, 0.f);
+    for (int k = 0; k < SR; k++) { float t = (float)k / SR; out[k] = frand() * (0.5f + 0.5f * std::sin(PI2 * 30 * t)) * 0.07f * std::min(1.f, t * 3); }
+    for (int k = 0; k < n; k++) out[SR + k] += v[k];
+    normalize(out, 0.85f, 0.01f);
+    return out;
+}
+// La Marseillaise complète (premier couplet + refrain « Aux armes, citoyens ! ») : partition piano et chant CC0
+// convertie par tools/ly_to_notes.py. Orchestre de fanfare : trompettes au chant, cors et cordes sur les accords
+// de la main droite, basse et tuba sur la main gauche (les trémolos deviennent un roulement de timbales).
+static std::vector<float> renderMarseillaise() {
+    const float PI2 = 6.2831853f;
+    float bpm = 104.f, spb = 60.f / bpm, tail = 3.f;
+    float total = MARS_LENGTH + tail;
+    int n = (int)(total * spb * SR) + SR;
+    std::vector<float> v(n, 0.f);
+    auto at = [&](float b) { return (int)(b * spb * SR); };
+    int nm = (int)(sizeof MARS_MEL / sizeof MARS_MEL[0]), nb = (int)(sizeof MARS_BASS / sizeof MARS_BASS[0]), nr = (int)(sizeof MARS_RH / sizeof MARS_RH[0]);
+    const float REFRAIN = 76.f;           // « Aux armes, citoyens ! » (mesure 20)
+    for (int i = 0; i < nm; i++) {
+        float len = MARS_MEL[i].len + (i == nm - 1 ? tail : 0.f);
+        float amp = MARS_MEL[i].beat >= REFRAIN ? 1.1f : 0.95f;
+        addBrass(v, at(MARS_MEL[i].beat), at(len), midiHz((float)MARS_MEL[i].midi), amp);
+        addBrass(v, at(MARS_MEL[i].beat), at(len), midiHz((float)MARS_MEL[i].midi - 12), amp * 0.35f);   // doublure à l'octave grave
+    }
+    for (int i = 0; i < nr; i++) {
+        float len = MARS_RH[i].len + (i == nr - 1 ? tail : 0.f);
+        int top = 0; for (int q = 0; q < 4; q++) top = std::max(top, MARS_RH[i].p[q]);
+        for (int q = 0; q < 4; q++) {
+            int m = MARS_RH[i].p[q];
+            if (m <= 0 || m == top) continue;                 // la note du dessus double déjà le chant
+            addString(v, at(MARS_RH[i].beat), at(len), midiHz((float)m), 1.1f);
+        }
+    }
+    for (int i = 0; i < nb; i++) {
+        float len = MARS_BASS[i].len, b = MARS_BASS[i].beat;
+        int i0 = at(b);
+        if (len < 0.2f) {                                     // trémolo : roulement de timbales
+            for (int k = 0; k < at(len) + SR / 20 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += std::sin(PI2 * (midiHz((float)MARS_BASS[i].midi) + 20 * std::exp(-t * 30)) * t) * std::exp(-t * 18) * 0.09f; }
+            continue;
+        }
+        if (i == nb - 1) len += tail;
+        addBass(v, i0, at(len), midiHz((float)MARS_BASS[i].midi), 1.f);
+    }
+    // timbales sur les temps forts, caisse claire de marche (temps 2 et 4), cymbales au refrain et à la fin
+    auto snare = [&](float b, float amp) { int i0 = at(b); for (int k = 0; k < SR / 6 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += (frand() * 0.8f + std::sin(PI2 * 190 * t) * 0.4f) * std::exp(-t * 22) * amp; } };
+    auto cymbal = [&](float b, float amp) { int i0 = at(b); for (int k = 0; k < SR * 2 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += frand() * std::exp(-t * 1.8f) * amp; } };
+    for (float b = 4; b < MARS_LENGTH; b += 1.f) {
+        int beatInBar = ((int)b) % 4;
+        if (beatInBar == 0) { int i0 = at(b); float fb = midiHz(34.f + (b >= REFRAIN ? 0 : 0)); for (int k = 0; k < SR / 2 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += std::sin(PI2 * (fb + 25 * std::exp(-t * 20)) * t) * std::exp(-t * 6) * 0.13f; } }
+        if (beatInBar == 1 || beatInBar == 3) snare(b, b >= REFRAIN ? 0.05f : 0.035f);
+        if (beatInBar == 3 && b >= REFRAIN) snare(b + 0.5f, 0.03f);
+    }
+    cymbal(REFRAIN, 0.1f);
+    cymbal(MARS_LENGTH - 4.f, 0.12f);
+    {   // réverbération de stade
+        static const int D[4] = { 1557, 1617, 1491, 1422 };
+        std::vector<float> wet(n, 0.f);
+        for (int c = 0; c < 4; c++) { std::vector<float> buf(D[c], 0.f); int bi = 0; for (int k = 0; k < n; k++) { float o = buf[bi]; buf[bi] = v[k] + o * 0.78f; bi = (bi + 1) % D[c]; wet[k] += o * 0.25f; } }
+        for (int k = 0; k < n; k++) v[k] = v[k] * 0.8f + wet[k] * 0.3f;
     }
     std::vector<float> out(SR + n, 0.f);
     for (int k = 0; k < SR; k++) { float t = (float)k / SR; out[k] = frand() * (0.5f + 0.5f * std::sin(PI2 * 30 * t)) * 0.07f * std::min(1.f, t * 3); }
@@ -1012,10 +1183,12 @@ int audioAnthemListCount() { return NUM_REAL_ANTHEMS + NUM_GENERIC; }
 // liste pour le test des sons : hymnes réels puis génériques ; renvoie l'index à passer à audioAnthemPlayIndex
 int audioAnthemListIndex(int i) { return i < NUM_REAL_ANTHEMS ? i : -1 - (i - NUM_REAL_ANTHEMS); }
 std::string audioAnthemListName(int i) {
-    if (i < NUM_REAL_ANTHEMS) { const RealAnthem& A = REAL_ANTHEMS[i]; std::string c = A.codes; return std::string(A.title) + "  (" + c + ")  - " + A.composer; }
+    if (i < NUM_REAL_ANTHEMS) { const RealAnthem& A = REAL_ANTHEMS[i]; std::string c = A.codes; return std::string(A.title) + (c == "FRA" ? " (couplet et refrain)" : "") + "  (" + c + ")  - " + A.composer; }
     int g = i - NUM_REAL_ANTHEMS; return g < NUM_GENERIC ? GENERIC_ANTHEMS[g].name : "";
 }
-std::string audioAnthemListCredit(int i) { if (i < NUM_REAL_ANTHEMS) return std::string("Partition : ") + REAL_ANTHEMS[i].license + " - " + REAL_ANTHEMS[i].source; return "Composition originale du jeu"; }
+std::string audioAnthemListCredit(int i) {
+    if (i < NUM_REAL_ANTHEMS && !strcmp(REAL_ANTHEMS[i].codes, "FRA")) return "Partition complète (piano et chant) : CC0 - github.com/jeandeaual/lilypond-piano-la-marseillaise";
+    if (i < NUM_REAL_ANTHEMS) return std::string("Partition : ") + REAL_ANTHEMS[i].license + " - " + REAL_ANTHEMS[i].source; return "Composition originale du jeu"; }
 bool audioAnthemPlaying() { return (g_anthemOn && IsSoundPlaying(g_anthemCur)) || (g_anthemMusOn && IsMusicStreamPlaying(g_anthemMus)); }
 // musique d'entrée des joueurs (fichier choisi dans l'éditeur, par compétition)
 static Music g_walkMus; static bool g_walkOn = false; static float g_walkFade = -1;
@@ -1126,4 +1299,14 @@ bool audioPreviewPlaying() {
     case 4: return audioAnthemPlaying();
     }
     return false;
+}
+// rendus bruts des ambiances (outils de vérification)
+std::vector<float> audioRenderCrowd(int what, int i) {
+    if (what == 0) return renderChant(std::max(0, std::min(NUM_CHANTS - 1, i)));
+    std::vector<float> v((size_t)(2.6f * SR), 0.f);
+    srand(59 + i);
+    if (what == 1) { addApplause(v, 0.f, 2.5f, 220, 1.f); addMurmur(v, 0.08f, 0.08f); stadiumSpace(v, 0.3f, 0.75f); }
+    else { addCrowdWhistles(v, 34, 1.f, 53); addMurmur(v, 0.15f, 0.1f); }
+    normalize(v, 0.75f, 0.05f);
+    return v;
 }

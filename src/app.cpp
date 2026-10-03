@@ -1542,7 +1542,7 @@ static void screenMatch(float dt) {
             std::string code = m.S.anthemOnly;
             if (code.empty()) { const Team& AT = g_world.teams[m.anthemReq == 0 ? m.S.home : m.S.away]; code = AT.nation >= 0 && AT.nation < NUM_NATIONS ? NATIONS[AT.nation].code : "FRA"; }
             audioAnthemCode(code);
-            m.anthemDur = std::max(8.f, std::min(32.f, audioAnthemSeconds() + 0.5f));
+            m.anthemDur = std::max(8.f, std::min(90.f, audioAnthemSeconds() + 0.5f));   // La Marseillaise complète dure environ 70 s
             m.anthemName = audioAnthemName(code);
             if (!audioAnthemFile(code).empty()) m.anthemName = GetFileNameWithoutExt(audioAnthemFile(code).c_str());
             m.anthemReq = -1;
