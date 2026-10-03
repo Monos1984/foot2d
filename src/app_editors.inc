@@ -1,6 +1,6 @@
 // ------------------------------------------------------------------ messagerie, éditeurs de sponsors et de managers, à propos, mode championnat
-static const char* GAME_VERSION = "00.02.01";
-static const int GAME_BUILD = 4;          // incrémenté à chaque livraison
+static const char* GAME_VERSION = "00.03.00";
+static const int GAME_BUILD = 11;          // incrémenté à chaque livraison
 
 // ---------------- messagerie : lire, effacer, non lus
 static int g_newsOpen = -1;           // index (dans season.news) du message ouvert
@@ -250,6 +250,7 @@ static const char* DIPLOMAS[] = { "UEFA Pro", "UEFA A (DES)", "UEFA B (BEF)", "S
 static std::vector<ManagerDef> g_managers;
 static bool g_managersLoaded = false;
 static int g_managerSel = -1;         // manager choisi pour la prochaine carrière
+static int g_mgReturn = -1;           // écran à rouvrir après la création obligatoire d'un manager
 static void loadManagers() {
     if (g_managersLoaded) return;
     g_managersLoaded = true;
@@ -263,8 +264,8 @@ static void loadManagers() {
         while (true) { size_t b = l.find('|', a); p.push_back(l.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 1; }
         ManagerDef m; m.name = p[0];
         if (p.size() > 1) m.nation = p[1];
-        if (p.size() > 2) m.skin = atoi(p[2].c_str()) % 4;
-        if (p.size() > 3) m.hair = atoi(p[3].c_str()) % 5;
+        if (p.size() > 2) m.skin = atoi(p[2].c_str()) % NUM_SKINS;
+        if (p.size() > 3) m.hair = atoi(p[3].c_str()) % NUM_HAIRS;
         if (p.size() > 4) m.age = std::max(25, std::min(85, atoi(p[4].c_str())));
         if (p.size() > 8) { m.bday = std::max(1, std::min(31, atoi(p[5].c_str()))); m.bmonth = std::max(1, std::min(12, atoi(p[6].c_str()))); m.place = p[7]; m.diploma = atoi(p[8].c_str()) & 3; }
         if (p.size() > 9) m.gender = atoi(p[9].c_str()) ? 1 : 0;
@@ -298,7 +299,7 @@ static void screenManagers() {
         std::vector<std::string> rows = {
             "Nom : " + M.name + (g_mgTyping && g_mgField == 0 && ((int)(GetTime() * 2)) % 2 ? "_" : ""),
             "Nationalité : " + (ni >= 0 ? g_world.teams[ni].name : M.nation),
-            fmt("Teint : %d", M.skin + 1), fmt("Cheveux : %d", M.hair + 1), fmt("Âge : %d ans", M.age),
+            std::string("Couleur de peau : ") + SKIN_NAMES[M.skin % NUM_SKINS], std::string("Cheveux : ") + HAIR_NAMES[M.hair % NUM_HAIRS], fmt("Âge : %d ans", M.age),
             fmt("Jour de naissance : %d", M.bday), std::string("Mois de naissance : ") + MONTHS_FR2[std::max(1, std::min(12, M.bmonth))],
             "Lieu de naissance : " + (M.place.empty() && !(g_mgTyping && g_mgField == 7) ? std::string("(non renseigné)") : M.place) + (g_mgTyping && g_mgField == 7 && ((int)(GetTime() * 2)) % 2 ? "_" : ""),
             std::string("Diplôme d'entraîneur : ") + DIPLOMAS[M.diploma & 3],
@@ -307,12 +308,11 @@ static void screenManagers() {
             "Supprimer ce manager", "Terminé" };
         // portrait
         Kit suit; suit.shirt = 0x1B2A63; suit.shirt2 = 0x1B2A63; suit.shorts = 0x202020; suit.socks = 0x101010;
-        DrawRectangle(470, 50, 120, 130, Color{ 30, 50, 90, 255 });
-        drawPlayerSprite(530, 170, suit, M.skin, M.hair, 0, 0, PS_NORMAL, false, 0, 8);
+        drawPortrait(470, 50, 120, M.skin, M.hair, M.gender, suit, hashStr(M.name));
         if (ni >= 0) drawKitIcon(g_world.teams[ni].home, 476, 56, 2);
         if (g_mgTyping) {
             textEdit(g_mgField == 7 ? M.place : M.name, 40);
-            menuRun(g_mgLW, rows, 50, 400);
+            listRun(g_mgLW, (int)rows.size(), 40, 50, 400, (int)rows.size(), 18, [&](int i, int x, int y, bool sel) { drawTextPx(rows[i], x + 6, y + 4, 10, sel ? BLACK : C_TXT); }, false);
             if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || IsKeyPressed(KEY_ESCAPE)) { g_mgTyping = false; g_textMode = false; saveManagers(); }
             drawFooter("Tapez le nom   Entrée : valider");
             return;
@@ -324,8 +324,8 @@ static void screenManagers() {
             case 1: { std::vector<int> nat; for (int i = 0; i < NUM_NATIONS; i++) nat.push_back(i);
                       int k = 0; for (int i = 0; i < (int)nat.size(); i++) if (nat[i] == ni) k = i;
                       k = (k + d + (int)nat.size()) % (int)nat.size(); M.nation = NATIONS[nat[k]].code; break; }
-            case 2: M.skin = (M.skin + d + 4) % 4; break;
-            case 3: M.hair = (M.hair + d + 5) % 5; break;
+            case 2: M.skin = (M.skin + d + NUM_SKINS) % NUM_SKINS; break;
+            case 3: M.hair = (M.hair + d + NUM_HAIRS) % NUM_HAIRS; break;
             case 4: M.age = std::max(25, std::min(85, M.age + d)); break;
             case 5: M.bday = (M.bday - 1 + d + 31) % 31 + 1; break;
             case 6: M.bmonth = (M.bmonth - 1 + d + 12) % 12 + 1; break;
@@ -354,62 +354,104 @@ static void screenManagers() {
     drawFooter("OK : modifier / créer   Le manager choisi est utilisé au lancement d'une carrière   Retour");
     if (s == n) { g_managers.push_back(ManagerDef()); g_managers.back().name = "Nouveau manager"; g_mgEdit = n; g_mgField = 0; g_mgTyping = true; g_textMode = true; g_mgLW = ListW(); while (GetCharPressed() > 0) {} saveManagers(); }
     else if (s >= 0) { g_mgEdit = s; g_mgLW = ListW(); }
-    if (IN.back) g_screen = SC_EDITMENU;
+    if (IN.back) { if (g_mgReturn >= 0) { g_screen = (Screen)g_mgReturn; g_mgReturn = -1; } else g_screen = SC_EDITMENU; }
+}
+
+// carrière (club ou sélection) : un entraîneur / manager est obligatoire
+static bool requireManager(Screen back) {
+    loadManagers();
+    if (g_managerSel >= 0 && g_managerSel < (int)g_managers.size()) return true;
+    if (!g_managers.empty()) { g_managerSel = 0; toast("Manager : " + g_managers[0].name + " (modifiable dans les options de carrière)"); return true; }
+    g_managers.push_back(ManagerDef()); g_managers.back().name = "Nouveau manager";
+    g_managerSel = (int)g_managers.size() - 1;
+    g_mgEdit = g_managerSel; g_mgField = 0; g_mgTyping = true; g_textMode = true; g_mgLW = ListW(); while (GetCharPressed() > 0) {}
+    saveManagers();
+    g_mgReturn = (int)back;
+    g_screen = SC_MANAGERS;
+    toast("Un entraîneur est obligatoire : créez votre manager");
+    return false;
 }
 
 // ---------------- à propos
 static void screenAbout() {
     drawBackground("À propos");
-    int y = 50;
-    drawTextCentered("FRANCE FOOT 2D", VW / 2, y, 20, C_HI); y += 26;
+    static int page=0;
+    if(button(110,34,200,14,"Le jeu",page==0)) page=0;
+    if(button(320,34,210,14,"Technologies et crédits",page==1)) page=1;
+    if(IN.tab || IN.left || IN.right) page=1-page;
+    int y = 56;
+    drawTextCentered("SUPER SOCCER WORLD", VW / 2, y, 20, C_HI); y += 22;
+    drawTextCentered("Jouez. Gérez. Vivez le football", VW / 2, y, 10, C_TXT); y += 14;
     drawTextCentered(std::string("Version ") + GAME_VERSION + fmt("  -  build %d", GAME_BUILD), VW / 2, y, 10, C_DIM); y += 20;
     const char* L[] = { "Jeu gratuit réalisé par l'IA Claude,", "piloté par Jean Monos pour Offgame.", "",
                         "Jeu non licencié : fan jeu, sans lien avec les ligues, fédérations et clubs cités.",
-                        "Musiques et sons originaux synthétisés par le jeu.", "",
-                        "Données : EA SPORTS FC 26 DataHub (joueurs), INSEE (communes), Wikipédia (palmarès)." };
-    for (auto l : L) { drawTextCentered(l, VW / 2, y, 10, C_TXT); y += 14; }
+                        "Musiques et sons originaux synthétisés par le jeu.",
+                        "Remerciement à Thorn Atari.",
+                        "Données : EA SPORTS FC 26 DataHub (joueurs), INSEE (communes), Wikipédia (palmarès).", "",
+                        "Soutenir le jeu : fr.tipeee.com/le-bazar-de-monos  (touche T)" };
+    const char* TECH[]={
+        "Conception : Jean Monos / Offgame. Création assistée par Claude (Anthropic).",
+        "Corrections et développement : Codex (OpenAI). Remerciement à Thorn Atari.",
+        "C++17 : simulation, gestion, rendu des joueurs et interface du jeu.",
+        "raylib 5.5 : Ramón Santamaría et contributeurs (licence zlib/libpng).",
+        "OpenGL : affichage. Win32, GDI, WinMM et Shell : services Windows (Microsoft).",
+        "raylib utilise notamment GLFW, glad, stb et miniaudio : crédits dans CREDITS.md.",
+        "LLVM / Clang, LLVM-MinGW : compilation Windows 64 bits et ressources.",
+        "PowerShell (Microsoft) : construction et vérification des livraisons.",
+        "Python (Python Software Foundation), pypdf et Pillow : imports, icône, archives.",
+        "Musique synthétisée, sprites et interface : code et créations du projet.",
+        "FFF, Ligues et Districts : compositions officielles importées (sources tracées).",
+        "EA SPORTS FC 26 DataHub, INSEE, Wikipédia : données historiques du projet.",
+        "Détails, liens et licences : CREDITS.md et LICENSE_raylib.txt fournis."};
+    if(page) for(auto l:TECH){drawTextCentered(l,VW/2,y,10,C_TXT);y+=12;}
+    else for(auto l:L){drawTextCentered(l,VW/2,y,10,C_TXT);y+=14;}
     // petit joueur qui jongle
     static float t = 0; t += GetFrameTime();
     Kit k; k.shirt = 0x1B2A63; k.shorts = 0xFFFFFF; k.socks = 0xE2001A;
     drawPlayerSprite(VW / 2, VH - 50, k, 1, 0, 0, (int)(t * 6), PS_NORMAL, false, 0, 3);
     DrawCircle(VW / 2 + 4, VH - 60 - (int)(std::fabs(std::sin(t * 5)) * 18), 3, WHITE);
-    drawFooter("Retour");
+    drawFooter("Tab / Gauche / Droite : catégorie    Retour    T : Tipeee");
+    if (IsKeyPressed(KEY_T)) OpenURL(TIPEEE_URL);
     if (IN.back || IN.ok) g_screen = SC_MAIN;
 }
 
-// ---------------- mode championnat : les premières divisions d'Europe, sans mode manager
+// ---------------- mode championnat (mode foot, allégé) : moteur de la carrière sans gestion, 1 à 4 clubs contrôlés,
+// toutes les divisions du pays (montées / descentes), coupes nationales et continentales, transferts simplifiés
 static ListW g_lmLW;
+static int g_lmPyr = -1;
 static void screenLeagueMode() {
-    drawBackground("Championnat");
-    struct LI { std::string name; int pyr; };
+    drawBackground("Championnat (mode foot)");
+    struct LI { std::string name, right; int pyr; int grp; };
     std::vector<LI> v;
+    static const char* CFN[NUM_CONFEDS] = { "UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC" };
     for (int p = 0; p < (int)g_basePyramids.size(); p++) {
         const Pyramid& P = g_basePyramids[p];
-        if (P.dom >= 0) continue;
+        if (P.dom >= 0 || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
         int q = P.poolIndex(0, 0);
         if (q < 0 || P.pools[q].clubs.size() < 4) continue;
+        bool fem = isWomenPyramid(P);
         int ni = g_world.nationIndex(P.country.c_str());
-        v.push_back({ P.tiers[0].name + "  (" + (ni >= 0 ? g_world.teams[ni].name : P.country) + ")", p });
+        int grp = P.country == "FRA" ? 0 : fem ? 10 : ni >= 0 ? 1 + NATIONS[ni].conf : 9;
+        std::string right = fmt("%d division%s", (int)P.tiers.size(), P.tiers.size() > 1 ? "s" : "");
+        v.push_back({ std::string(fem ? "[F] " : grp >= 1 && grp <= 6 ? std::string("[") + CFN[grp - 1] + "] " : "") + P.name + "  -  " + P.tiers[0].name, right, p, grp });
     }
-    drawTextCentered("Choisissez une première division : saison complète, sans gestion (1 ou plusieurs clubs).", VW / 2, 34, 10, C_DIM);
-    int s = listRun(g_lmLW, (int)v.size(), 80, 50, VW - 160, 20, 13, [&](int i, int x, int y, bool sel) {
-        const Pyramid& P = g_basePyramids[v[i].pyr];
-        int q = P.poolIndex(0, 0);
-        drawTextPx(v[i].name, x + 6, y + 1, 10, sel ? BLACK : C_TXT);
-        drawTextPx(fmt("%d clubs", (int)P.pools[q].clubs.size()), x + VW - 160 - 70, y + 1, 10, sel ? BLACK : C_DIM);
+    std::stable_sort(v.begin(), v.end(), [](const LI& a, const LI& b) { if (a.grp != b.grp) return a.grp < b.grp; return sortKey(a.name) < sortKey(b.name); });
+    drawTextCentered("Hommes (France en tête, puis par fédération) puis femmes. Saison complète, sans gestion : 1 à 4 clubs contrôlés.", VW / 2, 34, 10, C_DIM);
+    int s = listRun(g_lmLW, (int)v.size(), 40, 50, VW - 80, 22, 13, [&](int i, int x, int y, bool sel) {
+        drawTextPx(fitText(v[i].name, VW - 200, 10), x + 6, y + 1, 10, sel ? BLACK : v[i].grp == 10 ? Color{ 240, 150, 200, 255 } : C_TXT);
+        drawTextPx(v[i].right, x + VW - 80 - 90, y + 1, 10, sel ? BLACK : C_DIM);
     });
     drawFooter("OK : choisir vos clubs   Retour");
     if (IN.back) { g_screen = SC_MAIN; return; }
     if (s < 0) return;
     const Pyramid& P = g_basePyramids[v[s].pyr];
-    int q = P.poolIndex(0, 0);
+    g_lmPyr = v[s].pyr;
+    g_intlCandidates.clear();
+    int maxTier = P.country == "FRA" ? 2 : 99;          // France : Ligue 1, Ligue 2, Ligue 3
+    for (auto& pl : P.pools) if (pl.tier <= maxTier) for (int t : pl.clubs) if (g_world.teams[t].parent < 0) g_intlCandidates.push_back(t);
     g_cdef = CustomCompDef();
-    g_cdef.name = P.tiers[0].name + fmt(" %d-%02d", 2026, 27);
-    g_cdef.format = 0; g_cdef.legs = 2;
-    g_cdef.teams = P.pools[q].clubs;
-    g_customSel = g_cdef.teams;
+    g_cdef.name = P.tiers[0].name;
     g_leagueModePick = true;
-    g_intlCandidates = g_cdef.teams;
     g_intlSel.clear();
     openPick(PM_INTL);
 }
@@ -418,10 +460,17 @@ static void startLeagueMode() {
     g_leagueModePick = false;
     std::vector<int> ctrl = g_intlSel;
     if (ctrl.size() > 4) ctrl.resize(4);
-    g_career.newCustom(g_cdef, ctrl);
+    if (ctrl.empty()) return;
+    g_career.opts = Career::Opts();
+    g_career.opts.lite = 1;g_career.opts.disableManagerLife=1;g_career.opts.disableBribes=1;
+    g_career.newClubCareer(ctrl[0], 2026);
+    g_career.mgr.managerMode = false; g_career.mgr.noSack = true; g_career.mgr.fullManager = false;
+    g_career.season.controlled = ctrl;
     g_careerActive = true; g_needAdvance = true;
-    g_hubNotice = g_cdef.name + " - saison complète";
+    g_hubNotice = "Championnat : saison 2026-27 (" + std::to_string(ctrl.size()) + " club" + (ctrl.size() > 1 ? "s" : "") + " contrôlé" + (ctrl.size() > 1 ? "s" : "") + ")";
+    levelCacheDirty();
     openHub();
+    autosave();
 }
 
 static void managerCycle(int d) {
@@ -438,3 +487,4 @@ static void applyChosenManager() { applyManager(g_managerSel); }
 static Texture2D* sponsorLogoFwd(const std::string& name) { return sponsorLogo(name); }
 static void drawLogo2(Texture2D* t, int x, int y, int w, int h) { drawLogo(t, x, y, w, h); }
 static std::string sponsorImagePath(const std::string& name) { loadSponsors(); for (auto& sp : g_sponsors) if (sp.name == name) return sp.image; return ""; }
+

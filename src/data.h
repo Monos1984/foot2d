@@ -11,7 +11,8 @@ enum Culture {
 };
 
 // Motifs de maillot
-enum KitPattern { KP_PLAIN = 0, KP_VSTRIPES, KP_HOOPS, KP_HALVES, KP_SASH, KP_CHECK, KP_SLEEVES };
+enum KitPattern { KP_PLAIN = 0, KP_VSTRIPES, KP_HOOPS, KP_HALVES, KP_SASH, KP_CHECK, KP_SLEEVES,
+                  KP_PINSTRIPES, KP_QUARTERS, KP_BAND, KP_SHOULDERS, KP_CHEVRON, KP_CROSS, KP_DIAGHALF, NUM_PATTERNS };
 
 struct NationDef {
     const char* code;     // trigramme FIFA
@@ -76,6 +77,28 @@ extern const NationDef NATIONS[];
 extern const int NUM_NATIONS;
 extern const LeagueDef LEAGUES[];
 extern const int NUM_LEAGUES;
+// championnats complémentaires du monde (data_world_leagues.cpp) : clubs "Nom|ABR|note|c1|c2|stade;..."
+struct ExtLeagueDef { const char* id; const char* name; const char* country; int tier; int down; const char* clubs; };
+extern const ExtLeagueDef EXT_LEAGUES[];
+extern const int NUM_EXT_LEAGUES;
+const char* extCupName(const char* country);
+// football féminin (data_women.cpp)
+struct WomenLeagueDef { const char* country; int tier; const char* name; int down; const char* clubs; };
+struct WomenSquadDef { const char* key; const char* players; };   // key : nom du club ou code pays (sélection)
+extern const WomenLeagueDef WOMEN_LEAGUES[];
+extern const int NUM_WOMEN_LEAGUES;
+extern const WomenSquadDef WOMEN_SQUADS[];
+extern const int NUM_WOMEN_SQUADS;
+extern const WomenSquadDef WOMEN_NATIONS[];
+extern const int NUM_WOMEN_NATIONS;
+const char* womenCupName(const char* country);
+// mode « Légendes de la Coupe du monde » (data_legends.cpp)
+struct LegendEdition { int year; const char* host; const char* hostCode; int format; int ptsWin; int subs; const char* teams; const char* stadiums; const char* finalStadium; };
+struct LegendSquad { int year; const char* key; const char* players; };
+extern const LegendEdition LEGENDS[];
+extern const int NUM_LEGENDS;
+extern const LegendSquad LEGEND_SQUADS[];
+extern const int NUM_LEGEND_SQUADS;
 extern const ClubDef EURO_POOL[];
 extern const int NUM_EURO_POOL;
 extern const ClubDef WORLD_POOL[];
@@ -100,6 +123,18 @@ extern const FrClubDef FR_N1[]; extern const int NUM_FR_N1;
 extern const FrClubDef FR_N2[]; extern const int NUM_FR_N2;
 extern const FrClubDef FR_RESERVES_R1[]; extern const int NUM_FR_RESERVES_R1;
 
+// Published senior men's groups: tier 5=R1, 8=D1; squad is 1,2,3...
+struct FrOfficialTeam {
+    const char* name;
+    const char* parent;
+    const char* dept;
+    const char* district;
+    int region, tier, group, squad;
+};
+extern const FrOfficialTeam FR_OFFICIAL_2627[];
+extern const int NUM_FR_OFFICIAL_2627;
+
 // Noms de joueurs
 struct NamePool { const char* first; const char* last; };
 extern const NamePool NAME_POOLS[NUM_CULTURES];
+extern const char* FEMALE_FIRST[NUM_CULTURES];

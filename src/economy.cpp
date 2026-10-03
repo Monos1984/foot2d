@@ -55,7 +55,7 @@ int wageDemand(const Player& p, int toTeam) {
     int base = p.wageK > 0 ? p.wageK : p.wage();
     int rep = teamReputation(toTeam);
     float k = 1.0f + std::max(-0.25f, std::min(0.6f, (p.overall() - rep) * 0.012f));
-    return std::max(1, (int)(base * k));
+    return personalitySalary(g_career,p,toTeam,std::max(1,(int)(base*k)));
 }
 
 // frais d'arbitrage payés par le club qui reçoit (€) : pris en charge par la LFP en pro, barèmes des ligues et districts
@@ -66,7 +66,7 @@ int refereeFee(int comp, int home) {
     int f = FEE[std::max(0, std::min(12, lv))];
     if (comp >= 0 && comp < (int)S.comps.size()) {
         const Competition& C = S.comps[comp];
-        if (C.kind == 2 && C.name.find("tours régionaux") == std::string::npos) f = 0;   // Coupe de France (phase nationale) : prise en charge par la FFF
+        if (C.kind == 2 && home>=0 && home<(int)g_world.teams.size() && g_world.teams[home].nation==g_world.nationIndex("FRA") && C.name.find("tours régionaux") == std::string::npos) f = 0;   // Coupe de France (phase nationale) : prise en charge par la FFF
         if (C.kind == 3 || C.kind == 8 || C.kind == 7 || C.kind == 11 || C.kind == 6) f = 0;
         if (C.kind == 4 || C.kind == 5) f = f * 3 / 4;
     }

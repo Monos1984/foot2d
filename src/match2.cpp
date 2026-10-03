@@ -190,7 +190,7 @@ bool Match::updateMiniToss(float dt) {
         else pl[k].vel = V2();
     };
     walk(captain[0], c + V2(-1.4f, 0.4f)); walk(captain[1], c + V2(1.4f, 0.4f));
-    refPos = refPos + (c + V2(0, -0.6f) - refPos) * std::min(1.f, dt * 3);
+    refMove(c + V2(0, -0.6f), 3.6f, V2(0, 1), dt);
     cam = cam + (c - cam) * std::min(1.f, dt * 2);
     const float FLIP = 2.4f;
     if (cerT > FLIP && tossWinner < 0) {
@@ -311,4 +311,48 @@ bool Match::tryVolley(int i) {
         say("Reprise de volée de " + playerName(i) + " !", 2.4f);
     }
     return true;
+}
+
+// ------------------------------------------------------------------ météo
+const char* METEO_NAMES[6] = { "canicule", "chaud", "temps normal", "pluie", "orage", "neige" };
+
+int meteoForMonth(int month, int climate, uint64_t seed) {
+    Rng r(seed * 2654435761ULL + 99);
+    if (climate == 2) month = (month + 6) % 12;                 // hémisphère sud : saisons inversées
+    if (month > 10) month = month == 11 ? 0 : 10;              // juillet ~ août
+    // pondérations : canicule, chaud, normal, pluie, orage, neige
+    static const int W[11][6] = {
+        { 12, 30, 36, 10, 12, 0 },   // août
+        { 3, 18, 52, 18, 9, 0 },     // septembre
+        { 0, 4, 56, 36, 4, 0 },      // octobre
+        { 0, 0, 52, 42, 1, 5 },      // novembre
+        { 0, 0, 46, 38, 0, 16 },     // décembre
+        { 0, 0, 44, 36, 0, 20 },     // janvier
+        { 0, 0, 46, 38, 0, 16 },     // février
+        { 0, 2, 54, 38, 2, 4 },      // mars
+        { 0, 10, 56, 26, 8, 0 },     // avril
+        { 4, 24, 46, 14, 12, 0 },    // mai
+        { 14, 32, 34, 8, 12, 0 },    // juin
+    };
+    int w[6]; for (int k = 0; k < 6; k++) w[k] = W[std::max(0, std::min(10, month))][k];
+    if (climate == 1) { w[0] = w[0] * 2 + 6; w[1] = w[1] * 2 + 14; w[3] /= 3; w[5] = 0; }            // pays chaud : pas de neige
+    if (climate == 2) { w[5] /= 3; }
+    if (climate == 3) { w[5] = w[5] * 2 + (month >= 3 && month <= 7 ? 12 : 0); w[0] /= 3; w[1] /= 2; }  // pays nordique : davantage de neige
+    int tot = 0; for (int k = 0; k < 6; k++) tot += w[k];
+    int x = r.range(0, std::max(1, tot) - 1);
+    for (int k = 0; k < 6; k++) { if (x < w[k]) return k; x -= w[k]; }
+    return 2;
+}
+
+void meteoApply(MatchSetup& s, bool heated, int turf) {
+    Rng r((uint64_t)(s.home * 131 + s.away * 7 + s.meteo * 3 + 1));
+    switch (s.meteo) {
+    case 0: s.pitch = 1; break;                                            // canicule : terrain sec et dur
+    case 1: s.pitch = r.chance(0.6f) ? 1 : 0; break;
+    case 3: s.pitch = turf < 40 && r.chance((40 - turf) / 40.f + 0.1f) ? 3 : 2; break;
+    case 4: s.pitch = r.chance(0.55f) || turf < 50 ? 3 : 2; break;         // orage : terrain gorgé d'eau
+    case 5: s.pitch = heated ? 2 : 4; break;                               // neige : gelé, sauf pelouse chauffée
+    default: s.pitch = r.chance(0.2f) ? 1 : 0; break;
+    }
+    s.weather = s.meteo == 3 || s.meteo == 4 ? 2 : s.meteo == 5 ? 3 : 0;
 }

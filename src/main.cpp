@@ -1,8 +1,9 @@
-// France Foot 2D - point d'entrée
+// Super Soccer World - point d'entrée
 #include "render.h"
 #include "input.h"
 #include "audio.h"
 #include "icon_data.h"
+#include "crashlog.h"
 
 void appInit();
 void appFrame(float dt);
@@ -12,9 +13,20 @@ void appTestStart(const char* mode);
 #include <cstring>
 extern bool g_quit;
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc > 1 && !strcmp(argv[1], "--validate-france")) {
+        g_world.build();
+        for (const auto& p : g_basePyramids) if (p.country == "FRA" && p.dom < 0) {
+            auto errors = validateFrancePyramid(p, true);
+            for (const auto& error : errors) std::printf("ERROR %s\n", error.c_str());
+            std::printf("%s: %d imported senior teams\n", errors.empty() ? "PASS" : "FAIL", NUM_FR_OFFICIAL_2627);
+            return errors.empty() ? 0 : 1;
+        }
+        return 2;
+    }
+    crashLogInit();
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
-    InitWindow(1280, 720, "France Foot 2D");
+    InitWindow(1280, 720, "Super Soccer World");
     {
         Image ic = GenImageColor(32, 32, BLANK);
         memcpy(ic.data, ICON32, sizeof ICON32);

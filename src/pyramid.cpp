@@ -1,10 +1,12 @@
 // Pyramides des championnats
-// France 2026-2027 : L1, L2, L3 (pro), National 1 (3x16), National 2 (8x14), R1/R2/R3 (13 ligues),
-// Départemental 1 à 5 selon la taille du district, équipes réserves ; outre-mer ; pays étrangers.
+// France 2026-2027 : L1, L2, L3 (pro), National 1 (16/16/17 au départ), National 2 (7x14 + 13 au départ), R1/R2/R3 (13 ligues),
+// Départemental 1 à 8 supporté (profondeur réelle configurable par district), équipes réserves ; outre-mer ; pays étrangers.
 #include "game.h"
 #include <map>
 #include <set>
 #include <cstring>
+#include <stdexcept>
+#include <cctype>
 
 std::vector<Pyramid> g_basePyramids;
 int dbClubIndex(const char* key);             // world.cpp
@@ -50,6 +52,7 @@ int regionDeptCount(int region) {
 }
 
 int poolGroupCount(const Pyramid& P, const Pool& pool) {
+    if (!pool.groupSizes.empty()) return (int)pool.groupSizes.size();
     const TierConf& T = P.tiers[pool.tier];
     if (T.flexible || pool.terminal) {
         int n = (int)std::lround((double)pool.clubs.size() / std::max(1, pool.size));
@@ -59,6 +62,7 @@ int poolGroupCount(const Pyramid& P, const Pool& pool) {
 }
 
 int poolTarget(const Pyramid& P, const Pool& pool) {
+    if (!pool.groupSizes.empty()) { int n = 0; for (int size : pool.groupSizes) n += size; return n; }
     return poolGroupCount(P, pool) * pool.size;
 }
 
@@ -71,6 +75,14 @@ static int regionGeoOrder(int r) {
 
 void formGroups(Pyramid& P) {
     for (auto& pool : P.pools) {
+        if (pool.officialGroups) {
+            std::vector<int> drawn;
+            for (const auto& group : pool.groups) drawn.insert(drawn.end(), group.begin(), group.end());
+            auto members = pool.clubs;
+            std::sort(drawn.begin(), drawn.end()); std::sort(members.begin(), members.end());
+            if (drawn == members && (int)pool.groups.size() == poolGroupCount(P, pool)) continue;
+            pool.officialGroups = false;
+        }
         int n = poolGroupCount(P, pool);
         std::vector<int> cl = pool.clubs;
         int scope = P.tiers[pool.tier].scope;
@@ -86,7 +98,12 @@ void formGroups(Pyramid& P) {
         });
         pool.groups.assign(n, {});
         int N = (int)cl.size();
-        for (int i = 0; i < N; i++) pool.groups[(int)((long long)i * n / std::max(1, N))].push_back(cl[i]);
+        if (!pool.groupSizes.empty() && N == poolTarget(P, pool)) {
+            int at = 0;
+            for (int g = 0; g < n; g++) for (int k = 0; k < pool.groupSizes[g]; k++) pool.groups[g].push_back(cl[at++]);
+        } else {
+            for (int i = 0; i < N; i++) pool.groups[(int)((long long)i * n / std::max(1, N))].push_back(cl[i]);
+        }
         // deux équipes d'un même club jamais dans la même poule
         if (n > 1) {
             auto clubOf = [](int t) { return g_world.teams[t].parent >= 0 ? g_world.teams[t].parent : t; };
@@ -136,7 +153,13 @@ struct DeptGen {
     int next = 0;
 };
 
-static std::set<std::string> g_usedNames;
+struct ClubNameLess {
+    bool operator()(const std::string& a, const std::string& b) const {
+        return std::lexicographical_compare(a.begin(),a.end(),b.begin(),b.end(),
+            [](unsigned char x,unsigned char y){return std::tolower(x)<std::tolower(y);});
+    }
+};
+static std::set<std::string, ClubNameLess> g_usedNames;
 
 static void buildDeptGen(int d, DeptGen& g) {
     struct Town { std::string name; int pop; };
@@ -214,8 +237,9 @@ int makeReserve(World& w, int parent, int level, float rating) {
     bool pro = P.rating >= 50;
     const char* suf[] = { "", " B", " C", " D" };
     const char* sufA[] = { "", " 2", " 3", " 4" };
-    t.name = P.name + (pro ? suf[std::min(level, 3)] : sufA[std::min(level, 3)]);
-    t.shortName = P.shortName.substr(0, 4) + (pro ? "B" : fmt("%d", level + 1));
+    t.name = P.name + (level <= 3 ? (pro ? suf[level] : sufA[level]) : fmt(" %d", level + 1));
+    t.shortName = P.shortName.substr(0, 4) + (pro && level <= 3 ? std::string(1, (char)('A'+level)) : fmt("%d", level + 1));
+    g_usedNames.insert(t.name);
     t.rating = rating;
     t.dbClub = -1;
     t.seed = hashStr(t.name) ^ 0x77;
@@ -244,6 +268,12 @@ static int addFr(World& w, const FrClubDef& d, int nat, std::map<std::string, in
             t.parent = it->second;
             int lvl = 1;
             for (auto& x : w.teams) if (x.parent == t.parent && x.resLevel >= lvl) lvl = x.resLevel + 1;
+            // The label carries the reserve number, even if team B is absent.
+            if (t.name.size() > 2 && t.name[t.name.size()-2] == ' ') {
+                char suffix = t.name.back();
+                if (suffix >= 'B' && suffix <= 'D') lvl = suffix-'A';
+                else if (suffix >= '2' && suffix <= '9') lvl = suffix-'1';
+            }
             t.resLevel = lvl;
             t.home = w.teams[t.parent].home; t.away = w.teams[t.parent].away;
         }
@@ -261,20 +291,32 @@ static const RegTable REG_TABLE[13] = {
     { 2, 12, 2, 4, 12, 8, 12 },  // Paris Île-de-France
     { 1, 12, 1, 2, 12, 4, 12 },  // Centre-Val de Loire
     { 1, 14, 1, 2, 12, 5, 12 },  // Bourgogne-Franche-Comté
-    { 2, 12, 1, 3, 12, 6, 12 },  // Normandie
-    { 2, 14, 2, 4, 12, 8, 12 },  // Hauts-de-France
-    { 2, 14, 2, 4, 14, 9, 12 },  // Grand Est
-    { 2, 12, 1, 4, 12, 8, 12 },  // Pays de la Loire
-    { 2, 12, 1, 4, 12, 8, 12 },  // Bretagne
+    { 2, 12, 1, 4, 12, 8, 12 },  // Normandie : groupes FFF 2026/27
+    { 2, 12, 2, 4, 12, 8, 12 },  // Hauts-de-France 2026/27
+    { 3, 14, 2, 7, 12, 14, 12 }, // Grand Est 2026/27 (R2: 6x12+1x13 ; R3: 13x12+1x11)
+    { 2, 12, 1, 4, 12, 10, 12 }, // Pays de la Loire: R3 groups A..J
+    { 2, 14, 1, 6, 12, 12, 12 }, // Bretagne 2026/27: 28 / 72 / 144
     { 2, 12, 2, 6, 12, 10, 12 }, // Nouvelle-Aquitaine
-    { 2, 12, 2, 4, 12, 8, 12 },  // Occitanie
-    { 2, 12, 2, 4, 12, 10, 12 }, // Auvergne-Rhône-Alpes
-    { 1, 14, 1, 2, 14, 4, 12 },  // Méditerranée
+    { 2, 14, 2, 4, 14, 8, 12 },  // Occitanie 2026/27
+    { 2, 14, 2, 5, 12, 10, 12 }, // Auvergne-Rhône-Alpes 2026/27
+    { 1, 14, 1, 2, 12, 2, 12 },  // Méditerranée 2026/27
     { 1, 12, 1, 1, 10, 0, 12 },  // Corse
 };
 
 // niveaux départementaux selon la taille du district : nombre de groupes par niveau (0 = niveau absent)
 static std::vector<int> distLevels(int d) {
+    if(districtName(d)=="Marne") return {1,2,3,3};
+    if(districtName(d)=="Alsace")return {6,7,8,9,9,8,15,17};
+    if(districtName(d)=="Moselle")return {4,8,12,12};
+    if(districtName(d)=="Haute-Marne")return {1,2,3,3};
+    if(districtName(d)=="Ardennes")return {1,2,4,4};
+    if(districtName(d)=="Aube")return {1,2,2};
+    if(districtName(d)=="Meurthe-et-Moselle")return {3,4,4,6};
+    if(districtName(d)=="Meuse")return {1,2,3};
+    if(districtName(d)=="Vosges")return {1,2,4,4};
+    if (districtName(d) == "Loire-Atlantique") return { 2, 4, 8, 9, 7 };
+    if (districtName(d) == "Finistère") return { 6, 10, 14, 7 };
+    if (districtName(d) == "Maine-et-Loire") return { 2, 3, 5, 7, 10 };
     int pop = districtPopulation(d);
     if (districtRegion(d) == 12) return { 1, 2 };                   // Corse
     if (pop > 1400000) return { 1, 2, 4, 6, 8 };
@@ -283,7 +325,7 @@ static std::vector<int> distLevels(int d) {
     if (pop > 250000) return { 1, 2, 2, 3 };
     return { 1, 2, 2 };
 }
-int maxDeptLevels() { return 5; }
+int maxDeptLevels() { return 8; }
 
 static void buildFrance(World& w) {
     Rng r(0xF4A7CE);
@@ -303,7 +345,7 @@ static void buildFrance(World& w) {
     T("Régional 1", SC_REGION, 12, 1, 2, false, false, TB_FFF, 0);
     T("Régional 2", SC_REGION, 12, 1, 2, false, false, TB_FFF, 0);
     T("Régional 3", SC_REGION, 12, 1, 3, false, false, TB_FFF, 0);
-    for (int k = 1; k <= 5; k++) T(fmt("Départemental %d", k).c_str(), SC_DEPT, 12, 1, k == 5 ? 0 : 2, false, false, TB_FFF, 0);
+    for (int k = 1; k <= maxDeptLevels(); k++) T(fmt("Départemental %d", k).c_str(), SC_DEPT, 12, 1, k == maxDeptLevels() ? 0 : 2, false, false, TB_FFF, 0);
     const int TD1 = 8;
     auto addPool = [&](int tier, int key, int ng, int size) { Pool p; p.tier = tier; p.key = key; p.nGroups = ng; p.size = size; P.pools.push_back(p); return (int)P.pools.size() - 1; };
     addPool(0, 0, 1, 18); addPool(1, 0, 1, 18); addPool(2, 0, 1, 18);
@@ -328,15 +370,34 @@ static void buildFrance(World& w) {
     for (int i = 0; i < NUM_FR_L3; i++) P.pools[2].clubs.push_back(addFr(w, FR_L3[i], fra, byName));
     for (int i = 0; i < NUM_FR_N1; i++) P.pools[3].clubs.push_back(addFr(w, FR_N1[i], fra, byName));
     for (int i = 0; i < NUM_FR_N2; i++) P.pools[4].clubs.push_back(addFr(w, FR_N2[i], fra, byName));
-    // groupes réels de N1 / N2
+    // Groupes réels 2026/27 après décisions administratives :
+    // N1 = 16 / 16 / 17 (UF Touraine ajoutée en groupe C), N2 = 14 x 7 + 13 en groupe H.
     P.pools[3].groups.assign(3, {});
-    for (int i = 0; i < (int)P.pools[3].clubs.size(); i++) P.pools[3].groups[std::min(2, i / 16)].push_back(P.pools[3].clubs[i]);
+    P.pools[3].groupSizes = {16,16,17}; P.pools[3].officialGroups = true;
+    {
+        static const int SZ[] = {16, 16, 17};
+        int at = 0;
+        for (int g = 0; g < 3; g++) for (int n = 0; n < SZ[g] && at < (int)P.pools[3].clubs.size(); n++)
+            P.pools[3].groups[g].push_back(P.pools[3].clubs[at++]);
+    }
     P.pools[4].groups.assign(8, {});
-    for (int i = 0; i < (int)P.pools[4].clubs.size(); i++) P.pools[4].groups[std::min(7, i / 14)].push_back(P.pools[4].clubs[i]);
+    P.pools[4].groupSizes = {14,14,14,14,14,14,14,13}; P.pools[4].officialGroups = true;
+    {
+        static const int SZ[] = {14, 14, 14, 14, 14, 14, 14, 13};
+        int at = 0;
+        for (int g = 0; g < 8; g++) for (int n = 0; n < SZ[g] && at < (int)P.pools[4].clubs.size(); n++)
+            P.pools[4].groups[g].push_back(P.pools[4].clubs[at++]);
+    }
     for (int i = 0; i < NUM_FR_RESERVES_R1; i++) {
+        int rg = DEPTS[deptIndex(FR_RESERVES_R1[i].dept)].region;
+        bool covered = false;
+        for (int k = 0; k < NUM_FR_OFFICIAL_2627; k++) if (FR_OFFICIAL_2627[k].tier == 5 && FR_OFFICIAL_2627[k].region == rg) covered = true;
+        if (covered) continue;
         int id = addFr(w, FR_RESERVES_R1[i], fra, byName);
         P.pools[poolOf(5, w.teams[id].region)].clubs.push_back(id);
     }
+
+    #include "france_official.inc"
 
     // générateurs : communes de chaque département, réparties par district
     std::vector<DeptGen> gens(NUM_DEPTS);
@@ -378,7 +439,7 @@ static void buildFrance(World& w) {
             if (gc.name.empty()) for (auto& sb : subs) if (sb.next < sb.list.size()) { gc = sb.list[sb.next++]; dept = sb.dept; break; }
         }
         if (gc.name.empty()) { gc.town = districtName(di); gc.name = fmt("FC %s %d", gc.town.c_str(), ++fallbackN[di]); }
-        int id = makeGenClub(w, gc, dept, TIER_BASE_FR[tier] + r.frange(-3, 3));
+        int id = makeGenClub(w, gc, dept, frTierBase(tier) + r.frange(-3, 3));
         w.teams[id].district = di;
         distFirstTeams[di].push_back(id);
         teamsOfClub[id] = 1; lowestTier[id] = tier;
@@ -390,7 +451,7 @@ static void buildFrance(World& w) {
         GenClub gc;
         if (g.next < (int)g.list.size()) gc = g.list[g.next++];
         else { gc.town = sanitize(DEPTS[d].name); gc.name = fmt("FC %s %d", gc.town.c_str(), g.next++); }
-        return makeGenClub(w, gc, d, TIER_BASE_FR[tier] + r.frange(-3, 3));
+        return makeGenClub(w, gc, d, frTierBase(tier) + r.frange(-3, 3));
     };
     // réserve d'un club du district déjà placé plus haut
     auto reserveFrom = [&](int di, int tier) {
@@ -402,8 +463,9 @@ static void buildFrance(World& w) {
         }
         if (cand.empty()) return -1;
         int c = cand[r.range(0, (int)cand.size() - 1)];
-        int lvl = teamsOfClub[c];
-        int id = makeReserve(w, c, lvl, TIER_BASE_FR[tier] + r.frange(-3, 2));
+        int lvl = 1;
+        for (const auto& team : w.teams) if (team.parent == c && !team.youth) lvl = std::max(lvl, team.resLevel+1);
+        int id = makeReserve(w, c, lvl, frTierBase(tier) + r.frange(-3, 2));
         teamsOfClub[c]++; lowestTier[c] = tier;
         return id;
     };
@@ -416,18 +478,23 @@ static void buildFrance(World& w) {
     };
     auto distsOfRegion = [&](int rg) { std::vector<int> v; for (int d = 0; d < ND; d++) if (districtRegion(d) == rg) v.push_back(d); return v; };
     auto deptsOfRegion = [&](int rg) { std::vector<int> v; for (int d = 0; d < NUM_DEPTS; d++) if (DEPTS[d].region == rg) v.push_back(d); return v; };
-    static const float RES_P[] = { 0, 0, 0, 0, 0, 0.04f, 0.10f, 0.18f, 0.22f, 0.28f, 0.33f, 0.38f, 0.40f };
+    auto reserveProb = [](int tier) {
+        static const float P0[] = { 0, 0, 0, 0, 0, 0.04f, 0.10f, 0.18f, 0.22f, 0.28f, 0.33f, 0.38f, 0.40f };
+        if (tier >= 0 && tier < (int)(sizeof(P0) / sizeof(P0[0]))) return P0[tier];
+        return std::min(0.48f, 0.40f + 0.02f * (tier - 12));
+    };
     for (int tier = 5; tier <= 7; tier++) {
         for (int rg = 0; rg < NUM_METRO_REGIONS; rg++) {
             int q = poolOf(tier, rg);
             if (q < 0) continue;
             Pool& pool = P.pools[q];
+            if (pool.officialGroups) continue;
             int target = pool.nGroups * pool.size;
             std::vector<int> dists = distsOfRegion(rg);
             while ((int)pool.clubs.size() < target) {
                 int d = pickDist(dists);
                 int id = -1;
-                if (r.chance(RES_P[tier])) id = reserveFrom(d, tier);
+                if (r.chance(reserveProb(tier))) id = reserveFrom(d, tier);
                 if (id < 0) id = genFrom(d, tier);
                 pool.clubs.push_back(id);
             }
@@ -435,15 +502,16 @@ static void buildFrance(World& w) {
     }
     for (int d = 0; d < ND; d++) {
         if (districtRegion(d) < 0 || districtRegion(d) >= NUM_METRO_REGIONS) continue;
-        for (int k = 0; k < 5; k++) {
+        for (int k = 0; k < maxDeptLevels(); k++) {
             int tier = TD1 + k;
             int q = poolOf(tier, d);
             if (q < 0) continue;
             Pool& pool = P.pools[q];
+            if (pool.officialGroups) continue;
             int target = pool.nGroups * pool.size;
             while ((int)pool.clubs.size() < target) {
                 int id = -1;
-                if (r.chance(RES_P[tier])) id = reserveFrom(d, tier);
+                if (r.chance(reserveProb(tier))) id = reserveFrom(d, tier);
                 if (id < 0) id = genFrom(d, tier);
                 pool.clubs.push_back(id);
             }
@@ -484,16 +552,16 @@ static void buildForeign(World& w) {
         { "ESP", { { "ESP1", 3, 0, 0, TB_H2H }, { "ESP2", 0, 2, 2, TB_H2H }, {}, {} } },
         { "ITA", { { "ITA1", 3, 0, 0, TB_H2H }, { "ITA2", 0, 2, 2, TB_H2H }, {}, {} } },
         { "GER", { { "GER1", 2, 0, 0, TB_GD }, { "GER2", 2, 2, 1, TB_GD }, { "GER3", 0, 2, 1, TB_GD }, {} } },
-        { "POR", { { "POR1", 0, 0, 0, TB_H2H }, {}, {}, {} } }, { "NED", { { "NED1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "BEL", { { "BEL1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "SCO", { { "SCO1", 0, 0, 0, TB_ENG }, {}, {}, {} } },
-        { "TUR", { { "TUR1", 0, 0, 0, TB_H2H }, {}, {}, {} } }, { "AUT", { { "AUT1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "SUI", { { "SUI1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "DEN", { { "DEN1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "NOR", { { "NOR1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "SWE", { { "SWE1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "POL", { { "POL1", 0, 0, 0, TB_H2H }, {}, {}, {} } }, { "ROU", { { "ROU1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
+        { "POR", { { "POR1", 2, 0, 0, TB_H2H }, {}, {}, {} } }, { "NED", { { "NED1", 2, 0, 0, TB_GD }, {}, {}, {} } },
+        { "BEL", { { "BEL1", 2, 0, 0, TB_GD }, {}, {}, {} } }, { "SCO", { { "SCO1", 1, 0, 0, TB_ENG }, {}, {}, {} } },
+        { "TUR", { { "TUR1", 3, 0, 0, TB_H2H }, {}, {}, {} } }, { "AUT", { { "AUT1", 1, 0, 0, TB_GD }, {}, {}, {} } },
+        { "SUI", { { "SUI1", 1, 0, 0, TB_GD }, {}, {}, {} } }, { "DEN", { { "DEN1", 2, 0, 0, TB_GD }, {}, {}, {} } },
+        { "NOR", { { "NOR1", 2, 0, 0, TB_GD }, {}, {}, {} } }, { "SWE", { { "SWE1", 2, 0, 0, TB_GD }, {}, {}, {} } },
+        { "POL", { { "POL1", 3, 0, 0, TB_H2H }, {}, {}, {} } }, { "ROU", { { "ROU1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
         { "IRL", { { "IRL1", 0, 0, 0, TB_GD }, {}, {}, {} } },
         { "USA", { { "USA1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "ARG", { { "ARG1", 0, 0, 0, TB_GD }, {}, {}, {} } },
-        { "BRA", { { "BRA1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "KSA", { { "KSA1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
-        { "KOR", { { "KOR1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "CHN", { { "CHN1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
+        { "BRA", { { "BRA1", 4, 0, 0, TB_GD }, {}, {}, {} } }, { "KSA", { { "KSA1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
+        { "KOR", { { "KOR1", 1, 0, 0, TB_GD }, {}, {}, {} } }, { "CHN", { { "CHN1", 0, 0, 0, TB_H2H }, {}, {}, {} } },
         { "AUS", { { "AUS1", 0, 0, 0, TB_GD }, {}, {}, {} } }, { "IND", { { "IND1", 0, 0, 0, TB_GD }, {}, {}, {} } },
     };
     for (auto& d : DEFS) {
@@ -514,9 +582,45 @@ static void buildForeign(World& w) {
             for (int c : p.clubs) w.teams[c].lastTier = lvl;
             P.pools.push_back(p);
         }
-        // les barrages de l'Allemagne : 16e contre 3e
-        formGroups(P);
         g_basePyramids.push_back(P);
+    }
+    // championnats complémentaires : divisions inférieures des pays existants, puis nouveaux pays (toutes confédérations)
+    auto addTier = [&](Pyramid& P, int l) {
+        const ExtLeagueDef& L = EXT_LEAGUES[l];
+        TierConf t; t.name = sanitize(L.name); t.scope = SC_NATIONAL; t.groupsPerPool = 1;
+        t.groupSize = (int)w.extLeagueClubs[l].size(); t.down = L.down; t.tb = TB_GD;
+        int lvl = (int)P.tiers.size();
+        P.tiers.push_back(t);
+        Pool p; p.tier = lvl; p.key = 0; p.nGroups = 1; p.size = t.groupSize; p.clubs = w.extLeagueClubs[l];
+        for (int c : p.clubs) w.teams[c].lastTier = lvl;
+        P.pools.push_back(p);
+    };
+    for (int tier = 1; tier <= 4; tier++)
+        for (int l = 0; l < NUM_EXT_LEAGUES; l++) {
+            if (EXT_LEAGUES[l].tier != tier || w.extLeagueClubs[l].size() < 4) continue;
+            Pyramid* P = nullptr;
+            for (auto& B : g_basePyramids) if (B.country == EXT_LEAGUES[l].country && B.dom < 0) P = &B;
+            if (!P && tier > 1) continue;   // division inférieure sans élite connue
+            if (!P) {
+                Pyramid N; N.country = EXT_LEAGUES[l].country;
+                int nat = w.nationIndex(EXT_LEAGUES[l].country);
+                N.name = nat >= 0 ? w.teams[nat].name : N.country;
+                g_basePyramids.push_back(N);
+                P = &g_basePyramids.back();
+            }
+            if ((int)P->tiers.size() != tier - 1) continue;
+            addTier(*P, l);
+        }
+    // liaisons montée / relégation : le nombre de promus d'une division = relégués de la division supérieure
+    for (auto& P : g_basePyramids) {
+        if (P.country == "FRA" || P.dom >= 0 || P.country == "U19" || P.country == "U17" || P.country == "U15") continue;
+        for (int k = 0; k < (int)P.tiers.size(); k++) {
+            TierConf& T = P.tiers[k];
+            if (k + 1 >= (int)P.tiers.size()) T.down = 0;
+            if (k == 0) T.up = 0;
+            else if (T.up == 0 || T.up > P.tiers[k - 1].down) T.up = P.tiers[k - 1].down - (T.barrageUp == 2 && P.tiers[k - 1].down > 1 ? 1 : 0);
+        }
+        formGroups(P);
     }
 }
 
@@ -526,6 +630,8 @@ int makeU17Team(World& w, int parent) { return makeYouthTeam(w, parent, 2); }
 int makeYouthTeam(World& w, int parent, int kind) {
     const Team& P = w.teams[parent];
     Team t = P;
+    // Une équipe de jeunes ne doit jamais hériter du coefficient UEFA de l'équipe première.
+    for (float& c : t.coefs) c = 0.0f;
     const char* suf = kind == 3 ? " U15" : kind == 2 ? " U17" : " U19";
     t.squad.clear(); t.squadGen = false; t.honours.clear(); t.xi.clear();
     t.parent = parent; t.resLevel = kind == 3 ? 11 : kind == 2 ? 10 : 9; t.youth = kind;
@@ -645,6 +751,7 @@ void buildBasePyramids(World& w) {
     buildYouthPyr(w, 2);
     buildYouthPyr(w, 3);          // U15 : ligues et districts uniquement
     buildForeign(w);
+    buildWomen(w);
 }
 
 std::string poolLabel(const Pyramid& P, const Pool& pl, int g) {
@@ -654,8 +761,8 @@ std::string poolLabel(const Pyramid& P, const Pool& pl, int g) {
     int ng = (int)pl.groups.size();
     switch (T.scope) {
     case SC_ZONE: s += " - " + std::string(zoneName(pl.key)); break;
-    case SC_REGION: s += " - " + sanitize(REGIONS[pl.key].name); break;
-    case SC_DEPT: s += " - " + districtName(pl.key); break;
+    case SC_REGION: s += " - " + geoRegionName(P.country, pl.key); break;
+    case SC_DEPT: s += " - " + geoDistrictName(P.country, pl.key); break;
     default: break;
     }
     if (ng > 1) s += (T.scope == SC_NATIONAL ? " - Groupe " : " - Poule ") + std::string(1, (char)('A' + g));

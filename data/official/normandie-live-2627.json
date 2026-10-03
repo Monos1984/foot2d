@@ -1,0 +1,758 @@
+[
+  {
+    "tier": 5,
+    "group": "A",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500037-fc-rouen-1899-2/equipe/2026_184_SEM_14",
+        "name": "FC ROUEN 1899 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/513961-esm-gonfreville/equipe/2026_4364_SEM_1",
+        "name": "ESM GONFREVILLE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500052-havre-ac-2/equipe/2026_197_SEM_10",
+        "name": "HAVRE AC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/531562-qrm-2/equipe/2026_14293_SEM_12",
+        "name": "QRM 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500118-ca-lisieux-pa/equipe/2026_254_SEM_1",
+        "name": "CA LISIEUX PA"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/547671-bayeux-fc/equipe/2026_24956_SEM_1",
+        "name": "BAYEUX FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/563925-pacy-menilles-rc/equipe/2026_174278_SEM_1",
+        "name": "PACY MENILLES RC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/510729-as-tourlaville/equipe/2026_3668_SEM_1",
+        "name": "AS TOURLAVILLE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501452-stade-sotteville-cc/equipe/2026_971_SEM_1",
+        "name": "STADE SOTTEVILLE CC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/520307-havre-caucriauv-s/equipe/2026_6847_SEM_1",
+        "name": "HAVRE CAUCRIAUV S"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/554350-evreux-fc-27/equipe/2026_152041_SEM_1",
+        "name": "EVREUX FC 27"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550888-fc-serquigny-nassand/equipe/2026_105512_SEM_1",
+        "name": "FC SERQUIGNY NASSAND"
+      }
+    ]
+  },
+  {
+    "tier": 5,
+    "group": "B",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/509857-avt-g-caen-football/equipe/2026_3520_SEM_1",
+        "name": "AVT G. CAEN FOOTBALL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500105-us-avranches-msm-2/equipe/2026_241_SEM_10",
+        "name": "US AVRANCHES MSM 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/521207-maladrerie-os/equipe/2026_7424_SEM_1",
+        "name": "MALADRERIE OS"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501422-fc-neufchatel-en-br/equipe/2026_952_SEM_1",
+        "name": "FC NEUFCHATEL EN BR"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500144-as-de-cherbourg-f/equipe/2026_278_SEM_1",
+        "name": "AS DE CHERBOURG F."
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500476-es-coutancaise/equipe/2026_548_SEM_1",
+        "name": "ES COUTANCAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/581842-su-dives-cabourg-fb/equipe/2026_186871_SEM_1",
+        "name": "SU DIVES CABOURG FB"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501472-fc-flerien/equipe/2026_984_SEM_1",
+        "name": "FC FLERIEN"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501420-j-fertoise-bagnoles/equipe/2026_950_SEM_1",
+        "name": "J. FERTOISE BAGNOLES"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/514839-grand-quevilly-fc/equipe/2026_4626_SEM_1",
+        "name": "GRAND QUEVILLY FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/521578-st-marcel-f/equipe/2026_7663_SEM_2",
+        "name": "ST MARCEL F"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501489-us-granvillaise-2/equipe/2026_996_SEM_10",
+        "name": "US GRANVILLAISE 2"
+      }
+    ]
+  },
+  {
+    "tier": 6,
+    "group": "A",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550140-af-virois-2/equipe/2026_100449_SEM_6",
+        "name": "AF VIROIS 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/535796-agneaux-fc/equipe/2026_17124_SEM_1",
+        "name": "AGNEAUX FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/553693-fc-equeurdr-hainnev/equipe/2026_137162_SEM_1",
+        "name": "FC EQUEURDR. HAINNEV"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500088-fc-st-lo-manche-2/equipe/2026_227_SEM_9",
+        "name": "FC ST LO MANCHE 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501438-cs-carentanais/equipe/2026_961_SEM_1",
+        "name": "CS CARENTANAIS"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/549545-as-jullouville-sart/equipe/2026_26274_SEM_1",
+        "name": "AS JULLOUVILLE SART"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/546310-es-pointe-hague/equipe/2026_23947_SEM_1",
+        "name": "ES POINTE HAGUE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501594-as-ptt-caen-2/equipe/2026_1043_SEM_8",
+        "name": "AS PTT CAEN 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501651-us-ducey-isigny/equipe/2026_1062_SEM_1",
+        "name": "US DUCEY ISIGNY"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500476-es-coutancaise-2/equipe/2026_548_SEM_4",
+        "name": "ES COUTANCAISE 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550823-fc-des-etangs/equipe/2026_104872_SEM_1",
+        "name": "FC DES ETANGS"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/548912-us-cote-des-iles/equipe/2026_25831_SEM_1",
+        "name": "US COTE DES ILES"
+      }
+    ]
+  },
+  {
+    "tier": 6,
+    "group": "B",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550222-usc-mezidon-fb/equipe/2026_100457_SEM_1",
+        "name": "USC MEZIDON FB"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500118-ca-lisieux-pa-2/equipe/2026_254_SEM_11",
+        "name": "CA LISIEUX PA 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/541210-uson-mondeville/equipe/2026_21073_SEM_1",
+        "name": "USON MONDEVILLE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500058-astdv-2/equipe/2026_203_SEM_6",
+        "name": "ASTDV 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/520839-sch-football/equipe/2026_7179_SEM_1",
+        "name": "SCH FOOTBALL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/521207-maladrerie-os-2/equipe/2026_7424_SEM_6",
+        "name": "MALADRERIE OS 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501472-fc-flerien-2/equipe/2026_984_SEM_8",
+        "name": "FC FLERIEN 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501415-esfc-falaise/equipe/2026_947_SEM_1",
+        "name": "ESFC FALAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/547671-bayeux-fc-2/equipe/2026_24956_SEM_5",
+        "name": "BAYEUX FC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/515902-esp-conde-sarthe/equipe/2026_4924_SEM_1",
+        "name": "ESP CONDE/SARTHE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/581842-su-dives-cabourg-fb-2/equipe/2026_186871_SEM_3",
+        "name": "SU DIVES CABOURG FB 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/521982-as-ifs/equipe/2026_7932_SEM_1",
+        "name": "AS IFS"
+      }
+    ]
+  },
+  {
+    "tier": 6,
+    "group": "C",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500065-fc-dieppe-2/equipe/2026_209_SEM_9",
+        "name": "FC DIEPPE 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/582220-oh-trefilerie-neiges/equipe/2026_189414_SEM_1",
+        "name": "OH TREFILERIE NEIGES"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/509621-us-luneraysienne/equipe/2026_3482_SEM_1",
+        "name": "US LUNERAYSIENNE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/563635-us-de-bolbec/equipe/2026_172594_SEM_1",
+        "name": "US DE BOLBEC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/524299-cs-serv-mun-le-havre/equipe/2026_9398_SEM_1",
+        "name": "CS SERV.MUN.LE HAVRE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500384-js-st-nicolas-bethun/equipe/2026_474_SEM_1",
+        "name": "JS ST NICOLAS BETHUN"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500252-usf-fecamp/equipe/2026_367_SEM_1",
+        "name": "USF FECAMP"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501532-us-lillebonnaise/equipe/2026_1019_SEM_1",
+        "name": "US LILLEBONNAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/524620-eu-fc/equipe/2026_9618_SEM_1",
+        "name": "EU FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/520307-havre-caucriauv-s-2/equipe/2026_6847_SEM_7",
+        "name": "HAVRE CAUCRIAUV S 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501522-yvetot-ac/equipe/2026_1013_SEM_1",
+        "name": "YVETOT AC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/561080-olympia-caux-footbal/equipe/2026_200605_SEM_1",
+        "name": "OLYMPIA'CAUX FOOTBAL"
+      }
+    ]
+  },
+  {
+    "tier": 6,
+    "group": "D",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/515201-fc-val-de-reuil/equipe/2026_4738_SEM_1",
+        "name": "FC VAL DE REUIL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550524-fac-alizay/equipe/2026_175938_SEM_1",
+        "name": "FAC ALIZAY"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/521379-fusc-boisguillaume/equipe/2026_7539_SEM_1",
+        "name": "FUSC BOISGUILLAUME"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/532110-fc-illiers-l-eveque/equipe/2026_14701_SEM_1",
+        "name": "FC ILLIERS L'EVEQUE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/563925-pacy-menilles-rc-2/equipe/2026_174278_SEM_6",
+        "name": "PACY MENILLES RC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500390-o-de-darnetal/equipe/2026_479_SEM_1",
+        "name": "O. DE DARNETAL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500223-o-pavillais/equipe/2026_347_SEM_1",
+        "name": "O. PAVILLAIS"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/580568-fc-gisors-vexin-27/equipe/2026_176778_SEM_1",
+        "name": "FC GISORS VEXIN 27"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/513378-us-conchoise/equipe/2026_4222_SEM_1",
+        "name": "US CONCHOISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500362-spn-vernon/equipe/2026_454_SEM_1",
+        "name": "SPN VERNON"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500459-al-deville-maromme/equipe/2026_537_SEM_1",
+        "name": "AL DEVILLE MAROMME"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500286-cms-oissel-2/equipe/2026_391_SEM_8",
+        "name": "CMS OISSEL 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/545584-fc-garennes-bueil-cb/equipe/2026_23468_SEM_1",
+        "name": "FC GARENNES BUEIL CB"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "A",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501438-cs-carentanais-2/equipe/2026_961_SEM_4",
+        "name": "CS CARENTANAIS 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/510729-as-tourlaville-2/equipe/2026_3668_SEM_4",
+        "name": "AS TOURLAVILLE 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/545681-tessy-moyon-sp/equipe/2026_23557_SEM_1",
+        "name": "TESSY MOYON SP."
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/547117-fc-val-de-saire/equipe/2026_24561_SEM_1",
+        "name": "FC VAL DE SAIRE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/551694-usi-bessin-nord/equipe/2026_113695_SEM_1",
+        "name": "USI BESSIN NORD"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/508859-es-st-sauveur-rond/equipe/2026_3353_SEM_1",
+        "name": "ES ST SAUVEUR ROND."
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/513040-conde-sp/equipe/2026_4138_SEM_1",
+        "name": "CONDE SP"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/527693-as-berigny-cerisy/equipe/2026_11680_SEM_1",
+        "name": "AS BERIGNY CERISY"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500144-as-de-cherbourg-f-2/equipe/2026_278_SEM_18",
+        "name": "AS DE CHERBOURG F. 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500140-as-valognes-f/equipe/2026_274_SEM_1",
+        "name": "AS VALOGNES F."
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/553693-fc-equeurdr-hainnev-2/equipe/2026_137162_SEM_3",
+        "name": "FC EQUEURDR. HAINNEV 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/582311-scu-douve-divette/equipe/2026_189672_SEM_1",
+        "name": "SCU DOUVE DIVETTE"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "B",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/517666-rsg-courseulles/equipe/2026_5492_SEM_1",
+        "name": "RSG COURSEULLES"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/516576-as-verson/equipe/2026_5092_SEM_1",
+        "name": "AS VERSON"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/551336-bourguebus-soliers-f/equipe/2026_168106_SEM_1",
+        "name": "BOURGUEBUS SOLIERS F"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/519756-la-brehalaise/equipe/2026_6520_SEM_1",
+        "name": "LA BREHALAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/551516-st-hilaire-virey-lan/equipe/2026_113196_SEM_1",
+        "name": "ST HILAIRE VIREY LAN"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/582640-fc-thaon-bretteville/equipe/2026_191912_SEM_1",
+        "name": "FC THAON BRETTEVILLE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/518095-es-carpiquet-foot/equipe/2026_5712_SEM_1",
+        "name": "ES CARPIQUET FOOT"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500088-fc-st-lo-manche-3/equipe/2026_227_SEM_10",
+        "name": "FC ST LO MANCHE 3"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501489-us-granvillaise-3/equipe/2026_996_SEM_11",
+        "name": "US GRANVILLAISE 3"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/564802-fc-terre-et-mer/equipe/2026_202966_SEM_1",
+        "name": "FC TERRE ET MER"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500105-us-avranches-msm-3/equipe/2026_241_SEM_12",
+        "name": "US AVRANCHES MSM 3"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501439-cs-villedieu/equipe/2026_962_SEM_1",
+        "name": "CS VILLEDIEU"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "C",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/513709-usm-blainville/equipe/2026_4275_SEM_1",
+        "name": "USM BLAINVILLE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/522837-us-pont-l-eveque/equipe/2026_8473_SEM_1",
+        "name": "US PONT L'EVEQUE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501500-ajs-coll-ouistreham/equipe/2026_1003_SEM_1",
+        "name": "AJS COLL. OUISTREHAM"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/541210-uson-mondeville-2/equipe/2026_21073_SEM_8",
+        "name": "USON MONDEVILLE 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501441-us-villers-bocage/equipe/2026_963_SEM_1",
+        "name": "US VILLERS BOCAGE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/523719-asl-chemin-vert/equipe/2026_9020_SEM_1",
+        "name": "ASL CHEMIN VERT"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/582313-muance-fc/equipe/2026_189674_SEM_1",
+        "name": "MUANCE FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/509857-avt-g-caen-football-2/equipe/2026_3520_SEM_8",
+        "name": "AVT G. CAEN FOOTBALL 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500180-cs-honfleur/equipe/2026_310_SEM_1",
+        "name": "CS HONFLEUR"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/544676-as-st-desir/equipe/2026_22811_SEM_1",
+        "name": "AS ST DESIR"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501619-js-douvres-delivrand/equipe/2026_1051_SEM_1",
+        "name": "JS DOUVRES DELIVRAND"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500058-astdv-3/equipe/2026_203_SEM_7",
+        "name": "ASTDV 3"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "D",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/544951-us-d-andaine/equipe/2026_23046_SEM_1",
+        "name": "US D'ANDAINE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/544828-us-alenconnaise-61-2/equipe/2026_22935_SEM_8",
+        "name": "US ALENCONNAISE 61 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/551672-fc-argentan/equipe/2026_168107_SEM_1",
+        "name": "FC ARGENTAN"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/523396-l-st-georges-gros/equipe/2026_8824_SEM_1",
+        "name": "L. ST GEORGES GROS."
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501478-us-mortagnaise/equipe/2026_989_SEM_1",
+        "name": "US MORTAGNAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/523395-as-la-selle-la-forge/equipe/2026_8823_SEM_1",
+        "name": "AS LA SELLE LA FORGE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/514192-us-aunay-odon/equipe/2026_4423_SEM_1",
+        "name": "US AUNAY/ODON"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501730-oc-briouze/equipe/2026_1077_SEM_1",
+        "name": "OC BRIOUZE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501425-ss-domfrontaise/equipe/2026_955_SEM_1",
+        "name": "SS DOMFRONTAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/519304-as-gibervillaise/equipe/2026_6304_SEM_1",
+        "name": "AS GIBERVILLAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501420-j-fertoise-bagnoles-2/equipe/2026_950_SEM_3",
+        "name": "J. FERTOISE BAGNOLES 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/551624-fc-hauts-du-perche/equipe/2026_113495_SEM_1",
+        "name": "FC HAUTS DU PERCHE"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "E",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500328-as-de-montivilliers/equipe/2026_427_SEM_1",
+        "name": "AS DE MONTIVILLIERS"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/521692-sc-octeville-sur-mer/equipe/2026_7727_SEM_1",
+        "name": "SC OCTEVILLE SUR MER"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/563543-le-havre-fc-2012/equipe/2026_172112_SEM_1",
+        "name": "LE HAVRE FC 2012"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501466-sc-frileuse/equipe/2026_981_SEM_1",
+        "name": "SC FRILEUSE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500445-cany-fc/equipe/2026_526_SEM_1",
+        "name": "CANY FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/524299-cs-serv-mun-le-havre-2/equipe/2026_9398_SEM_10",
+        "name": "CS SERV.MUN.LE HAVRE 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/563635-us-de-bolbec-2/equipe/2026_172594_SEM_3",
+        "name": "US DE BOLBEC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500544-as-fauvillaise/equipe/2026_598_SEM_1",
+        "name": "AS FAUVILLAISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/520307-havre-caucriauv-s-3/equipe/2026_6847_SEM_8",
+        "name": "HAVRE CAUCRIAUV S 3"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501522-yvetot-ac-2/equipe/2026_1013_SEM_11",
+        "name": "YVETOT AC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/560764-caux-fc/equipe/2026_198914_SEM_1",
+        "name": "CAUX FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500271-fc-barentinois/equipe/2026_382_SEM_1",
+        "name": "FC BARENTINOIS"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "F",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500248-s-de-grand-quevilly/equipe/2026_365_SEM_1",
+        "name": "S DE GRAND QUEVILLY"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501390-fc-offranvillais/equipe/2026_928_SEM_1",
+        "name": "FC OFFRANVILLAIS"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500307-fc-st-etienne-rouvra/equipe/2026_409_SEM_1",
+        "name": "FC ST ETIENNE ROUVRA"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501422-fc-neufchatel-en-br-2/equipe/2026_952_SEM_4",
+        "name": "FC NEUFCHATEL EN BR 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/544812-es-plateau-fouc-real/equipe/2026_22923_SEM_1",
+        "name": "ES PLATEAU FOUC.REAL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/530662-as-st-pierre-varenge/equipe/2026_13723_SEM_1",
+        "name": "AS ST PIERRE VARENGE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500065-fc-dieppe-3/equipe/2026_209_SEM_10",
+        "name": "FC DIEPPE 3"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550050-e-vienne-saane-longu/equipe/2026_179644_SEM_1",
+        "name": "E.VIENNE SAANE LONGU"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/553985-rouen-sapins-fc/equipe/2026_141941_SEM_1",
+        "name": "ROUEN SAPINS FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501702-us-crielloise/equipe/2026_1070_SEM_1",
+        "name": "US CRIELLOISE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/514839-grand-quevilly-fc-2/equipe/2026_4626_SEM_3",
+        "name": "GRAND QUEVILLY FC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500459-al-deville-maromme-2/equipe/2026_537_SEM_4",
+        "name": "AL DEVILLE MAROMME 2"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "G",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501457-as-gournay-football/equipe/2026_976_SEM_1",
+        "name": "AS GOURNAY FOOTBALL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/519745-mont-saint-aignan-fc/equipe/2026_6515_SEM_1",
+        "name": "MONT SAINT AIGNAN FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/547499-plat-quincampoix-fc/equipe/2026_24807_SEM_1",
+        "name": "PLAT QUINCAMPOIX FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/580532-fc-seine-eure/equipe/2026_176698_SEM_1",
+        "name": "FC SEINE EURE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501482-caudebec-st-pierre-f/equipe/2026_992_SEM_1",
+        "name": "CAUDEBEC ST PIERRE F"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501452-stade-sotteville-cc-2/equipe/2026_971_SEM_4",
+        "name": "STADE SOTTEVILLE CC 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500286-cms-oissel-3/equipe/2026_391_SEM_9",
+        "name": "CMS OISSEL 3"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/501513-canteleu-fc/equipe/2026_1008_SEM_1",
+        "name": "CANTELEU FC"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/581874-fc-st-julien-pt-quev/equipe/2026_186933_SEM_1",
+        "name": "FC ST JULIEN PT QUEV"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/542524-as-canton-d-argueil/equipe/2026_22045_SEM_1",
+        "name": "AS CANTON D' ARGUEIL"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500223-o-pavillais-2/equipe/2026_347_SEM_4",
+        "name": "O. PAVILLAIS 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/524765-as-madrillet-chat-bl/equipe/2026_9694_SEM_1",
+        "name": "AS MADRILLET CHAT BL"
+      }
+    ]
+  },
+  {
+    "tier": 7,
+    "group": "H",
+    "rows": [
+      {
+        "href": "https://epreuves.fff.fr/competition/club/544076-us-mesnil-esnard-fra/equipe/2026_22390_SEM_1",
+        "name": "US MESNIL ESNARD FRA"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500244-ca-pont-audemer/equipe/2026_361_SEM_1",
+        "name": "CA PONT AUDEMER"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/527047-saint-sebastien-foot/equipe/2026_11246_SEM_1",
+        "name": "SAINT SEBASTIEN FOOT"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/517078-us-gasny/equipe/2026_5248_SEM_1",
+        "name": "US GASNY"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/550888-fc-serquigny-nassand-2/equipe/2026_105512_SEM_3",
+        "name": "FC SERQUIGNY NASSAND 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/580568-fc-gisors-vexin-27-2/equipe/2026_176778_SEM_4",
+        "name": "FC GISORS VEXIN 27 2"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/547422-es-vallee-de-l-oison/equipe/2026_24738_SEM_1",
+        "name": "ES VALLEE DE L'OISON"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/540624-romilly-pt-st-pierre/equipe/2026_20660_SEM_1",
+        "name": "ROMILLY PT ST PIERRE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/517511-as-andresienne/equipe/2026_5448_SEM_1",
+        "name": "AS ANDRESIENNE"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/500359-stade-vernolien/equipe/2026_451_SEM_1",
+        "name": "STADE VERNOLIEN"
+      },
+      {
+        "href": "https://epreuves.fff.fr/competition/club/554350-evreux-fc-27-2/equipe/2026_152041_SEM_11",
+        "name": "EVREUX FC 27 2"
+      }
+    ]
+  }
+]

@@ -174,6 +174,7 @@ std::vector<PoolPlayer> coachPool(int nation, int maxAge, int cat) {
         for (int k = 0; k < (int)t.squad.size(); k++) {
             const Player& p = t.squad[k];
             if (p.nation != nation || p.age < (cat == 3 ? 14 : cat ? 15 : 17)) continue;
+            if ((p.gender == 1) != (cat == 5)) continue;            // séparation stricte : sélections féminines = joueuses
             if (maxAge > 0 && p.age > maxAge) continue;
             if (names.count(p.name + fmt("%d", p.age))) continue;
             names.insert(p.name + fmt("%d", p.age));
@@ -221,9 +222,12 @@ void Career::coachAutoSelect() {
     if (coachCat) { QUOTA[1] = 8; QUOTA[2] = 7; QUOTA[3] = 5; }      // sélections de jeunes : 23
     int n[4] = { 0, 0, 0, 0 };
     std::vector<CoachCall> keep;
+    int over = 0;
+    bool oly = coachTeamCat() == 4;
     for (auto& pp : pool) {
         const Player& p = *pp.p;
         if (p.injured > 2) continue;
+        if (oly && p.age > 23) { if (over >= 3) continue; over++; }       // tournoi olympique : 3 joueurs de plus de 23 ans
         int k = std::min(3, (int)p.pos);
         if (n[k] >= QUOTA[k]) continue;
         n[k]++;

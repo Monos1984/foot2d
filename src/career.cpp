@@ -10,7 +10,8 @@ float frTierBase(int tier);                                  // pyramid.cpp
 
 const char* INTL_NAMES[NUM_INTL] = { "Coupe du Monde", "Euro", "Coupe d'Afrique des Nations", "Copa América",
                                      "Coupe d'Asie", "Gold Cup", "Coupe d'Océanie",
-                                     "Tournoi olympique", "Euro Espoirs", "Euro U19", "Euro U17" };
+                                     "Tournoi olympique", "Euro Espoirs", "Euro U19", "Euro U17",
+                                     "Tournoi olympique féminin", "Euro féminin", "Coupe du Monde féminine" };
 
 bool nationEligible(int n) { return strcmp(NATIONS[n].code, "RUS") != 0; }
 
@@ -147,6 +148,12 @@ int Career::uefaRank(const std::string& code) const {
 // classement / vainqueur de coupe d'un pays pour l'attribution européenne
 struct CountryRes { std::vector<int> standings; int cup = -1; int cupRunner = -1; };
 
+static int editorCupWinner(const Career& K, const EditorCupDef& d, bool useSeason) {
+    if (useSeason) for (int ci : K.customCups) if (ci >= 0 && ci < (int)K.season.comps.size()) { const Competition& C = K.season.comps[ci]; if (C.kind == 72 && C.tag == d.id && C.winner >= 0) return C.winner; }
+    auto it = K.prevCustomCupWinner.find(d.id);
+    return it == K.prevCustomCupWinner.end() ? -1 : it->second;
+}
+
 static CountryRes countryResult(const Career& K, const std::string& code, bool useSeason) {
     CountryRes r;
     int p = pyramidOf(K.pyramids, code);
@@ -171,6 +178,9 @@ static CountryRes countryResult(const Career& K, const std::string& code, bool u
             if (!CC.stages.empty() && CC.stages.back().ties.size() == 1) { const Tie& t = CC.stages.back().ties[0]; r.cupRunner = t.a == r.cup ? t.b : t.a; }
         }
         else if (r.standings.size() > 3) r.cup = r.standings[g_rng.range(1, 3)];
+        // éditeur : la coupe nationale peut ne donner aucune place européenne ; une autre coupe peut porter cette place.
+        if (!cupRuleFor(code).euroQual) { r.cup = -1; r.cupRunner = -1; }
+        for (auto& d : editorCups()) if (d.enabled && d.country == code && d.qual == ECQ_EURO_CUP_SLOT) { int w = editorCupWinner(K, d, useSeason); if (w >= 0) { r.cup = w; r.cupRunner = -1; break; } }
         // les réserves ne vont pas en Coupe d'Europe
         r.standings.erase(std::remove_if(r.standings.begin(), r.standings.end(), [](int t) { return g_world.teams[t].parent >= 0; }), r.standings.end());
         if (r.cup >= 0 && g_world.teams[r.cup].parent >= 0) r.cup = -1;
@@ -304,6 +314,12 @@ static void computeEuro(Career& K, bool useSeason) {
         for (int k = 0; k < 3 && k < (int)E.itR3.size(); k++) E.uefaR1.push_back(E.itR3[k]);
         E.itR1.clear(); E.itR2.clear(); E.itR3.clear();
     }
+    // Coupes créées dans l'éditeur : qualification européenne explicite.
+    auto eraseE = [&](int t) { for (auto* v : { &E.uclQ1, &E.uclQ2, &E.uclQ3, &E.uclGS, &E.uefaQR, &E.uefaR1, &E.itR1, &E.itR2, &E.itR3 }) v->erase(std::remove(v->begin(), v->end(), t), v->end()); };
+    for (auto& d : editorCups()) if (d.enabled && d.qual >= ECQ_UCL && d.qual <= ECQ_UECL) {
+        int t = editorCupWinner(K, d, useSeason); if (t < 0 || g_world.teams[t].parent >= 0) continue; eraseE(t);
+        if (d.qual == ECQ_UCL) E.uclQ1.push_back(t); else E.uefaQR.push_back(t);
+    }
     K.nextEuro = E;
 }
 
@@ -378,6 +394,12 @@ static void computeEuroNew(Career& K, bool useSeason) {
             if (rk.second == "LIE" || (int)N.l[li].size() >= 12) continue;
             for (int t : res[rk.second].standings) if (!used.count(t) && g_world.teams[t].parent < 0 && std::find(N.l[li].begin(), N.l[li].end(), t) == N.l[li].end()) { N.l[li].push_back(t); break; }
         }
+    }
+    // Coupes de l'éditeur : accès explicite à C1 / C3 / C4.
+    auto eraseN = [&](int t) { for (int i = 0; i < NE_COUNT; i++) N.l[i].erase(std::remove(N.l[i].begin(), N.l[i].end(), t), N.l[i].end()); };
+    for (auto& d : editorCups()) if (d.enabled && d.qual >= ECQ_UCL && d.qual <= ECQ_UECL) {
+        int t = editorCupWinner(K, d, useSeason); if (t < 0 || g_world.teams[t].parent >= 0) continue; eraseN(t);
+        if (d.qual == ECQ_UCL) N.l[0].push_back(t); else if (d.qual == ECQ_UEL) N.l[7].push_back(t); else N.l[11].push_back(t);
     }
     K.newEuro = N;
     // équivalent « ancienne formule » pour les écrans de synthèse (C1 / C3 / C4)
@@ -456,29 +478,44 @@ void Career::routeNewEuro() {
 }
 
 // ------------------------------------------------------------------ nouvelle carrière club
+static int placePoolFor(Pyramid& P, int team, int tier) {
+    if (tier < 0 || tier >= (int)P.tiers.size()) return -1;
+    Team& t = g_world.teams[team];
+    if (t.parent >= 0) {
+        const Team& par = g_world.teams[t.parent];
+        if (t.region < 0) t.region = par.region;
+        if (t.district < 0) t.district = par.district;
+        if (t.dept < 0) t.dept = par.dept;
+    }
+    int key = P.tiers[tier].scope == SC_NATIONAL ? 0 : P.keyFor(tier, team);
+    for (int q = 0; q < (int)P.pools.size(); q++) if (P.pools[q].tier == tier && P.pools[q].key == key) return q;
+    // A neighbouring district is never a fallback for an absent local division.
+    return -1;
+}
+
+// Place un club dans la division demandée par l'éditeur ; à défaut, dans le dernier
+// niveau disponible de sa pyramide. La région/district du club choisit la bonne poule.
 void placeInBottomPool(Pyramid& P, int team) {
     Team& t = g_world.teams[team];
-    if (t.district < 0 && t.parent >= 0) t.district = g_world.teams[t.parent].district;     // réserve : district de l'équipe fanion
-    int best = -1, bt = -1;
-    for (int q = 0; q < (int)P.pools.size(); q++) {
-        const Pool& pl = P.pools[q];
-        if (P.tiers[pl.tier].scope == SC_DEPT && pl.key == t.district && pl.tier > bt) { bt = pl.tier; best = q; }
-    }
-    if (best < 0) for (int q = 0; q < (int)P.pools.size(); q++) if (P.pools[q].tier > bt) { bt = P.pools[q].tier; best = q; }
+    int wanted = (t.lastTier >= 0 && t.lastTier < (int)P.tiers.size()) ? t.lastTier : lowestLocalTier(P,team);
+    int best = placePoolFor(P, team, wanted);
+    if (best < 0) for (int tier = (int)P.tiers.size() - 1; tier >= 0 && best < 0; --tier) best = placePoolFor(P, team, tier);
     if (best < 0) return;
-    P.pools[best].clubs.push_back(team);
+    auto& clubs = P.pools[best].clubs;
+    if (std::find(clubs.begin(), clubs.end(), team) == clubs.end()) clubs.push_back(team);
     if (P.pools[best].groups.empty()) P.pools[best].groups.push_back({});
-    // groupe le moins rempli
-    int gi = 0;
-    for (int g = 1; g < (int)P.pools[best].groups.size(); g++) if (P.pools[best].groups[g].size() < P.pools[best].groups[gi].size()) gi = g;
-    P.pools[best].groups[gi].push_back(team);
-    g_world.teams[team].lastTier = P.pools[best].tier;
+    int gi = 0; for (int g = 1; g < (int)P.pools[best].groups.size(); g++) if (P.pools[best].groups[g].size() < P.pools[best].groups[gi].size()) gi = g;
+    if (std::find(P.pools[best].groups[gi].begin(), P.pools[best].groups[gi].end(), team) == P.pools[best].groups[gi].end()) P.pools[best].groups[gi].push_back(team);
+    t.lastTier = P.pools[best].tier;
 }
 
 void Career::addClubToPyramid(int team) {
     if (kind == CK_CLUB && !season.comps.empty()) { pendingNewClubs.push_back(team); return; }
-    int p = pyramidOf(pyramids, "FRA");
-    if (p >= 0) placeInBottomPool(pyramids[p], team);
+    if (team < 0 || team >= (int)g_world.teams.size()) return;
+    const Team& T = g_world.teams[team];
+    if (T.nation < 0 || T.nation >= NUM_NATIONS) return;
+    int p = pyramidOf(pyramids, NATIONS[T.nation].code);
+    if (p >= 0) { placeInBottomPool(pyramids[p], team); formGroups(pyramids[p]); }
 }
 
 void Career::newClubCareer(int team, int yr) {
@@ -496,15 +533,19 @@ void Career::newClubCareer(int team, int yr) {
     season.year = yr;
     season.mode = 0;
     prevUclWinner = prevUefaWinner = -1;
-    prevChampion.clear(); prevCupWinner.clear(); prevRunnerUp.clear(); prevRegCupWinner.clear(); superRegions = -1;
+    prevChampion.clear(); prevCupWinner.clear(); prevRunnerUp.clear(); prevRegCupWinner.clear(); prevCustomCupWinner.clear(); customCups.clear(); superRegions = -1;
     initUefa();
-    // clubs créés avec l'éditeur : dernière division de leur district
+    // clubs créés avec l'éditeur : pays, région/district et division choisis par le joueur
     int fr = pyramidOf(pyramids, "FRA");
-    for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++)
-        if (g_world.teams[i].custom && g_world.teams[i].dept >= 0 && fr >= 0 && tierOfTeam(i) < 0) placeInBottomPool(pyramids[fr], i);
+    for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) {
+        Team& ct = g_world.teams[i];
+        if (!ct.custom || ct.parent >= 0 || tierOfTeam(i) >= 0 || ct.nation < 0 || ct.nation >= NUM_NATIONS) continue;
+        int cp = pyramidOf(pyramids, NATIONS[ct.nation].code);
+        if (cp >= 0) { ct.lastTier=lowestLocalTier(pyramids[cp],i);markClubDebut(i,yr);placeInBottomPool(pyramids[cp], i); }
+    }
     // équipes U19 des clubs créés : District U19 de leur département
     { int yp = u19Pyramid(); for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++)
-        if (g_world.teams[i].youth && tierOfTeam(i) < 0) { int py = youthPyramid(i); if (py >= 0) placeInBottomPool(pyramids[py], i); } }
+        if (g_world.teams[i].youth >= 1 && g_world.teams[i].youth <= 3 && tierOfTeam(i) < 0) { int py = youthPyramid(i); if (py >= 0) placeInBottomPool(pyramids[py], i); } }
     // tenants réels 2025-26 : Ligue des champions PSG, Ligue Europa Aston Villa
     auto byName = [](const char* nm) { for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == nm && g_world.teams[i].parent < 0) return i; return -1; };
     prevUclWinner = byName("Paris Saint-Germain");
@@ -524,7 +565,7 @@ void Career::newClubCareer(int team, int yr) {
     startSeason();
     mgrInit();
     refreshFreeAgents(40);
-    initStaff();
+    initStaff();museumState(userTeam);directorSync();supportersStartSeason();personalityInitClub(userTeam);if(sportingMode()){if(sporting.employed)season.controlled={userTeam};else season.controlled.clear();sportingPrepare(userTeam);sportingTick();}
 }
 
 static const char* cupNameFor(const std::string& c) {
@@ -545,7 +586,16 @@ static const char* cupNameFor(const std::string& c) {
     if (c == "POL") return "Coupe de Pologne";
     if (c == "ROU") return "Coupe de Roumanie";
     if (c == "IRL") return "FAI Cup";
-    return "Coupe nationale";
+    if (const char* e = extCupName(c.c_str())) return e;
+    static std::map<std::string, std::string> gen;     // coupe créée automatiquement
+    auto it = gen.find(c);
+    if (it == gen.end()) {
+        int n = g_world.nationIndex(c.c_str());
+        std::string nm = n >= 0 ? sanitize(NATIONS[n].name) : c;
+        bool vowel = !nm.empty() && strchr("AEIOUÉÎaeiou", nm[0]);
+        it = gen.emplace(c, (vowel ? "Coupe d'" : "Coupe de ") + nm).first;
+    }
+    return it->second.c_str();
 }
 static const char* superNameFor(const std::string& c) {
     if (c == "FRA") return "Trophée des Champions";
@@ -581,6 +631,43 @@ static void simpleCup(Competition& c, const std::vector<int>& teams, double t0, 
     for (int i = 0; i < R; i++) c.koTimes.push_back(t0 + (t1 - t0) * i / std::max(1, R - 1));
 }
 
+static std::vector<int> editorCupEntrants(Career& K, const EditorCupDef& d) {
+    std::vector<std::pair<std::pair<int,float>, int>> ranked;
+    int p = pyramidOf(K.pyramids, d.country);
+    if (p < 0) return {};
+    Pyramid& P = K.pyramids[p];
+    std::set<int> seen;
+    for (auto& pl : P.pools) {
+        if (pl.tier < d.minTier || pl.tier > d.maxTier) continue;
+        for (int t : pl.clubs) {
+            if (t < 0 || t >= (int)g_world.teams.size() || seen.count(t)) continue;
+            const Team& T = g_world.teams[t]; if (T.parent >= 0 || T.youth) continue;
+            if (d.scope == ECS_REGION && T.region != d.geoKey) continue;
+            if (d.scope == ECS_DISTRICT && T.district != d.geoKey) continue;
+            seen.insert(t); ranked.push_back({ { pl.tier, -T.rating }, t });
+        }
+    }
+    std::sort(ranked.begin(), ranked.end());
+    std::vector<int> out; for (auto& x : ranked) out.push_back(x.second);
+    if (d.finalSize > 1 && (int)out.size() > d.finalSize) out.resize(d.finalSize);
+    return out;
+}
+
+static void capNationalCup(Career& K, Pyramid& P, std::vector<int>& teams, const CupRule& cr) {
+    if (cr.finalSize <= 1 || (int)teams.size() <= cr.finalSize) return;
+    std::vector<int> forced;
+    for (auto& d : editorCups()) if (d.enabled && d.country == P.country && d.qual == ECQ_NATIONAL_CUP) {
+        auto it = K.prevCustomCupWinner.find(d.id); if (it != K.prevCustomCupWinner.end() && it->second >= 0) forced.push_back(it->second);
+    }
+    std::set<int> have; std::vector<int> out;
+    for (int t : forced) if (std::find(teams.begin(), teams.end(), t) != teams.end() && !have.count(t)) { out.push_back(t); have.insert(t); }
+    std::vector<std::pair<std::pair<int,float>, int>> rest;
+    for (int t : teams) if (!have.count(t)) { int ti = K.tierOfTeam(t); rest.push_back({ { ti < 0 ? 999 : ti, -g_world.teams[t].rating }, t }); }
+    std::sort(rest.begin(), rest.end());
+    for (auto& x : rest) if ((int)out.size() < cr.finalSize) out.push_back(x.second);
+    teams.swap(out);
+}
+
 // Coupe de France : tours régionaux d'une ligue (entrées : amateurs au 1er tour ou au tour préliminaire,
 // N2 au 3e tour, N1 au 4e tour, Ligue 3 au 5e tour ; qualifiés pour le 7e tour = quota de la ligue)
 // règlement des ligues : tour d'entrée (1 = 1er tour) des R1, R2, R3 et D1 ; les autres divisions de district
@@ -614,11 +701,12 @@ static void buildCdfRegional(Competition& c, int region, std::vector<int> lv[5],
     c.format = FMT_CUP; c.kind = 2; c.regionalDraw = true; c.regionalRounds = 99; c.noReserves = true; c.neutralFinal = false; c.homeRule = 1;
     const int* ent = CDF_ENTRY[std::max(0, std::min(12, region))];
     std::vector<std::vector<int>> E(7);            // E[1..6] : entrants par tour
-    for (int k = 0; k < 4; k++) for (int t : lv[k]) E[ent[k]].push_back(t);
+    for (int k = 0; k < 4; k++) for (int t : lv[k]) E[clubFirstSeason(t)?1:ent[k]].push_back(t);
     for (int t : n2) E[3].push_back(t);
     for (int t : n1) E[4].push_back(t);
     for (int t : l3) E[5].push_back(t);
-    auto byRating = [](std::vector<int>& v) { std::stable_sort(v.begin(), v.end(), [](int a, int b) { return g_world.teams[a].rating > g_world.teams[b].rating; }); };
+    auto byRating = [](std::vector<int>& v) { std::stable_sort(v.begin(), v.end(), [](int a, int b) { if(clubFirstSeason(a)!=clubFirstSeason(b))return !clubFirstSeason(a);return g_world.teams[a].rating > g_world.teams[b].rating; }); };
+    std::vector<int> debut;for(auto& entrants:E)for(auto it=entrants.begin();it!=entrants.end();)if(clubFirstSeason(*it)){debut.push_back(*it);it=entrants.erase(it);}else ++it;
     std::vector<int> out(7, 0);
     out[6] = Q;
     for (int k = 6; k >= 2; k--) {
@@ -631,6 +719,7 @@ static void buildCdfRegional(Competition& c, int region, std::vector<int> lv[5],
     int in1 = 2 * out[1];
     byRating(E[1]);
     std::vector<int> pre = lv[4];
+    pre.insert(pre.end(),debut.begin(),debut.end());
     // Grand Est : R3 et toutes les divisions de district dès le 1er tour, R2 au 2e tour, R1 au 3e tour
     if (region == 5) { for (int t : pre) E[1].push_back(t); pre.clear(); byRating(E[1]); }
     while ((int)E[1].size() > in1 - 1 && !E[1].empty()) { pre.push_back(E[1].back()); E[1].pop_back(); }
@@ -696,17 +785,23 @@ void Career::startSeason() {
                 int n = (int)pl.groups[g].size();
                 double t0 = 1.0, t1 = 40.0;
                 bool yth = P.country == "U19" || P.country == "U17" || P.country == "U15";
-                bool pro = (P.country != "FRA" && !yth) || (P.country == "FRA" && pl.tier <= 2);
+                bool fem = isWomenPyramid(P);
+                bool pro = (P.country != "FRA" && !yth && !fem) || (P.country == "FRA" && pl.tier <= 2) || (fem && pl.tier <= 1);
                 if (!pro) { t0 = 2; t1 = n <= 10 ? 36 : 38; }
                 if (yth) { t0 = 3; t1 = pl.tier == 0 ? 35 : 36; c.yellowLimit = 3; }
-                c.setupLeague(pl.groups[g], 2, t0, t1, 1);
+                if (fem) { t0 = 2; t1 = P.country == "F:FRA" && pl.tier == 0 ? 36 : 38; c.yellowLimit = P.country == "F:FRA" ? 3 : 5; }
+                c.ptsWin = std::max(-10, std::min(20, P.tiers[pl.tier].ptsWin));
+                c.ptsDraw = std::max(-10, std::min(20, P.tiers[pl.tier].ptsDraw));
+                c.ptsLoss = std::max(-10, std::min(20, P.tiers[pl.tier].ptsLoss));
+                c.ptsForfeit = std::max(-20, std::min(20, P.tiers[pl.tier].ptsForfeit));
+                c.setupLeague(pl.groups[g], std::max(1, std::min(4, P.tiers[pl.tier].legs)), t0, t1, 1);
                 if (pl.groups[g].size() < 2) { c.done = true; c.result = pl.groups[g]; for (auto& st : c.stages) st.finished = true; }   // poule vide : rien à jouer
                 pl.comps.push_back(addComp(S, std::move(c)));
             }
         }
     }
     // ---------------- Coupe de France (tours régionaux par ligue)
-    cdf = -1; cdfNational = -1; cdfRegional.clear(); regionalCups.clear(); deptCups.clear(); superCups.clear(); nationalCups.clear();
+    cdf = -1; cdfNational = -1; cdfRegional.clear(); regionalCups.clear(); deptCups.clear(); superCups.clear(); nationalCups.clear(); customCups.clear();
     int fr = pyramidOf(pyramids, "FRA");
     if (fr >= 0 && !euroOnly) {
         Pyramid& P = pyramids[fr];
@@ -822,6 +917,13 @@ void Career::startSeason() {
         // coupes de district : une par district, ou deux dans les grands districts (D1-D2 et D3 et plus, comme dans la Marne)
         for (int d = 0; d < numDistricts(); d++) {
             if (districtRegion(d) < 0 || districtRegion(d) >= 13) continue;
+            if(d==districtIndex("Marne")) {
+                std::vector<int> candidates;
+                for(const auto& pl:P.pools)if(pl.tier>=5 && pl.tier<=11)
+                    for(int t:pl.clubs)if(g_world.teams[t].district==d && !g_world.teams[t].youth)candidates.push_back(t);
+                createMarneCups(*this,oneTeamPerClub(candidates));
+                continue;
+            }
             int nLv = 0; for (auto& pl : P.pools) if (P.tiers[pl.tier].scope == SC_DEPT && pl.key == d) nLv = std::max(nLv, pl.tier - 7);
             bool split = nLv >= 4;
             std::string base = districtRegion(d) == 12 ? std::string("Coupe de Corse (divisions départementales)") : "Coupe du " + districtFullName(d);
@@ -846,19 +948,41 @@ void Career::startSeason() {
             }
         }
     }
-    // ---------------- coupes nationales étrangères (clubs européens)
+    // ---------------- coupes nationales étrangères : chaque pays doté d'un championnat a sa coupe (nom réel ou « Coupe de <pays> »)
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) {
         Pyramid& P = pyramids[p];
-        if (P.dom >= 0 || P.country == "FRA" || !isEuropean(P.country)) continue;
+        if (P.dom >= 0 || P.country == "FRA" || P.country == "U19" || P.country == "U17" || P.country == "U15" || isWomenPyramid(P)) continue;
         std::vector<int> t;
-        for (auto& pl : P.pools) for (int x : pl.clubs) if (g_world.teams[x].parent < 0) t.push_back(x);
+        for (auto& pl : P.pools) for (int x : pl.clubs) if (g_world.teams[x].parent < 0 && !g_world.teams[x].youth) t.push_back(x);
+        if (t.size() < 4) continue;
+        CupRule cr = cupRuleFor(P.country);
+        if (!cr.enabled) continue;                 // éditeur : coupe nationale désactivée
+        capNationalCup(*this, P, t, cr);
+        // vainqueurs des coupes régionales de la saison précédente : qualification prioritaire (ex. Landespokal -> DFB-Pokal).
+        for (auto& d : editorCups()) if (d.enabled && d.country == P.country && d.qual == ECQ_NATIONAL_CUP) { auto it = prevCustomCupWinner.find(d.id); if (it != prevCustomCupWinner.end() && it->second >= 0 && std::find(t.begin(), t.end(), it->second) == t.end()) { if (cr.finalSize > 1 && (int)t.size() >= cr.finalSize) t.back() = it->second; else t.push_back(it->second); } }
         Competition c;
         c.name = cupNameFor(P.country); c.shortName = c.name; c.kind = 2; c.tag = p;
         simpleCup(c, t, 6, 39);
+        c.neutralFinal = cr.neutralFinal;
         int idx = addComp(S, std::move(c));
         S.comps[idx].cupRound(0, S.comps[idx].entrants[0]);
         nationalCups.push_back(idx);
     }
+    // ---------------- coupes créées dans l'éditeur : nationales, régionales ou de district.
+    // Le vainqueur peut alimenter la coupe nationale suivante ou une place européenne.
+    for (auto& d : editorCups()) {
+        if (!d.enabled) continue;
+        std::vector<int> t = editorCupEntrants(*this, d);
+        if (t.size() < 2) continue;
+        Competition c; c.name = d.name; c.shortName = d.name; c.kind = 72; c.tag = d.id;
+        simpleCup(c, t, 4.5, 36.5); c.neutralFinal = d.neutralFinal;
+        int idx = addComp(S, std::move(c));
+        S.comps[idx].cupRound(0, S.comps[idx].entrants[0]);
+        customCups.push_back(idx);
+    }
+    // ---------------- football féminin : coupes nationales, Coupe LFFP, Ligue des champions féminine
+    womenStartSeason(*this);
+    continentalStartSeason(*this);
     // ---------------- supercoupes (champion contre vainqueur de la coupe)
     for (int p = 0; !euroOnly && p < (int)pyramids.size(); p++) {
         Pyramid& P = pyramids[p];
@@ -1112,6 +1236,7 @@ void Career::startSeason() {
     updateStatuses();
     // coefficients : saison en cours remise à zéro
     for (auto& u : uefa) { u.cur = 0; u.clubs = 0; }
+    startPoleCup();
 }
 
 // ------------------------------------------------------------------ crochets
@@ -1215,6 +1340,7 @@ void Career::logHonour(int comp) {
 }
 
 void Career::onCompetitionDone(int comp) {
+    museumCompetition(comp);
     Competition& C = season.comps[comp];
     if (comp == intertoto && uel >= 0 && kind == CK_CLUB) {
         Competition& E = season.comps[uel];
@@ -1247,6 +1373,8 @@ void Career::onCompetitionDone(int comp) {
         }
     }
     onU19CompDone(comp);
+    womenOnCompDone(*this, comp);
+    if (isContinentalKind(C.kind) && C.winner >= 0) season.news.push_back(C.name + " : " + g_world.teams[C.winner].name + " est champion continental !");
     std::string y = seasonLabel(year);
     if (C.format != FMT_LEAGUE && C.winner >= 0 && C.kind != 10 && C.kind != 12 && C.kind != 20 && C.name.find("tours régionaux") == std::string::npos)
         addHonour(C.winner, "Vainqueur : " + C.name + " (" + y + ")");
@@ -1270,7 +1398,7 @@ void Career::onCompetitionDone(int comp) {
         int t2 = 64 - (int)n.entrants[2].size();
         n.koTargets = { std::max(t2, in0 / 2), t2, 32, 16, 8, 4, 2, 1 };
         n.koNames = { "7e tour", "8e tour", "32es de finale", "16es de finale", "8es de finale", "Quarts de finale", "Demi-finales", "Finale" };
-        n.koTimes = { std::max(15.0, season.now + 0.5), 17, 20, 23, 26, 30, 34, 39 };
+        n.koTimes = { std::max(15.0, season.now + 0.5), 17, 20, 23, 26, 30, 35, 41.3 };     // finale : après la dernière journée de L1 (40), avant la finale de la C1 (43)
         n.regionalDraw = true; n.regionalRounds = 2;
         int idx = addComp(season, std::move(n));
         season.comps[idx].cupRound(0, season.comps[idx].entrants[0]);
@@ -1328,6 +1456,11 @@ static bool tierAllowsReserve(const Pyramid& P, int tier) { return !P.tiers[tier
 
 static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
     Pyramid& P = K.pyramids[pyr];
+    if(P.country=="FRA" && P.dom<0) for(auto& pool:P.pools) if(pool.key==5 && pool.tier>=5 && pool.tier<=7) {
+        int next=K.year+1;
+        pool.nextGroupSizes.assign(pool.tier==5?3:pool.tier==6?(next>=2029?6:7):(next>=2027?13:14),pool.tier==5?14:12);
+        if(pool.tier==7 && next>=2027)pool.nextGroupSizes.assign(next>=2028?12:13,12);
+    }
     int T = (int)P.tiers.size();
     std::map<int, int> newTier, oldTier;
     for (auto& pl : P.pools) for (int c : pl.clubs) { newTier[c] = pl.tier; oldTier[c] = pl.tier; }
@@ -1346,6 +1479,11 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
         if (!tierAllowsReserve(P, tier)) return false;
         return tier > parentTier(t);
     };
+    auto upperTier = [&](int club, int from) {
+        for (int t = from - 1; t >= 0; --t)
+            if (P.poolIndex(t, P.keyFor(t, club)) >= 0) return t;
+        return -1;
+    };
     for (auto& pl : P.pools) {
         const TierConf& TC = P.tiers[pl.tier];
         std::vector<std::pair<float, int>> winners;
@@ -1363,9 +1501,12 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
             // montées : les premiers éligibles (réserves exclues si le niveau supérieur leur est interdit)
             if (pl.tier > 0) {
                 int got = 0;
-                for (int i = 0; i < n && got < TC.up; i++) {
-                    if (!eligible(res[i], pl.tier - 1)) continue;
-                    winners.push_back({ -rank[res[i]].ppg - (TC.up - got) * 10.f, res[i] });
+                int spots=TC.up;
+                if(pl.upCap>=0 && !pl.comps.empty())spots=std::max(spots,(pl.upCap+(int)pl.comps.size()-1)/(int)pl.comps.size());
+                for (int i = 0; i < n && got < spots; i++) {
+                    int upper = upperTier(res[i], pl.tier);
+                    if (upper < 0 || !eligible(res[i], upper)) continue;
+                    winners.push_back({ -rank[res[i]].ppg - (spots - got) * 10.f, res[i] });
                     got++;
                 }
             }
@@ -1380,7 +1521,7 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
         }
         std::sort(winners.begin(), winners.end());
         int cap = pl.upCap >= 0 ? pl.upCap : (int)winners.size();
-        for (int i = 0; i < (int)winners.size() && i < cap; i++) newTier[winners[i].second] = pl.tier - 1;
+        for (int i = 0; i < (int)winners.size() && i < cap; i++) newTier[winners[i].second] = upperTier(winners[i].second, pl.tier);
     }
     // barrages
     for (auto& c : K.season.comps) {
@@ -1420,6 +1561,21 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
         }
     };
     for (auto& kv : newTier) place(kv.first, kv.second);
+    // Published exceptional sizes describe this season, not the next season.
+    // Explicit targets may differ by group; otherwise retain the configured standard.
+    for (auto& pl : P.pools) {
+        pl.officialGroups = false;
+        if (P.tiers[pl.tier].flexible || pl.terminal) pl.groupSizes.clear();
+        else {
+            pl.groupSizes = pl.nextGroupSizes.empty()
+                ? std::vector<int>(std::max(1, pl.nGroups), std::max(1, pl.size))
+                : pl.nextGroupSizes;
+        }
+    }
+    int extraDown = 0, extraUp = 0;
+    // Repeat after reserve demotions: these can overflow an already processed pool.
+    for (int balancePass = 0; balancePass < T * 2; ++balancePass) {
+    auto previousTiers = newTier;
     // ajustement des effectifs, du haut vers le bas
     for (int t = 0; t < T; t++) {
         for (int q = 0; q < (int)P.pools.size(); q++) {
@@ -1433,24 +1589,27 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
                     float v = rank[c].ratio * 10 - rank[c].ppg + (oldTier[c] == t ? 100 : 0);
                     if (v > wv) { wv = v; worst = c; }
                 }
+                int destination = -1;
+                for (int lower = t + 1; lower < T && destination < 0; ++lower)
+                    destination = P.poolIndex(lower, P.keyFor(lower, worst));
+                if (destination < 0) break; // preserve the club if no lower division exists
                 pl.clubs.erase(std::find(pl.clubs.begin(), pl.clubs.end(), worst));
-                size_t before = 0; for (auto& p2 : P.pools) before += p2.clubs.size();
-                place(worst, t + 1);
-                size_t after = 0; for (auto& p2 : P.pools) after += p2.clubs.size();
-                if (after == before || newTier[worst] == t) { pl.clubs.push_back(worst); break; }
+                P.pools[destination].clubs.push_back(worst);
+                newTier[worst] = P.pools[destination].tier;
+                ++extraDown;
             }
             guard = 0;
             while ((int)pl.clubs.size() < target && guard++ < 500) {
                 int bestc = -1; float bv = 1e9; int bq = -1;
-                for (int t2 = t + 1; t2 < T && t2 <= t + 1 && bestc < 0; t2++) {     // jamais deux niveaux d'un coup
+                for (int t2 = t + 1; t2 < T && bestc < 0; t2++) { // nearest existing lower division for each club
                     for (int q2 = 0; q2 < (int)P.pools.size(); q2++) {
                         Pool& lo = P.pools[q2];
                         if (lo.tier != t2) continue;
                         for (int c : lo.clubs) {
                             if (P.tiers[t].scope != SC_NATIONAL && P.keyFor(t, c) != pl.key) continue;
-                            if (oldTier[c] != t2) continue;
+                            if ((oldTier[c] != t2 && oldTier[c] != t) || upperTier(c, t2) != t) continue;
                             if (!eligible(c, t)) continue;
-                            float v = rank[c].ratio * 10 - rank[c].ppg;
+                            float v = rank[c].ratio * 10 - rank[c].ppg + (oldTier[c] == t ? 100.f : 0.f);
                             if (v < bv) { bv = v; bestc = c; bq = q2; }
                         }
                     }
@@ -1460,6 +1619,7 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
                 lc.erase(std::find(lc.begin(), lc.end(), bestc));
                 pl.clubs.push_back(bestc);
                 newTier[bestc] = t;
+                ++extraUp;
             }
         }
     }
@@ -1489,13 +1649,13 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
             int bestc = -1, bq = -1; float bv = 1e9;
             for (int q2 = 0; q2 < (int)P.pools.size(); q2++) {
                 const Pool& lo = P.pools[q2];
-                if (lo.tier != cur + 1) continue;
+                if (lo.tier <= cur) continue;
                 for (int c : lo.clubs) {
                     if (c == r) continue;
-                    if (oldTier.count(c) && oldTier[c] != cur + 1) continue;       // un promu de l'étage inférieur ne saute pas un niveau
+                    if ((oldTier[c] != lo.tier && oldTier[c] != cur) || upperTier(c, lo.tier) != cur) continue; // no double promotion through an existing division
                     if (P.tiers[cur].scope != SC_NATIONAL && P.keyFor(cur, c) != P.pools[qa].key) continue;
                     if (!eligible(c, cur)) continue;
-                    float v = rank[c].ratio * 10 - rank[c].ppg;
+                    float v = rank[c].ratio * 10 - rank[c].ppg + (oldTier[c] == cur ? 100.f : 0.f);
                     if (v < bv) { bv = v; bestc = c; bq = q2; }
                 }
             }
@@ -1506,6 +1666,14 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
             newTier[bestc] = cur;
         }
     }
+    if (previousTiers == newTier) break;
+    }
+    if (extraDown || extraUp)
+        K.season.news.push_back(P.country + " : retour aux effectifs prevus, " + std::to_string(extraDown)
+            + " descentes supplementaires et " + std::to_string(extraUp) + " repechages/montees complementaires.");
+    for (const auto& pl : P.pools) if (!P.tiers[pl.tier].flexible && !pl.terminal && (int)pl.clubs.size() != poolTarget(P, pl))
+        K.season.news.push_back(P.tiers[pl.tier].name + " : effectif cible non atteint dans la zone "
+            + std::to_string(pl.key) + ", aucun mouvement supplementaire eligible.");
     // évolution des niveaux
     for (auto& pl : P.pools) {
         for (int c : pl.clubs) {
@@ -1532,7 +1700,15 @@ static void movePyramid(Career& K, int pyr, std::map<int, RankInfo>& rank) {
             tm.lastTier = pl.tier;
         }
     }
+    for (auto& pool : P.pools) pool.officialGroups = false;
     formGroups(P);
+}
+
+// Apply completed results to one pyramid (also usable by scenario validators).
+void applyPyramidSeasonResults(Career& career, int pyramid) {
+    if (pyramid < 0 || pyramid >= (int)career.pyramids.size()) return;
+    std::map<int, RankInfo> rank;
+    movePyramid(career, pyramid, rank);
 }
 
 // points UEFA de la saison (victoire 2, nul 1 ; moitié en qualifications ; bonus phase de groupes et tours finaux)
@@ -1597,6 +1773,7 @@ static void computeUefaPoints(Career& K) {
     for (int t = 0; t < (int)g_world.teams.size(); t++) {
         Team& T = g_world.teams[t];
         if (T.kind != TK_CLUB) continue;
+        if (T.parent >= 0 || T.youth) { for (float& c : T.coefs) c = 0; continue; }     // réserves et jeunes : pas de coefficient UEFA
         for (int i = 0; i < 4; i++) T.coefs[i] = T.coefs[i + 1];
         auto it = cp.find(t);
         T.coefs[4] = it != cp.end() ? it->second : 0;
@@ -1606,6 +1783,9 @@ static void computeUefaPoints(Career& K) {
 void ageSquads(int userTeam, std::vector<std::string>& news);
 
 void Career::endSeason() {
+    if(!season.finished)return;
+    prepareSeasonAwards();museumSeasonEnd(false);
+    std::vector<int> leagueControls=season.controlled;
     Season& S = season;
     std::string y = seasonLabel(year);
     auto champ = [&](int comp) { return comp >= 0 && S.comps[comp].winner >= 0 ? g_world.teams[S.comps[comp].winner].name : std::string("?"); };
@@ -1621,6 +1801,10 @@ void Career::endSeason() {
     }
     if (cdf >= 0) history.push_back(y + " Coupe de France : " + champ(cdf));
     for (int c : nationalCups) history.push_back(y + " " + S.comps[c].name + " : " + champ(c));
+    for (int c : customCups) if (c >= 0 && c < (int)S.comps.size()) {
+        history.push_back(y + " " + S.comps[c].name + " : " + champ(c));
+        if (S.comps[c].winner >= 0) prevCustomCupWinner[S.comps[c].tag] = S.comps[c].winner;
+    }
     if (u19Final >= 0) history.push_back(y + " Champion de France U19 : " + champ(u19Final));
     if (u17Final >= 0) history.push_back(y + " Champion de France U17 : " + champ(u17Final));
     if (gambNational >= 0) history.push_back(y + " Coupe Gambardella : " + champ(gambNational));
@@ -1667,7 +1851,8 @@ void Career::endSeason() {
         if (r.cup >= 0) prevCupWinner[pyramids[p].country] = r.cup;
     }
     std::vector<std::string> msgs;
-    if (kind == CK_CLUB && !euroOnly) mgrEndSeason(msgs);       // avant les montées/descentes : classement final réel
+    if(sportingMode())sportingSeasonEnd();
+    if (kind == CK_CLUB && !euroOnly) { mgrEndSeason(msgs); fpfCheck(msgs); returnLoans(msgs);if(sportingMode())mgr.sacked=0; }      // avant les montées/descentes : classement final réel
     computeUefaPoints(*this);
     computeEuro(*this, true);
     std::map<int, RankInfo> rank;
@@ -1688,10 +1873,34 @@ void Career::endSeason() {
         std::string cut = lvl.substr(0, lvl.find(" - "));
         if (ta < kv.second) msgs.push_back(std::string(mine ? "[Votre club] " : "") + "PROMOTION : " + t.name + " monte en " + cut + " !");
         else msgs.push_back(std::string(mine ? "[Votre club] " : "") + "RELÉGATION : " + t.name + " descend en " + cut + ".");
+        if(sportingMode()&&kv.first==userTeam&&ta<kv.second)for(auto& h:sporting.history)if(h.club==userTeam&&!h.to)h.promotions++;
         addReputation(kv.first, ta < kv.second ? 4 : -5);
     }
+    // corruption prouvée : rétrogradation administrative d'une division
+    if (kind == CK_CLUB && life.adminRelegate && userTeam >= 0) {
+        life.adminRelegate = 0;
+        int p, q, g;
+        int cur = tierOfTeam(userTeam, &p, &q, &g);
+        if (cur >= 0) {
+            Pyramid& P = pyramids[p];
+            int tq = -1;
+            for (int t2 = cur + 1; t2 < (int)P.tiers.size() && tq < 0; t2++) tq = P.poolIndex(t2, P.keyFor(t2, userTeam));
+            if (tq >= 0) {
+                Pool& A = P.pools[q];
+                A.clubs.erase(std::remove(A.clubs.begin(), A.clubs.end(), userTeam), A.clubs.end());
+                for (auto& gr : A.groups) gr.erase(std::remove(gr.begin(), gr.end(), userTeam), gr.end());
+                Pool& B = P.pools[tq];
+                B.clubs.push_back(userTeam);
+                if (B.groups.empty()) B.groups.push_back({});
+                int gi = 0; for (int k = 1; k < (int)B.groups.size(); k++) if (B.groups[k].size() < B.groups[gi].size()) gi = k;
+                B.groups[gi].push_back(userTeam);
+                msgs.push_back("[Votre club] AFFAIRE DE CORRUPTION : rétrogradation administrative en " + P.tiers[B.tier].name + ".");
+                addReputation(userTeam, -15);
+            }
+        }
+    }
     // dépôt de bilan : rétrogradation administrative (au moins deux divisions, jusqu'au Régional 1)
-    if (kind == CK_CLUB && mgr.managerMode && mgr.bankrupt && userTeam >= 0) {
+    if (kind == CK_CLUB && mgr.managerMode && hasDncg() && mgr.bankrupt && userTeam >= 0) {
         mgr.bankrupt = 0;
         int p, q, g;
         int cur = tierOfTeam(userTeam, &p, &q, &g);
@@ -1723,29 +1932,39 @@ void Career::endSeason() {
         addReputation(userTeam, -25);
         mgr.budget = std::max<int64_t>(10, mgr.incomeBase / 20); mgr.dncg = 0; mgr.confidence = 50;
     }
-    // clubs créés en cours de saison
+    // clubs créés en cours de saison : entrée dans leur propre pyramide nationale/régionale
     int fr = pyramidOf(pyramids, "FRA");
     int ypy = u19Pyramid();
+    std::set<int> touchedPyrs;
     for (int t : pendingNewClubs) {
-        if (g_world.teams[t].youth) { int py = youthPyramid(t); if (py >= 0) placeInBottomPool(pyramids[py], t); }
-        else if (fr >= 0) placeInBottomPool(pyramids[fr], t);
+        if (t < 0 || t >= (int)g_world.teams.size()) continue;
+        markClubDebut(t,year+1);g_world.teams[t].lastTier=-1;
+        if (g_world.teams[t].youth && g_world.teams[t].youth != 6) { int py = youthPyramid(t); if (py >= 0) { placeInBottomPool(pyramids[py], t); touchedPyrs.insert(py); } }
+        else { Team& ct = g_world.teams[t]; if (ct.nation >= 0 && ct.nation < NUM_NATIONS) { int cp = pyramidOf(pyramids, NATIONS[ct.nation].code); if (cp >= 0) { placeInBottomPool(pyramids[cp], t); touchedPyrs.insert(cp); } } }
     }
-    if (fr >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[fr]);
+    for (int p : touchedPyrs) formGroups(pyramids[p]);
     if (ypy >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[ypy]);
     { int p17 = u17Pyramid(); if (p17 >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[p17]); }
     { int p15 = u15Pyramid(); if (p15 >= 0 && !pendingNewClubs.empty()) formGroups(pyramids[p15]); }
     pendingNewClubs.clear();
+    personalitySeasonEnd();
+    supportersOnSeasonEnd();
+    museumSeasonEnd(true);
     archiveSeason();                  // avant l'historique des joueurs (qui remet les compteurs à zéro)
+    archiveComps();
     recordSeasonHistory();
     ageSquads(userTeam, msgs);
+    finishPoleSeason(msgs);
     for (auto& t : g_world.teams) if (t.squadGen) for (auto& pl : t.squad) { pl.suspended = 0; pl.yellows = 0; pl.goals = 0; pl.apps = 0; pl.assists = 0; pl.injured = 0; }
     retiring.clear();
     mgr.boardRequests = 0;
     year++;
     startSeason();
+    if(opts.lite){season.controlled=leagueControls;mgr.noSack=true;mgr.managerMode=false;mgr.sacked=false;}
     if (kind == CK_CLUB && !euroOnly) { mgrInit(); aiTransfers(120); refreshFreeAgents(40); }
     else if (euroOnly) aiTransfers(60);
-    for (auto& n : msgs) season.news.push_back(n);
+    if(opts.lite){season.controlled=leagueControls;mgr.noSack=true;mgr.managerMode=false;mgr.sacked=false;}
+    for (auto& n : msgs) season.news.push_back(n);museumState(userTeam);directorSync();supportersStartSeason();personalityInitClub(userTeam);if(sportingMode()){if(sporting.employed)season.controlled={userTeam};else season.controlled.clear();sportingPrepare(userTeam);sportingTick();}
 }
 
 // ------------------------------------------------------------------ jeunes (U19)
@@ -1913,6 +2132,7 @@ void Career::startYouthGroups(const std::vector<int>& teams0) {
 
 int Career::createU19(int club, std::string& err) { return createYouth(club, 1, err); }
 int Career::createYouth(int club, int ykind, std::string& err) {
+    if(club<0 || club>=(int)g_world.teams.size() || ykind<1 || ykind>3){err="Club ou catégorie jeune invalide.";return -1;}
     const char* A = ykind == 3 ? "U15" : ykind == 2 ? "U17" : "U19";
     for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == club && g_world.teams[i].youth == ykind) { err = std::string("Le club a déjà une équipe ") + A + "."; return -1; }
     for (int t : pendingNewClubs) if (g_world.teams[t].parent == club && g_world.teams[t].youth == ykind) { err = std::string("L'équipe ") + A + " est déjà créée."; return -1; }
@@ -1975,9 +2195,10 @@ void ageSquads(int userTeam, std::vector<std::string>& news) {
             else if (p.age <= 29) d = r.range(-1, 1);
             else if (p.age <= 32) d = r.range(-3, 0);
             else d = r.range(-5, -1);
+            d=personalityAnnualGain(g_career,p,d);
             auto adj = [&](uint8_t& v) { v = (uint8_t)std::max(5, std::min(99, (int)v + d)); };
             if (d) { adj(p.speed); adj(p.shoot); adj(p.pass); adj(p.tackle); adj(p.stamina); if (p.pos == POS_GK) adj(p.keep); }
-            if (t.youth && t.parent >= 0 && p.age >= (t.youth == 3 ? 15 : t.youth == 2 ? 17 : 20)) {
+            if (t.youth && t.parent >= 0 && p.age >= (t.youth == 3 ? 16 : t.youth == 2 ? 18 : 20)) {
                 // trop âgé : U17 -> U19 du club ; U19 -> réserve (ou équipe première) ; un jeune arrive à sa place
                 int dest = t.parent;
                 for (int k = 0; k < (int)g_world.teams.size(); k++) if (g_world.teams[k].parent == t.parent && !g_world.teams[k].youth && g_world.teams[k].resLevel == 1) dest = k;
@@ -2012,6 +2233,7 @@ void ageSquads(int userTeam, std::vector<std::string>& news) {
             }
             bool announced = std::find(g_career.retiring.begin(), g_career.retiring.end(), p.id) != g_career.retiring.end();
             if (announced || p.age >= 38 || (p.age >= 34 && ti != userTeam && r.chance((p.age - 33) * 0.25f)) || (p.age >= 36 && ti == userTeam)) {
+                g_career.personalityRetire(p,ti);
                 if (ti == userTeam) news.push_back(p.name + fmt(" (%d ans) prend sa retraite.", p.age));
                 else if (p.overall() >= 78) news.push_back(fmt("Fin d'une époque : %s (%s, %d ans) raccroche les crampons.", p.name.c_str(), t.shortName.c_str(), p.age));
                 // reconversion
@@ -2083,7 +2305,15 @@ std::string Career::divisionRules(int comp) const {
         B("Puis tirs au but.");
     };
     bool club = kind == CK_CLUB;
-    if (C.format == FMT_LEAGUE && C.kind == 1 && C.tag >= 0 && club) {
+    if(C.kind==150){
+        H("Coupe des Pôles Espoirs (compétition simulée)");
+        B("16 pôles masculins, joueurs simulés de 13-14 ans ; 4 groupes de 4 en match simple.");
+        B("Les deux premiers de chaque groupe vont en quarts, puis demi-finales et finale.");
+        B("Tous les matchs sur un seul site de Pôle Espoirs. Deux périodes de 20 minutes.");
+        B("Phase finale : aucune prolongation, tirs au but directement en cas d'égalité.");
+        B("Classement individuel après la finale ; recrutement pour les U15 du club à la saison suivante.");
+        tbLines(C.tb,s);
+    } else if (C.format == FMT_LEAGUE && C.kind == 1 && C.tag >= 0 && club) {
         int p = C.tag / 100000, q = (C.tag / 100) % 1000;
         const Pyramid& PY = pyramids[p];
         const Pool& pl = PY.pools[q];
@@ -2106,13 +2336,26 @@ std::string Career::divisionRules(int comp) const {
         if (T.barrageUp == 1) B("Le 3e dispute un barrage aller-retour contre le 16e de la division supérieure.");
         if (T.barrageUp == 2) B(fmt("Play-offs pour une montée supplémentaire (du %de au %de).", T.up + 1, T.up + 4));
         if (T.barrageUp == 3) B("Barrages : le 5e reçoit le 4e, le vainqueur va chez le 3e, puis barrage aller-retour contre le 16e de Ligue 1.");
-        if (!T.flexible && !pl.terminal && T.down > 0) B(fmt("Descente : %d dernier%s (plus d'éventuelles descentes en cascade, rétrogradations administratives de la DNCG).", T.down, T.down > 1 ? "s" : ""));
+        if (!T.flexible && !pl.terminal && T.down > 0) B(fmt("Descente : %d dernier%s (plus d'éventuelles descentes en cascade%s).", T.down, T.down > 1 ? "s" : "", PY.country=="FRA" || PY.country=="F:FRA" ? ", rétrogradations administratives de la DNCG" : ""));
         if (pl.terminal || T.flexible) B("Dernier niveau du district : pas de relégation ; deux équipes d'un même club sont placées dans des poules différentes.");
         if (PY.country == "FRA" && pl.tier >= 3) B("Montées et descentes selon la zone géographique (région, district).");
         H("Équipes réserves");
         if (T.noReserves) B("Division interdite aux équipes réserves.");
         else if (PY.country == "FRA") { B("Autorisées, mais jamais au même niveau ou au-dessus de l'équipe supérieure du club."); B("Une réserve ne peut pas accéder à la Ligue 3."); }
         else B("Selon le règlement du pays.");
+        if (isWomenPyramid(PY)) {
+            H("Football féminin");
+            B("Séparation stricte : seules des joueuses peuvent évoluer dans ce championnat.");
+            if (PY.country == "F:FRA" && pl.tier == 0) {
+                B("Saison régulière en 22 journées. Les 4 premières disputent les play-offs pour le titre : demi-finales (1re - 4e, 2e - 3e) et finale sur match unique.");
+                B("Les 2 dernières descendent en Seconde Ligue.");
+            }
+            if (PY.country == "F:FRA" && pl.tier == 1) B("22 journées : les 2 premières montent en Arkema Première Ligue, les 2 dernières descendent en D3.");
+            if (PY.country == "F:FRA" && pl.tier <= 1) {
+                B("Feuille de match : 20 joueuses, 5 remplacements.");
+                B("Règle JFL : au moins 10 joueuses formées localement (JFL) sur la feuille de match.");
+            }
+        }
         if (PY.country == "U15" || PY.country == "U17" || PY.country == "U19") {
             H("Catégorie de jeunes");
             if (PY.country == "U15") { B("Joueurs de moins de 15 ans (U15). Championnats de ligue et de district uniquement : pas de championnat national."); B("En fin de saison, les joueurs trop âgés rejoignent l'équipe U17 (ou U19) du club."); }
@@ -2142,7 +2385,7 @@ std::string Career::divisionRules(int comp) const {
         koDraw(true, false);
     } else if (C.format == FMT_CUP) {
         bool pens = C.penaltiesOnly();
-        bool cdfNoET = C.kind == 2 && club && !opts.cdfET;
+        bool cdfNoET = C.kind == 2 && club && !opts.cdfET && std::find(nationalCups.begin(),nationalCups.end(),comp)==nationalCups.end();
         H("Format");
         B("Coupe à élimination directe en match unique.");
         if (C.kind == 11) B("Clubs de Ligue 1, Ligue 2 et Ligue 3 : entrée échelonnée (L3 au 1er tour, L2 au 2e tour, L1 en 16es).");
@@ -2150,16 +2393,26 @@ std::string Career::divisionRules(int comp) const {
         if (C.name.find("tours régionaux") != std::string::npos) B(C.tag >= 0 && C.tag < 13 ? cdfEntryText(C.tag) : std::string("Deux qualifiés par territoire pour le 7e tour."));
         if (C.kind == 4) B("Réservée aux équipes de Régional 1, 2 et 3 : une seule équipe par club (l'équipe fanion si elle joue en Régional, sinon sa réserve la mieux classée).");
         if (C.kind == 5) B("Une seule équipe par club : une réserve ne joue que si aucune équipe supérieure du club n'est engagée.");
+        if(marneCupPart(C)>=0) {
+            B(fmt("Finales des trois coupes le 16 mai %d sur le même site (choisi dans la simulation).",C.season+1));
+            B("Match unique, 90 minutes puis tirs au but directs, y compris en finale. Pas de prolongation.");
+            if(marneCupPart(C)==0) {
+                B("Meilleure équipe de chaque club entre R1 et D4 ; équipes de Ligue exemptées des trois premiers tours.");
+                B("Qualification automatique tant que le club joue en Coupe de France ou Coupe du Grand Est, jusqu'aux 16es inclus.");
+                B("Éliminées aux tours 1 à 4 : D1/D2 vers la Coupe D1/D2 ; D3/D4 vers la Coupe D3/D4. Aucun repêchage ensuite.");
+                B("Le club inférieur reçoit en cas d'écart d'au moins deux divisions, sauf finale sur terrain neutre.");
+            } else B("Repêchées de la Coupe de la Marne uniquement. Tirage intégral ; une seule exemption avant les quarts et au plus deux réceptions consécutives.");
+        }
         if (C.kind == 15) B("Coupe Gambardella (U19) : phase nationale à partir du 1er tour fédéral avec l'entrée des clubs du National U19 ; finale au Stade de France.");
         if (C.kind == 16) B("Coupe Gambardella (U19) : tours régionaux organisés par la ligue ; les qualifiés rejoignent la phase nationale.");
         if (C.kind == 6) B("Trophée des Champions : match unique entre le champion et le vainqueur de la coupe, dans un grand stade différent chaque saison.");
         if (C.noReserves) B("Les équipes réserves ne participent pas.");
         H("Tirage au sort");
         if (C.kind == 11) B("Tirage des tours préliminaires et des 16es ; le tirage des 8es fixe le tableau jusqu'à la finale.");
-        if (C.homeRule == 1) B("Le premier club tiré reçoit ; si deux divisions (ou plus) séparent les clubs, le club de la plus petite division reçoit.");
-        else B("Le premier club tiré reçoit, sans protection du club de division inférieure.");
+        if (C.homeRule == 1 || marneCupPart(C)==0) B("Le premier club tiré reçoit ; si deux divisions (ou plus) séparent les clubs, le club de la plus petite division reçoit.");
+        else if(marneCupPart(C)<0) B("Le premier club tiré reçoit, sans protection du club de division inférieure.");
         if (C.regionalDraw) B("Tirage régionalisé (clubs géographiquement proches) dans les premiers tours.");
-        koDraw(!(pens || cdfNoET), true);
+        koDraw(!(pens || cdfNoET || marneCupPart(C)>=0), marneCupPart(C)<0);
         if (cdfNoET) B("Option de la carrière : prolongation supprimée avant la finale.");
         H("Finale");
         auto cv = cupVenue.find(comp);
@@ -2333,7 +2586,8 @@ void youthQualify(Career& K, int comp);
 int intlYear(int type) {
     switch (type) { case IT_WORLDCUP: return 2030; case IT_EURO: return 2028; case IT_CAN: return 2027; case IT_COPA: return 2028;
                     case IT_ASIA: return 2027; case IT_GOLD: return 2027; case IT_OLYMPICS: return 2028;
-                    case IT_EURO21: case IT_EURO19: case IT_EURO17: return 2027; default: return 2028; }
+                    case IT_EURO21: case IT_EURO19: case IT_EURO17: return 2027;
+                    case IT_OLY_W: return 2028; case IT_EURO_W: return 2029; case IT_WC_W: return 2027; default: return 2028; }
 }
 
 std::vector<int> defaultHosts(int type) {
@@ -2349,6 +2603,9 @@ std::vector<int> defaultHosts(int type) {
     case IT_EURO21: return { N("ALB"), N("SRB") };            // Euro Espoirs 2027 : Albanie et Serbie
     case IT_EURO19: return { N("SVK") };
     case IT_EURO17: return { N("CRO") };
+    case IT_OLY_W: return { N("USA") };                       // Los Angeles 2028
+    case IT_EURO_W: return { N("GER") };                      // Euro féminin 2029
+    case IT_WC_W: return { N("BRA") };                        // Coupe du monde féminine 2027
     default: return { N("NZL") };
     }
 }
@@ -2863,7 +3120,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 15;
+static const unsigned SAVE_VERSION = 33;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -2885,13 +3142,16 @@ template <class IO, class C> static void ioCompScalars(IO& io, C& c) {
     io.pod(c.season); io.pod(c.noReserves); io.pod(c.neutralFinal); io.pod(c.extReadyMask); io.pod(c.awayGoals); io.pod(c.homeRule); io.pod(c.yellowLimit);
 }
 static void wComp(Writer& w, const Competition& c) {
-    w.str(c.name); w.str(c.shortName); ioCompScalars(w, c); w.vpod(c.matches);
+    w.str(c.name); w.str(c.shortName); ioCompScalars(w, c); w.pod(c.ptsDraw); w.pod(c.ptsLoss); w.pod(c.ptsForfeit); w.vpod(c.matches);
     unsigned n = (unsigned)c.stages.size(); w.pod(n); for (auto& s : c.stages) wStage(w, s);
     w.vpod(c.koTimes); w.vstr(c.koNames); w.vpod(c.koLegs); w.vvi(c.entrants); w.vpod(c.koTargets); w.vpod(c.result);
     w.vpod(c.extra); w.vpod(c.extra2); w.vpod(c.carry); w.vpod(c.events);
 }
-static void rComp(Reader& r, Competition& c) {
-    r.str(c.name); r.str(c.shortName); ioCompScalars(r, c); r.vpod(c.matches);
+static void rComp(Reader& r, Competition& c, unsigned ver) {
+    r.str(c.name); r.str(c.shortName); ioCompScalars(r, c);
+    if (ver >= 23) { r.pod(c.ptsDraw); r.pod(c.ptsLoss); r.pod(c.ptsForfeit); }
+    else { c.ptsDraw = 1; c.ptsLoss = 0; c.ptsForfeit = 0; }
+    r.vpod(c.matches);
     unsigned n = 0; r.pod(n); if (!r.ok || n > 100000) { r.ok = false; return; }
     c.stages.resize(n); for (auto& s : c.stages) rStage(r, s);
     r.vpod(c.koTimes); r.vstr(c.koNames); r.vpod(c.koLegs); r.vvi(c.entrants); r.vpod(c.koTargets); r.vpod(c.result);
@@ -2909,7 +3169,7 @@ bool Career::save(const char* path) const {
     for (auto& t0 : g_world.teams) {
         Team& t = const_cast<Team&>(t0);
         w.str(t.name); w.str(t.shortName); w.str(t.stadium); w.str(t.town);
-        w.pod(t.kind); w.pod(t.nation); w.pod(t.rating); ioKit(w, t.home); ioKit(w, t.away); w.pod(t.culture); w.pod(t.region); w.pod(t.dept);
+        w.pod(t.kind); w.pod(t.nation); w.pod(t.rating); ioKit(w, t.home); ioKit(w, t.away); ioKit(w, t.third); w.pod(t.hasThird); w.pod(t.culture); w.pod(t.region); w.pod(t.dept);
         w.pod(t.seed); w.pod(t.formation); w.pod(t.dbClub); w.pod(t.parent); w.pod(t.resLevel); w.pod(t.custom); w.pod(t.edited);
         w.pod(t.lastTier); w.pod(t.founded); w.pod(t.squadGen); w.vstr(t.honours);
         unsigned np = (unsigned)t.squad.size(); w.pod(np);
@@ -2945,9 +3205,9 @@ bool Career::save(const char* path) const {
     for (auto& P : pyramids) {
         w.str(P.country); w.str(P.name); w.pod(P.barrageUp); w.pod(P.dom);
         unsigned n = (unsigned)P.tiers.size(); w.pod(n);
-        for (auto& t : P.tiers) { w.str(t.name); w.pod(t.scope); w.pod(t.groupsPerPool); w.pod(t.groupSize); w.pod(t.up); w.pod(t.down); w.pod(t.flexible); w.pod(t.noReserves); w.pod(t.tb); w.pod(t.barrageUp); }
+        for (auto& t : P.tiers) { w.str(t.name); w.pod(t.scope); w.pod(t.groupsPerPool); w.pod(t.groupSize); w.pod(t.up); w.pod(t.down); w.pod(t.flexible); w.pod(t.noReserves); w.pod(t.tb); w.pod(t.barrageUp); w.pod(t.ptsWin); w.pod(t.legs); w.pod(t.ptsDraw); w.pod(t.ptsLoss); w.pod(t.ptsForfeit); }
         n = (unsigned)P.pools.size(); w.pod(n);
-        for (auto& pl : P.pools) { w.pod(pl.tier); w.pod(pl.key); w.pod(pl.nGroups); w.pod(pl.size); w.pod(pl.upCap); w.pod(pl.terminal); w.vpod(pl.clubs); w.vvi(pl.groups); w.vpod(pl.comps); }
+        for (auto& pl : P.pools) { w.pod(pl.tier); w.pod(pl.key); w.pod(pl.nGroups); w.pod(pl.size); w.pod(pl.upCap); w.pod(pl.terminal); w.vpod(pl.clubs); w.vvi(pl.groups); w.vpod(pl.comps); w.vpod(pl.groupSizes); w.pod(pl.officialGroups); w.vpod(pl.nextGroupSizes); }
     }
     const Season& S = season;
     w.vpod(S.controlled); w.pod(S.now); w.pod(S.year); w.pod(S.finished); w.vstr(S.news); w.pod(S.mode);
@@ -2966,6 +3226,17 @@ bool Career::save(const char* path) const {
     saveV13(w);                   // version 13
     saveV14(w);                   // version 14
     saveV15(w);                   // version 15
+    saveV17(w);                   // version 17 : vie privée, corruption
+    // version 23 : coupes éditeur persistantes
+    w.vpod(customCups); { std::vector<std::pair<int,int>> v(prevCustomCupWinner.begin(), prevCustomCupWinner.end()); w.vpod(v); }
+    w.vpod(ballonEditions); // version 26
+    w.vpod(seasonAwards);w.vpod(clubDebuts);w.vpod(poleTeams);w.vpod(poleRecruits);w.pod(poleCup); // version 27
+    for(auto& t:g_world.teams){w.pod(t.tactical);for(auto& p:t.squad){initPositions(p);w.pod(p.positions);}} // version 28
+    museumSave(w,*this); // version 29
+    directorSave(w,*this); // version 30
+    sportingSave(w,*this); // version 31
+    supportersSave(w,*this); // version 32
+    personalitySave(w,*this); // version 33
     fclose(f);
     return true;
 }
@@ -2976,14 +3247,14 @@ bool Career::load(const char* path) {
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
-    if (magic != SAVE_MAGIC || ver < 5 || ver > SAVE_VERSION) { fclose(f); return false; }
+    if (magic != SAVE_MAGIC || ver < 21 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }
     g_world.teams.resize(nt);
     for (auto& t : g_world.teams) {
         r.str(t.name); r.str(t.shortName); r.str(t.stadium); r.str(t.town);
-        r.pod(t.kind); r.pod(t.nation); r.pod(t.rating); ioKit(r, t.home); ioKit(r, t.away); r.pod(t.culture); r.pod(t.region); r.pod(t.dept);
+        r.pod(t.kind); r.pod(t.nation); r.pod(t.rating); ioKit(r, t.home); ioKit(r, t.away); ioKit(r, t.third); r.pod(t.hasThird); r.pod(t.culture); r.pod(t.region); r.pod(t.dept);
         r.pod(t.seed); r.pod(t.formation); r.pod(t.dbClub); r.pod(t.parent); r.pod(t.resLevel); r.pod(t.custom); r.pod(t.edited);
         r.pod(t.lastTier); r.pod(t.founded); r.pod(t.squadGen); r.vstr(t.honours);
         unsigned np = 0; r.pod(np); if (!r.ok || np > 200) { fclose(f); return false; }
@@ -3029,10 +3300,10 @@ bool Career::load(const char* path) {
         r.str(P.country); r.str(P.name); r.pod(P.barrageUp); r.pod(P.dom);
         unsigned n = 0; r.pod(n); if (!r.ok || n > 100) { fclose(f); return false; }
         P.tiers.resize(n);
-        for (auto& t : P.tiers) { r.str(t.name); r.pod(t.scope); r.pod(t.groupsPerPool); r.pod(t.groupSize); r.pod(t.up); r.pod(t.down); r.pod(t.flexible); r.pod(t.noReserves); r.pod(t.tb); r.pod(t.barrageUp); }
+        for (auto& t : P.tiers) { r.str(t.name); r.pod(t.scope); r.pod(t.groupsPerPool); r.pod(t.groupSize); r.pod(t.up); r.pod(t.down); r.pod(t.flexible); r.pod(t.noReserves); r.pod(t.tb); r.pod(t.barrageUp); if (ver >= 22) { r.pod(t.ptsWin); r.pod(t.legs); } if (ver >= 23) { r.pod(t.ptsDraw); r.pod(t.ptsLoss); r.pod(t.ptsForfeit); } }
         r.pod(n); if (!r.ok || n > 100000) { fclose(f); return false; }
         P.pools.resize(n);
-        for (auto& pl : P.pools) { r.pod(pl.tier); r.pod(pl.key); r.pod(pl.nGroups); r.pod(pl.size); r.pod(pl.upCap); r.pod(pl.terminal); r.vpod(pl.clubs); r.vvi(pl.groups); r.vpod(pl.comps); }
+        for (auto& pl : P.pools) { r.pod(pl.tier); r.pod(pl.key); r.pod(pl.nGroups); r.pod(pl.size); r.pod(pl.upCap); r.pod(pl.terminal); r.vpod(pl.clubs); r.vvi(pl.groups); r.vpod(pl.comps); if (ver >= 24) { r.vpod(pl.groupSizes); r.pod(pl.officialGroups); } if (ver >= 25) r.vpod(pl.nextGroupSizes); }
     }
     season = Season();
     Season& S = season;
@@ -3040,7 +3311,7 @@ bool Career::load(const char* path) {
     unsigned nc = 0; r.pod(nc); if (!r.ok || nc > 100000) { fclose(f); return false; }
     S.comps.reserve(std::max(8000u, nc + 100));
     S.comps.resize(nc);
-    for (auto& c : S.comps) rComp(r, c);
+    for (auto& c : S.comps) rComp(r, c, ver);
     superRegions = -1; prevRegCupWinner.clear();
     if (ver >= 6) {
         r.pod(mgr.trainFocus); r.pod(mgr.trainInt); r.pod(superRegions);
@@ -3068,7 +3339,31 @@ bool Career::load(const char* path) {
     if (ver >= 14) loadV14(r);
     nlLeague.clear(); nlYear = -1; opts = Opts(); newEuro = NewEuroSpots(); prevUeclWinner = -1; coachCat = 0; coachU21Podium.clear(); mgr.sponsorYears = mgr.namingYears = 0;
     if (ver >= 15) loadV15(r);
+    if (ver >= 17) loadV17(r);
+    customCups.clear(); prevCustomCupWinner.clear();
+    if (ver >= 23) { r.vpod(customCups); std::vector<std::pair<int,int>> v; r.vpod(v); for (auto& x : v) prevCustomCupWinner[x.first] = x.second; }
+    ballonEditions.clear();
+    if(ver>=26) r.vpod(ballonEditions);
+    seasonAwards.clear();clubDebuts.clear();poleTeams.clear();poleRecruits.clear();poleCup=-1;
+    if(ver>=27){r.vpod(seasonAwards);r.vpod(clubDebuts);r.vpod(poleTeams);r.vpod(poleRecruits);r.pod(poleCup);}
+    for(auto& t:g_world.teams){t.tactical=TacticalPlan();if(ver>=28){r.pod(t.tactical);if(t.tactical.customized>1||t.tactical.model>1)r.ok=false;for(auto& v:t.tactical.slot)if(v.duty>2||v.instructions>>TI_COUNT||v.position!=255&&v.position>=DP_COUNT)r.ok=false;}for(auto& p:t.squad){if(ver>=28){r.pod(p.positions);if(p.positions.primary>=DP_COUNT||p.positions.target!=255&&p.positions.target>=DP_COUNT)r.ok=false;for(auto v:p.positions.familiarity)if(v>100)r.ok=false;}else initPositions(p);}}
+    clubHistories.clear();if(ver>=29)museumLoad(r,*this);
+    director=DirectorState();if(ver>=30)directorLoad(r,*this);
+    sporting=SportingCareer();if(ver>=31)sportingLoad(r,*this);
+    supporters=SupporterState();personalities=PersonalityState();if(ver>=32)supportersLoad(r,*this);if(ver>=33)personalityLoad(r,*this);
+    for(const auto& e:ballonEditions) if(e.presented>1 || e.count[0]>3 || e.count[1]>3) r.ok=false;
     g_world.rebuildCountryClubs(pyramids);
+    if (!hasDncg()) { mgr.dncg=0; mgr.bankrupt=0; mgr.wageCapK=0; }
+    // Restaurer le barème historique, même si une ancienne sauvegarde avait trois points.
+    for(auto& C:season.comps) if(C.kind==50 && C.tag>=0 && C.tag<NUM_LEGENDS) {
+        C.ptsWin=LEGENDS[C.tag].ptsWin;
+        double oldNext=1e30,newNext=1e30;
+        for(auto& st:C.stages) for(auto& rd:st.rounds) if(!rd.done) oldNext=std::min(oldNext,rd.time);
+        legendRepairCalendar(C);
+        for(auto& st:C.stages) for(auto& rd:st.rounds) if(!rd.done) newNext=std::min(newNext,rd.time);
+        if(oldNext!=newNext && newNext<1e29) season.now=newNext-1.0/7;
+        if(C.done && C.tag<22)season.now=legendCalendarTime(C.tag,1);
+    }
     fclose(f);
     return r.ok;
 }
@@ -3213,14 +3508,22 @@ void Career::sheetRules(int comp, int& sheet, int& subs, bool& rolling) const {
     sheet = 18; subs = 3; rolling = false;
     if (comp < 0 || comp >= (int)season.comps.size()) return;
     const Competition& C = season.comps[comp];
+    if(marneCupPart(C)>=0){
+        bool final=C.cur>=0 && C.cur<(int)C.stages.size() && C.stages[C.cur].name=="Finale";
+        sheet=final?16:14;subs=final?5:99;rolling=!final;return;
+    }
+    if(C.kind==150){sheet=18;subs=7;rolling=true;return;}
     if (C.rollingSubs()) { sheet = 14; subs = 99; rolling = true; return; }
     if (C.kind == 12) { sheet = 18; subs = 5; return; }
+    if (C.kind == 50 && C.tag >= 0 && C.tag < NUM_LEGENDS) { legendSheet(C.tag, sheet, subs); return; }
+    if (C.kind >= 40 && C.kind <= 44) { sheet = 20; subs = 5; return; }                 // football féminin : 20 joueuses, 5 remplacements
     if (C.kind == 15 || C.kind == 16 || C.kind == 19 || C.kind == 22 || C.kind == 20 || C.kind == 21) { sheet = 16; subs = 3; return; }
     if (C.kind == 1 && C.tag >= 0) {
         int p = C.tag / 100000, q = (C.tag / 100) % 1000;
         if (p < (int)pyramids.size() && q < (int)pyramids[p].pools.size()) {
             const Pyramid& P = pyramids[p]; int tier = pyramids[p].pools[q].tier;
-            if (P.country == "U15") { sheet = 14; subs = 99; rolling = true; return; }                                   // U15 : remplacements libres
+            if (P.country == "U15") { sheet = 14; subs = 99; rolling = true; return; }
+            if (isWomenPyramid(P)) { if (tier <= 1 || P.country != "F:FRA") { sheet = 20; subs = 5; } else { sheet = 16; subs = 3; } return; }                                   // U15 : remplacements libres
             if (P.country == "U19" || P.country == "U17") { sheet = tier == 0 ? 16 : 14; subs = 3; return; }
             if (P.country == "FRA" && P.dom < 0 && (tier == 3 || tier == 4)) { sheet = 16; subs = 3; return; }             // National 2 et National 3
             if (P.country == "FRA" && P.dom < 0 && tier >= 5 && tier <= 7) { sheet = 14; subs = 3; return; }             // Régional 1 à 3
@@ -3324,6 +3627,8 @@ void Career::resetV7() {
     euroOnly = false;
     intlFormat = 0; honourLog.clear(); honourVenue.clear(); uclFinalVenue.clear(); uefaFinalVenue.clear(); tdcVenue.clear(); intertoto = -1;
     managerName.clear(); managerNation = -1; managerSkin = 0; managerHair = 0; managerAge = 45; newsRead.clear(); retiring.clear(); mgr.boardRequests = 0;
+    life = PlayerLife(); loans.clear(); compArch.clear(); compAllTime.clear(); ballonEditions.clear();
+    seasonAwards.clear();clubDebuts.clear();poleTeams.clear();poleRecruits.clear();poleCup=-1;clubHistories.clear();director=DirectorState();sporting=SportingCareer();supporters=SupporterState();personalities=PersonalityState();
 }
 
 // aperçu des qualifiés européens sans modifier la carrière (bilan de fin de saison)
@@ -3339,3 +3644,5 @@ EuroSpots Career::previewEuro() {
     for (size_t i = 0; i < g_world.teams.size(); i++) for (int k = 0; k < 5; k++) g_world.teams[i].coefs[k] = ckeep[i][k];
     return out;
 }
+
+

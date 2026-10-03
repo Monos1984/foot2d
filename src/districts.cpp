@@ -171,9 +171,14 @@ int districtFor(int dept, const std::string& town, const std::string& club) {
 }
 
 void assignDistricts(World& w) {
+    std::map<std::string,int> declaredDistricts;
+    for(int i=0;i<NUM_FR_OFFICIAL_2627;i++)if(FR_OFFICIAL_2627[i].district[0])declaredDistricts[sanitize(FR_OFFICIAL_2627[i].name)]=districtIndex(sanitize(FR_OFFICIAL_2627[i].district));
     for (auto& t : w.teams) {
         if (t.kind != TK_CLUB || t.dept < 0) { if (t.kind != TK_CLUB) t.district = -1; continue; }
+        // Keep an explicit, valid affiliation (e.g. Ornel's fourth team in Meuse).
+        auto declared=declaredDistricts.find(t.name);
+        if(declared!=declaredDistricts.end()) {t.district=declared->second;continue;}
         if (t.parent >= 0 && t.parent < (int)w.teams.size() && w.teams[t.parent].district >= 0) { t.district = w.teams[t.parent].district; continue; }
-        if (t.district < 0 || t.district >= NUM_DIST || districtRegion(t.district) != DEPTS[t.dept].region) t.district = districtFor(t.dept, t.town, t.name);
+        if (t.district < 0 || t.district >= NUM_DIST || districtRegion(t.district) != t.region) t.district = districtFor(t.dept, t.town, t.name);
     }
 }

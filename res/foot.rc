@@ -1,14 +1,16 @@
 IDI_ICON1 ICON "foot.ico"
 1 VERSIONINFO
-FILEVERSION 1,0,0,0
+FILEVERSION 0,3,0,11
+PRODUCTVERSION 0,3,0,11
 BEGIN
  BLOCK "StringFileInfo"
  BEGIN
   BLOCK "040C04B0"
   BEGIN
-   VALUE "FileDescription", "France Foot 2D"
-   VALUE "ProductName", "France Foot 2D"
-   VALUE "FileVersion", "1.0"
+   VALUE "FileDescription", "Super Soccer World"
+   VALUE "ProductName", "Super Soccer World"
+   VALUE "FileVersion", "00.03.00 build 11"
+   VALUE "ProductVersion", "00.03.00 build 11"
   END
  END
  BLOCK "VarFileInfo"

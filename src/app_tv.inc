@@ -5,6 +5,15 @@ static void launchMatch();
 static void finishMatchToResult();
 static std::vector<std::string> wrapText(const std::string& s, int maxw);
 
+// affluence et influence du stade (public, taille, remplissage) sur l'équipe qui reçoit
+static void crowdContext(MatchSetup& s) {
+    const Team& H = g_world.teams[s.home];
+    int cap = H.sta.init && H.sta.capacity() > 0 ? H.sta.capacity() : H.kind == TK_NATION ? 60000 : 5000;
+    if (s.neutral) cap = std::max(cap, 40000);
+    s.attendance = (int)(cap * s.crowdFill);
+    s.homeBoost = s.neutral || s.training ? 0.f : 0.008f + 0.03f * s.crowdFill * std::min(1.f, 0.35f + cap / 60000.f);
+}
+
 static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     s.tv = false; s.night = false; s.channel.clear(); s.kickoffTime = "20h45"; s.kickoffDate.clear(); s.weather = 0;
     const Team& H = g_world.teams[s.home];
@@ -18,6 +27,12 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
         s.proMedia = s.tv || H.rating >= 62;
         if (s.tv) { s.channel = "FRANCE SPORT"; g_tv = { "FRANCE SPORT", "Michel Larrieu", "Bernard Castagnet" }; }
         s.night = true;
+        static const int PM[6] = { 2, 1, 3, 3, 5, -1 };        // météo cohérente avec le terrain choisi
+        s.meteo = s.pitch >= 0 && s.pitch < 5 ? PM[s.pitch] : meteoForMonth(0, 0, (uint64_t)g_rng.range(1, 1 << 30));
+        if (s.pitch == 3 && g_rng.chance(0.4f)) s.meteo = 4;
+        s.weather = s.meteo == 3 || s.meteo == 4 ? 2 : s.meteo == 5 ? 3 : 0;
+        crowdContext(s);
+        supportersApplySetup(career?&g_career:nullptr,s,comp,match);
         return;
     }
     const Season& S = g_career.season;
@@ -33,16 +48,41 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     s.kickoffTime = fmt("%dh%02d", hour, minute);
     s.kickoffDate = kickoffText(comp, match, true);
     s.night = hour >= 20 || (winter && hour >= 17) || C.kind == 3 || C.kind == 7;
-    // météo selon la saison (réglage « Aléatoire »)
-    if (g_settings.pitch == 5) {
-        float x = r.f();
+    // carrière : la météo dépend de la date et du climat du pays ; le terrain dépend de la météo et de la qualité de la pelouse
+    {
         bool heated = lvl <= 1;       // pelouses chauffées en pro
-        if (month <= 1 || month >= 9) s.pitch = x < 0.35f ? 1 : x < 0.9f ? 0 : 2;
-        else if (month == 2 || month == 3 || month == 7 || month == 8) s.pitch = x < 0.45f ? 0 : x < 0.88f ? 2 : 3;
-        else s.pitch = x < 0.3f ? 0 : x < 0.6f ? 2 : x < 0.8f ? 3 : (heated ? 2 : 4);
-        if (H.sta.pitch == 2 && s.pitch == 3) s.pitch = 2;      // synthétique : pas de boue
+        int turf = s.neutral ? 90 : turfQualityFor(s.home, month);
+        int kind = s.neutral || !H.sta.init ? 0 : H.sta.pitch;   // 0 naturelle, 1 hybride, 2 synthétique
+        int climate = 0;
+        int mth = month;
+        const char* cc = H.nation >= 0 && H.nation < NUM_NATIONS ? NATIONS[H.nation].code : "FRA";
+        static const char* HOT[] = { "QAT", "KSA", "UAE", "EGY", "MAR", "ALG", "TUN", "MEX", "BRA", "NGA", "SEN", "CIV", "CMR", "GHA", "IRQ", "JOR", "IRN", "IND", "THA", "VIE", "IDN", "MAS", "COL", "VEN", "ECU", "PER", "CRC", "PAN", "HON", "JAM", "HAI", "CUW", "CPV", "COD", "ANG", "KUW", "BHR", "OMA", "LBY", "SUD", "MLI", "BFA", "GUI", "CAM", "TRI", "SLV", "GUA", "NCA", "DOM", "CUB", "PUR" };
+        static const char* SOUTH[] = { "ARG", "URU", "CHI", "RSA", "AUS", "NZL", "PAR", "BOL" };
+        static const char* NORTH[] = { "NOR", "SWE", "FIN", "RUS", "ISL", "EST", "LVA", "LTU", "CAN", "FRO", "UKR", "BLR", "KAZ" };
+        for (auto c : HOT) if (!strcmp(c, cc)) climate = 1;
+        for (auto c : SOUTH) if (!strcmp(c, cc)) climate = 2;
+        for (auto c : NORTH) if (!strcmp(c, cc)) climate = 3;
+        bool summerTourney = g_career.kind == CK_INTL || (g_career.kind == CK_CUSTOM && C.kind == 50);
+        if (summerTourney) mth = 10;                                          // phases finales : en juin-juillet
+        if (g_career.kind == CK_CUSTOM && C.kind == 50 && C.tag >= 0 && C.tag < NUM_LEGENDS) {
+            int y = LEGENDS[C.tag].year;
+            const char* hc = LEGENDS[C.tag].hostCode;
+            climate = 0;
+            for (auto c : HOT) if (!strcmp(c, hc)) climate = 1;
+            if (y == 1994 || y == 2026) climate = 1;                         // étés américains
+            if (y == 2022) { mth = 4; climate = 1; }                         // Qatar : novembre-décembre
+            if (y == 1978 || y == 2010) climate = 2;                         // Argentine, Afrique du Sud : hiver austral
+            if (y == 1950 || y == 2014) climate = 1;
+        }
+        s.meteo = meteoForMonth(mth, climate, (uint64_t)(comp * 7919 + match * 31 + g_career.year * 13));
+        meteoApply(s, heated || summerTourney, turf);
+        if (kind == 1 && s.pitch == 3 && r.chance(0.6f)) s.pitch = 2;   // hybride : draine mieux
+        if (kind == 2) { if (s.pitch == 3) s.pitch = 2; if (s.pitch == 4) s.pitch = 0; }   // synthétique : ni boue ni gel
+        s.turf = kind == 2 ? std::max(turf, 70) : turf;
+        // phases finales internationales et Coupe du monde des légendes : pelouses de grande qualité
+        if (summerTourney || s.neutral) s.turf = std::max(s.turf, 96);
+        if (summerTourney && s.pitch == 3) s.pitch = 2;
     }
-    s.weather = s.pitch == 2 ? 2 : s.pitch == 4 ? 3 : s.pitch == 3 ? 1 : 0;
     // télévision : L1, L2, Coupe de France dès le 9e tour (32es), Coupe de la Ligue, Europe, supercoupes
     int st = C.stageOfMatch(match);
     bool cdf32 = C.name == "Coupe de France" && st >= 2;
@@ -52,20 +92,24 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     else if (C.kind == 11) { s.tv = true; g_tv = { "FRANCE SPORT 3", "Laurent Maréchal", "Didier Roche" }; }
     else if (C.kind == 3 || C.kind == 8 || C.kind == 7) { s.tv = true; g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }; }
     else if (C.kind == 6) { s.tv = true; g_tv = { "CANAL FOOT+", "Stéphane Guy-Durand", "Patrice Vannier" }; }
+    else if (C.kind == 50 || C.name.find("Coupe du monde") != std::string::npos) { s.tv = true; g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }; }   // Coupe du monde : toujours télévisée
     else if (g_career.kind == CK_INTL) { s.tv = true; g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }; }
     if (s.tv) s.channel = g_tv.channel;
     // médias pro (caméras, photographes) : football professionnel et grandes coupes ; plateau TV en Ligue des champions et phases finales
     s.proMedia = s.tv || lvl <= 2 || C.kind == 3 || C.kind == 8 || C.kind == 7 || C.kind == 6 || C.kind == 11 || C.kind == 14 || cdf32 || g_career.kind == CK_INTL;
-    s.studio = C.kind == 3 || C.kind == 7 || (g_career.kind == CK_INTL && comp == g_career.finalComp);
+    s.studio = C.kind == 3 || C.kind == 7 || (g_career.kind == CK_INTL && comp == g_career.finalComp) || C.kind == 50;
+    if (C.kind == 50) s.proMedia = true;
     // photo officielle avant les matchs de coupe
     s.cupPhoto = C.format != FMT_LEAGUE && C.format != FMT_QUAL_GROUPS && C.kind != 12;
     // affluence prévue
     const StadiumInfo& SI = H.sta;
     if (SI.init && SI.capacity() > 0) fill = std::min(1.f, SI.fans * 0.85f / SI.capacity() + (C.format != FMT_LEAGUE ? 0.1f : 0) + (s.tv ? 0.05f : 0));
     s.crowdFill = std::max(0.15f, std::min(1.f, fill));
+    crowdContext(s);
+    supportersApplySetup(&g_career,s,comp,match);
 }
 
-static const char* WEATHER_NAMES[] = { "beau temps", "temps couvert", "pluie", "neige" };
+
 
 // ---------------- présentation télévisée
 static void screenTvIntro(float dt) {
@@ -78,7 +122,7 @@ static void screenTvIntro(float dt) {
     drawTextShadow(g_tv.channel, 14, 22, 20, WHITE);
     drawTextPx("EN DIRECT", VW - 90, 26, 10, ((int)(t * 2)) % 2 ? WHITE : Color{ 255, 200, 200, 255 });
     drawTextCentered(fitText(g_setup.title, VW - 40, 10), VW / 2, 52, 10, C_HI);
-    drawTextCentered("En direct du " + g_setup.stadium + "  -  " + (g_setup.kickoffDate.empty() ? "coup d'envoi " + g_setup.kickoffTime : g_setup.kickoffDate) + "  -  " + WEATHER_NAMES[g_setup.weather], VW / 2, 66, 10, C_TXT);
+    drawTextCentered("En direct du " + g_setup.stadium + "  -  " + (g_setup.kickoffDate.empty() ? "coup d'envoi " + g_setup.kickoffTime : g_setup.kickoffDate) + "  -  " + METEO_NAMES[g_setup.meteo], VW / 2, 66, 10, C_TXT);
     // équipes
     drawKitIcon(H.home, 40, 86, 4); drawKitIcon(A.home, VW - 72, 86, 4);
     drawTextCentered(fitText(H.name, 220, 20), 190, 90, 20, WHITE);

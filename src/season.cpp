@@ -1,5 +1,6 @@
 // Déroulement chronologique d'une saison (toutes compétitions confondues)
 #include "game.h"
+#include "crashlog.h"
 
 void onCompetitionDoneHook(int comp); // career.cpp
 void onStageDoneHook(int comp, int stage);
@@ -42,7 +43,14 @@ PendingMatch Season::advance(bool simulateUser) {
             if (s >= 0 && t < best) { best = t; bc = c; bs = s; }
         }
         if (bc < 0) { finished = true; return pm; }
+        if(this==&g_career.season && g_career.ballonEnabled()) {
+            if(!simulateUser && now<ballonDate(year) && best>=ballonDate(year)) {
+                bool exists=false;for(const auto& e:g_career.ballonEditions)if(e.year==year)exists=true;
+                if(!exists){now=ballonDate(year);if(g_career.ballonTick())return pm;}
+            }
+        }
         now = best;
+        if(this==&g_career.season)g_career.ballonTick();
         Competition& C = comps[bc];
         Stage& ST = C.stages[bs];
         Round& R = ST.rounds[ST.nextR];
@@ -56,6 +64,7 @@ PendingMatch Season::advance(bool simulateUser) {
             if (m.played) continue;
             if (!simulateUser && (isControlled(m.home) || isControlled(m.away))) { if (userMatch < 0) userMatch = mi; continue; }
             if (userSlot >= 0 && kickoffMinutes(bc, mi) >= userSlot) continue;
+            if(this==&g_career.season)g_career.supportersPrepareMatch(bc,mi);
             simulateMatch(m, &C);
             recordResult(bc, mi);
             genMatchEvents(C, mi);
@@ -77,6 +86,7 @@ void Season::finishRoundOthers(int c, int mi) {
         for (int x : R.m) {
             MatchRes& m = C.matches[x];
             if (m.played || x == mi || isControlled(m.home) || isControlled(m.away)) continue;
+            if(this==&g_career.season)g_career.supportersPrepareMatch(c,x);
             simulateMatch(m, &C);
             recordResult(c, x);
             genMatchEvents(C, x);
@@ -84,8 +94,9 @@ void Season::finishRoundOthers(int c, int mi) {
     }
 }
 
-void Season::recordResult(int c, int mi) {
+void Season::recordResult(int c, int mi, bool physical) {
     MatchRes& m = comps[c].matches[mi];
+    if(this==&g_career.season){g_career.museumMatch(c,mi);g_career.supportersOnMatchEnd(c,mi);g_career.personalityMatchEnd(c,mi);if(g_career.sportingMode())g_career.sportingMatch(c,mi);}
     // journal : résultats de la réserve et des équipes de jeunes du club du joueur
     if (g_career.kind == CK_CLUB && m.played && m.home >= 0 && m.away >= 0) {
         int u = g_career.userTeam;
@@ -114,12 +125,14 @@ void Season::recordResult(int c, int mi) {
         int res = gf > ga ? 1 : gf < ga ? -1 : 0;
         if (res == 0 && m.ph >= 0) res = ((side ? m.pa : m.ph) > (side ? m.ph : m.pa)) ? 1 : -1;
         applyMatchLoad(t, res);
+        if(careerRules()&&!physical){auto lu=g_world.pickLineup(t,T.formation,RULESET_CAREER);int minutes=comps[c].kind==150?40:m.aet?120:90;for(int s=0;s<11&&s<(int)lu.size();s++)if(lu[s]>=0)learnPosition(T.squad[lu[s]],teamSlotPosition(T,T.formation,s),minutes);}
     }
 }
 
 // ------------------------------------------------------------------ condition physique et moral
+static bool olympicSchedule() { return g_career.kind == CK_INTL && (g_career.intlType == IT_OLYMPICS || g_career.intlType == IT_OLY_W); }
 static float recoveryRate(int team) {
-    float r = 12.f;   // points par semaine
+    float r = olympicSchedule() ? 9.f : 12.f;   // points par semaine (JO : chaleur, voyages, un match tous les 3 jours)
     if (g_career.kind == CK_CLUB && team == g_career.userTeam) {
         r += 1.5f * g_career.staffLevel(SR_PHYSIO_PREP);
         r += g_career.mgr.trainInt == 0 ? 4.f : g_career.mgr.trainInt == 2 ? -4.f : 0.f;
@@ -143,13 +156,14 @@ void applyMatchLoad(int team, int result) {
     auto lu = g_world.pickLineup(team, T.formation);
     std::vector<char> started(T.squad.size(), 0);
     for (int k = 0; k < 11 && k < (int)lu.size(); k++) if (lu[k] >= 0) started[lu[k]] = 1;
-    bool user = g_career.kind == CK_CLUB && team == g_career.userTeam;
+    bool user = careerRules() && g_career.kind == CK_CLUB && team == g_career.userTeam;
     float extra = user ? (g_career.mgr.trainInt == 2 ? 2.f : g_career.mgr.trainInt == 0 ? -2.f : 0.f) : 0.f;
     for (int i = 0; i < (int)T.squad.size(); i++) {
         Player& p = T.squad[i];
         int mo = p.morale;
         if (started[i]) {
             float load = 11.f + (100 - p.stamina) * 0.1f + (float)(g_rng.next() % 5) + extra;
+            if (olympicSchedule()) load *= 1.3f;            // fatigue renforcée aux JO
             if (p.pos == POS_GK) load *= 0.45f;
             p.cond = (uint8_t)std::max(25, (int)(p.cond - load));
             mo += result > 0 ? 6 : result < 0 ? -5 : 1;
@@ -162,7 +176,7 @@ void applyMatchLoad(int team, int result) {
     }
 }
 
-float formFactor(int team) {
+float formFactor(int team, RuleProfile rules) {
     const Team& T = g_world.teams[team];
     if (!T.squadGen || T.squad.empty()) return 0;
     auto lu = g_world.pickLineup(team, T.formation);
@@ -170,7 +184,9 @@ float formFactor(int team) {
     for (int k = 0; k < 11 && k < (int)lu.size(); k++) if (lu[k] >= 0) { c += playerCond(team, T.squad[lu[k]]); m += T.squad[lu[k]].morale; n++; }
     if (!n) return 0;
     c /= n; m /= n;
-    return (c - 88.f) * 0.06f + (m - 60.f) * 0.03f;
+    float tactical=0;
+    if(rules==RULESET_CAREER){auto detail=g_world.pickLineup(team,T.formation,RULESET_CAREER);for(int s=0;s<11&&s<(int)detail.size();s++)if(detail[s]>=0){int dp=teamSlotPosition(T,T.formation,s);auto tactic=T.tactical.customized?T.tactical.slot[s]:defaultSlotTactic(dp,T.seed%2,s);const auto& p=T.squad[detail[s]];tactical+=(positionFamiliarity(p,dp)-75)*.025f+(roleAptitude(p,dp,tactic.role)-p.overall())*.025f;}tactical/=11;}
+    return (c - 88.f) * 0.06f + (rules==RULESET_CAREER?(m - 60.f) * 0.03f+tactical:0.f);
 }
 
 void Season::checkRound(int c) {

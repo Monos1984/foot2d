@@ -1,0 +1,14 @@
+PASS screen player-navigation
+PASS screen player-postes
+PASS screen player-personality
+PASS screen player-history
+PASS screen player-scout
+PASS screen player-simple
+PASS screen result-summary
+PASS screen result-attack
+PASS screen result-discipline
+PASS screen pause-stats
+PASS screen tv-entry
+PASS screen tv-match
+PASS screen match-career
+PASS screen match-simple

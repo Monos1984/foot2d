@@ -65,6 +65,8 @@ static void screenCallup() {
         const PoolPlayer& pp = g_poolCache[pool[sa]];
         if (isCalled(pp.p->id)) { K.coachCalls.erase(std::remove_if(K.coachCalls.begin(), K.coachCalls.end(), [&](const CoachCall& c) { return c.pid == pp.p->id; }), K.coachCalls.end()); }
         else if ((int)K.coachCalls.size() >= K.coachSquadMax()) toast(fmt("%d joueurs maximum : retirez d'abord un joueur", K.coachSquadMax()));
+        else if (K.coachTeamCat() == 4 && pp.p->age > 23 && [&]() { int o = 0; for (auto& c : K.coachCalls) { const Player* q = coachFind(c); if (q && q->age > 23) o++; } return o >= 3; }())
+            toast("Tournoi olympique : 3 joueurs de plus de 23 ans au maximum");
         else { CoachCall c; c.pid = pp.p->id; c.club = pp.club; K.coachCalls.push_back(c); }
     }
     if (sb >= 0 && sb < (int)selIdx.size()) K.coachCalls.erase(K.coachCalls.begin() + selIdx[sb]);

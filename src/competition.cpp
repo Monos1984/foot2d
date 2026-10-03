@@ -1,12 +1,13 @@
 // Moteur de compétitions : championnats (règles de départage), coupes, phases de groupes,
 // Ligue des champions / Coupe UEFA format 2000-2001, barrages
 #include "game.h"
+#include "crashlog.h"
 #include <functional>
 #include <cstring>
 #include <map>
 #include <set>
 
-float teamStrength(int team) { return g_world.teams[team].rating + teamBonus(team) + formFactor(team); }
+float teamStrength(int team, RuleProfile rules) { return g_world.teams[team].rating + teamBonus(team) + formFactor(team,rules); }
 
 const char* tieBreakText(int tb) {
     switch (tb) {
@@ -57,13 +58,21 @@ static bool firstLegScore(const Competition* c, const MatchRes& m, int& aggHome,
 }
 
 void simulateMatch(MatchRes& m, const Competition* c) {
+    if(g_career.sportingMode()){g_career.sportingPrepare(m.home);g_career.sportingPrepare(m.away);}
     Rng& r = g_rng;
-    double rh = teamStrength(m.home), ra = teamStrength(m.away);
-    double d = rh - ra + (m.neutral ? 0 : 4.0);
+    RuleProfile rules=c&&careerRules()?RULESET_CAREER:RULESET_SIMPLE;
+    double rh = teamStrength(m.home,rules), ra = teamStrength(m.away,rules);
+    if(rules==RULESET_CAREER){rh*=personalityTeamMultiplier(g_career,m.home,m,c);ra*=personalityTeamMultiplier(g_career,m.away,m,c);}
+    double d = rh - ra + (m.neutral ? 0 : 4.0) + lifeBribeDelta(m);
     // écart de niveau « tassé » : un gros écart donne une large victoire, rarement un score fleuve (les favoris gèrent)
     double dd = 30.0 * std::tanh(d / 30.0);
     double lh = 1.38 * std::exp(dd / 22.0), la = 1.13 * std::exp(-dd / 22.0);
+    if(rules==RULESET_CAREER){
+     auto attacking=[&](int team){const auto& T=g_world.teams[team];float risk=0;for(int s=1;s<11;s++){int dp=teamSlotPosition(T,T.formation,s);auto tac=T.tactical.customized?T.tactical.slot[s]:defaultSlotTactic(dp,T.seed%2,s);auto e=roleEffects(dp,tac);risk+=e.advance+(.15f*(e.shot-1))+.05f*(e.risk-1);}return std::clamp(risk/10.f,-.12f,.18f);};
+     float home=attacking(m.home),away=attacking(m.away);lh*=1+home+.45f*away;la*=1+away+.45f*home;
+    }
     lh = std::max(0.12, std::min(lh, 4.2)); la = std::max(0.12, std::min(la, 4.2));
+    if(c && c->kind==150){lh*=40.0/90;la*=40.0/90;}
     m.hg = (int16_t)poisson(r, lh);
     m.ag = (int16_t)poisson(r, la);
     if (m.hg > 6) m.hg = (int16_t)(6 + (m.hg - 6) / 3);
@@ -103,14 +112,16 @@ static std::vector<std::vector<std::pair<int, int>>> roundRobin(std::vector<int>
         }
         rounds.push_back(ms);
     }
-    if (legs == 2) {
-        // matchs retour : ordre décalé d'une journée pour éviter trois matchs de suite au même endroit
+    if (legs >= 2) {
+        // matchs retour : ordre décalé d'une journée pour éviter trois matchs de suite au même endroit ;
+        // 3 ou 4 confrontations (éditeur de compétitions) : cycles supplémentaires, domicile alterné
         int R = (int)rounds.size();
-        for (int i = 0; i < R; i++) {
-            std::vector<std::pair<int, int>> ms;
-            for (auto& p : rounds[(i + 1) % R]) ms.push_back({ p.second, p.first });
-            rounds.push_back(ms);
-        }
+        for (int cyc = 1; cyc < std::min(4, legs); cyc++)
+            for (int i = 0; i < R; i++) {
+                std::vector<std::pair<int, int>> ms;
+                for (auto& p : rounds[(i + cyc) % R]) ms.push_back(cyc % 2 ? std::make_pair(p.second, p.first) : p);
+                rounds.push_back(ms);
+            }
     }
     return rounds;
 }
@@ -152,11 +163,12 @@ void Competition::addGroupStage(const std::vector<std::vector<int>>& groups, int
         Round R;
         R.time = times.empty() ? rd : times[std::min(rd, (int)times.size() - 1)] + (rd >= (int)times.size() ? rd - (int)times.size() + 1 : 0);
         R.name = nm + fmt(" - J%d", rd + 1);
+        if(kind==50 && tag>=0 && tag<22) R.time=legendGroupTime(tag,(int)stages.size(),rd,maxR);
         for (int g = 0; g < (int)groups.size(); g++) {
             if (rd >= (int)sched[g].size()) continue;
             for (auto& p : sched[g][rd]) {
                 MatchRes m; m.home = p.first; m.away = p.second; m.group = (int16_t)g;
-                if (format == FMT_TOURNAMENT && kind != 21) {
+                if (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && !isContinentalKind(kind)) {
                     m.neutral = true;
                     if (host >= 0 && (m.away == host)) std::swap(m.home, m.away);
                     if (host >= 0 && m.home == host) m.neutral = false;
@@ -216,6 +228,7 @@ void Competition::setupSwiss(const std::vector<int>& teams, int nrounds, const s
 }
 
 Stage& Competition::addKOStage(const std::vector<std::pair<int, int>>& pairs, int lg, double time, const std::string& nm, bool neutralFinal) {
+    if(kind==50 && tag>=0 && tag<22) time=legendRoundTime(tag,(int)pairs.size()*2,nm);
     Stage st; st.type = ST_KO; st.legs = lg; st.name = nm;
     Round r1; r1.time = time; r1.name = lg == 2 ? nm + " (aller)" : nm;
     double gap = (format == FMT_UCL2000 || format == FMT_UEFA2000) ? 2.0 : format == FMT_NEWEURO ? 1.0 : format == FMT_INTERTOTO ? 1.0 : 0.5;   // coupes d'Europe : retour 2 semaines plus tard
@@ -224,9 +237,19 @@ Stage& Competition::addKOStage(const std::vector<std::pair<int, int>>& pairs, in
         Tie t; t.a = p.first; t.b = p.second;
         if (t.b < 0) { t.winner = t.a; st.ties.push_back(t); continue; }
         MatchRes m; m.home = t.a; m.away = t.b; m.tie = (int16_t)st.ties.size();
-        m.neutral = neutralFinal || (format == FMT_TOURNAMENT && kind != 21);
+        if(marneCupPart(*this)>=0 || kind==150) m.noET=1;
+        m.neutral = neutralFinal || (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && !isContinentalKind(kind));
         if (format == FMT_SINGLE || (penaltiesOnly() && (!neutralFinal || kind == 26 || kind == 27))) { m.noET = 1; }
-        if (kind == 2 && nm != "Finale" && g_career.kind == CK_CLUB && !g_career.opts.cdfET) m.noET = 1;   // option : Coupe de France sans prolongation (sauf la finale)   // supercoupes de région et Méga Coupe : TAB directs, finale comprise
+        if (kind == 72 && nm != "Finale") {
+            if (EditorCupDef* d = editorCupById(tag)) if (!d->et) m.noET = 1;
+        }
+        if (kind == 2 && nm != "Finale" && g_career.kind == CK_CLUB) {     // prolongation : option Coupe de France / règle de la coupe nationale (éditeur)
+            bool et = g_career.opts.cdfET;
+            int self = (int)(this - g_career.season.comps.data());
+            if (self >= 0 && self < (int)g_career.season.comps.size() && std::find(g_career.nationalCups.begin(), g_career.nationalCups.end(), self) != g_career.nationalCups.end()
+                && tag >= 0 && tag < (int)g_career.pyramids.size()) et = cupRuleFor(g_career.pyramids[tag].country).et;
+            if (!et) m.noET = 1;
+        }   // option : Coupe de France sans prolongation (sauf la finale)   // supercoupes de région et Méga Coupe : TAB directs, finale comprise
         if (format == FMT_TOURNAMENT && host >= 0 && (t.a == host || t.b == host)) {
             m.neutral = false; if (t.b == host) { m.home = t.b; m.away = t.a; }
         }
@@ -264,9 +287,10 @@ std::vector<Standing> Competition::table(int s, int g) const {
         ms.push_back(&m);
         Standing& H = v[ih->second]; Standing& A = v[ia->second];
         H.p++; A.p++; H.gf += m.hg; H.ga += m.ag; A.gf += m.ag; A.ga += m.hg;
-        if (m.hg > m.ag) { H.w++; A.l++; H.pts += ptsWin; }
-        else if (m.hg < m.ag) { A.w++; H.l++; A.pts += ptsWin; A.aw++; }
-        else { H.d++; A.d++; H.pts++; A.pts++; }
+        if (m.hg > m.ag) { H.w++; A.l++; H.pts += ptsWin; A.pts += ptsLoss; }
+        else if (m.hg < m.ag) { A.w++; H.l++; A.pts += ptsWin; H.pts += ptsLoss; A.aw++; }
+        else if (kind == 42 && m.ph >= 0 && m.pa >= 0) { H.d++; A.d++; if (m.ph > m.pa) { H.pts += 2; A.pts++; } else { A.pts += 2; H.pts++; } }   // Coupe LFFP : tirs au but directs
+        else { H.d++; A.d++; H.pts += ptsDraw; A.pts += ptsDraw; }
     }
     // mini-classement entre équipes à égalité
     auto h2h = [&](const std::vector<int>& teams, std::map<int, std::pair<int, int>>& out) {
@@ -276,7 +300,10 @@ std::vector<Standing> Competition::table(int s, int g) const {
             if (!T.count(m->home) || !T.count(m->away)) continue;
             auto& H = out[m->home]; auto& A = out[m->away];
             H.second += m->hg - m->ag; A.second += m->ag - m->hg;
-            if (m->hg > m->ag) H.first += 3; else if (m->hg < m->ag) A.first += 3; else { H.first++; A.first++; }
+            if (m->hg > m->ag) { H.first += ptsWin; A.first += ptsLoss; }
+            else if (m->hg < m->ag) { A.first += ptsWin; H.first += ptsLoss; }
+            else if (kind == 42 && m->ph >= 0 && m->pa >= 0) { if (m->ph > m->pa) { H.first += 2; A.first += 1; } else { A.first += 2; H.first += 1; } }
+            else { H.first += ptsDraw; A.first += ptsDraw; }
         }
     };
     std::stable_sort(v.begin(), v.end(), [](const Standing& a, const Standing& b) { return a.pts > b.pts; });
@@ -435,6 +462,7 @@ float clubSeed(int team) {
 }
 
 void Competition::koRound(const std::vector<int>& teams, int lg, double time, const std::string& nm, bool fin) {
+    crashMark("tirage au sort : %s - %s (%d équipes)", name.c_str(), nm.c_str(), (int)teams.size());
     std::vector<int> s = teams;
     // tirage intégral (sans tête de série, sans restriction de pays) : C1 dès les quarts, C3 dès les 8es
     bool freeDraw = (format == FMT_UCL2000 || format == FMT_UEFA2000 || format == FMT_INTERTOTO) &&
@@ -573,6 +601,7 @@ static std::vector<std::vector<int>> drawGroupsUCL(std::vector<int> teams, int n
 }
 
 void Competition::onStageFinished() {
+    crashMark("fin de tour : %s - étape %d / %d", name.c_str(), cur, (int)stages.size());
     Stage& st = stages[cur];
     st.finished = true;
     std::vector<int> winners, losers;
@@ -595,7 +624,12 @@ void Competition::onStageFinished() {
     }
     case FMT_SINGLE: finish(winners.empty() ? -1 : winners[0]); result = winners; return;
     case FMT_CUP: {
-        int k = cur + 1;
+        if(marneStageFinished(*this,winners)) return;
+        if(awaiting>=0 && st.name=="Match d'ajustement du tableau"){
+            int round=awaiting;awaiting=-1;std::vector<int> pool=winners;
+            pool.insert(pool.end(),carry.begin(),carry.end());carry.clear();cupRound(round,pool);return;
+        }
+        int k = qualPlayoff>0 ? qualPlayoff : cur + 1;
         bool last = !koTargets.empty() && k >= (int)koTargets.size();
         if ((winners.size() == 1 && (k >= (int)entrants.size() || entrants[k].empty())) || last) {
             result = winners;
@@ -608,6 +642,7 @@ void Competition::onStageFinished() {
         return;
     }
     case FMT_EUROPE: {
+        if (uwclStageFinished(*this, winners)) return;
         if (st.type == ST_SWISS) {
             auto tb2 = swissTable(cur);
             result.clear(); for (auto& s : tb2) result.push_back(s.team);
@@ -699,6 +734,7 @@ void Competition::onStageFinished() {
         return;
     }
     case FMT_TOURNAMENT: {
+        if (kind == 50 && legendStageFinished(*this, winners)) return;
         if (st.type == ST_LEAGUE && officialBracket(*this, cur, pairsTmp)) {
             cur = (int)stages.size();
             int n = (int)pairsTmp.size() * 2;
@@ -791,6 +827,7 @@ int Competition::stageOfMatch(int mi) const {
 }
 
 void Competition::cupRound(int k, const std::vector<int>& pool) {
+    crashMark("tirage au sort (coupe) : %s - tour %d (%d équipes)", name.c_str(), k + 1, (int)pool.size());
     int n = (int)pool.size();
     int target = (n + 1) / 2;
     if (k < (int)koTargets.size() && koTargets[k] > 0) target = std::min(koTargets[k], n);
@@ -798,8 +835,19 @@ void Competition::cupRound(int k, const std::vector<int>& pool) {
     if (target >= n) target = std::max(1, n / 2);
     int nm = n - target;
     std::vector<int> sorted = pool;
-    std::stable_sort(sorted.begin(), sorted.end(), [](int a, int b) { return g_world.teams[a].rating > g_world.teams[b].rating; });
+    std::stable_sort(sorted.begin(), sorted.end(), [](int a, int b) { if(clubFirstSeason(a)!=clubFirstSeason(b))return !clubFirstSeason(a);return g_world.teams[a].rating > g_world.teams[b].rating; });
     int nbyes = n - 2 * nm;
+    int eligible=0;for(int t:pool)eligible+=!clubFirstSeason(t);
+    while(nbyes>eligible && nm<n/2){nm++;nbyes-=2;}
+    // An odd field consisting entirely of debut clubs cannot award a bye.
+    // A played adjustment tie reduces it to an even field. Its logical round
+    // is retained separately from the extra physical stage (also across saves).
+    qualPlayoff=k+1;
+    if(nbyes>eligible && n>2){
+        g_rng.shuffle(sorted);carry.assign(sorted.begin()+2,sorted.end());awaiting=k;
+        cur=(int)stages.size();double time=k<(int)koTimes.size()?koTimes[k]:t0;
+        addKOStage({{sorted[0],sorted[1]}},1,time-1.0/7,"Match d'ajustement du tableau",false);return;
+    }
     std::vector<int> byes, play;
     // Coupe de la Ligue : tableau fixe à partir des 8es (vainqueur du match 1 contre vainqueur du match 2...)
     bool fixedBracket = kind == 11 && k > 3 && nbyes <= 0;
@@ -883,7 +931,7 @@ void genMatchEvents(Competition& C, int mi) {
         }
         for (int g = 0; g < goals[side]; g++) {
             MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side];
-            e.minute = (uint8_t)(m.aet && r.chance(0.25f) ? r.range(91, 120) : r.range(1, 90));
+            e.minute = (uint8_t)(m.aet && r.chance(0.25f) ? r.range(91, 120) : r.range(1, C.kind==150?40:90));
             if (r.chance(0.035f) && !O.squad.empty()) {           // contre son camp
                 int k = pickPlayer(O, r, WA, false, -1);
                 if (k < 0) continue;
@@ -913,7 +961,7 @@ void genMatchEvents(Competition& C, int mi) {
             static const float WC[4] = { 0.1f, 2.2f, 1.6f, 0.9f };
             int i = pickPlayer(T, r, WC, false, -1);
             if (i < 0) continue;
-            MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side]; e.type = 2; e.pid = T.squad[i].id; e.minute = (uint8_t)r.range(5, 90);
+            MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side]; e.type = 2; e.pid = T.squad[i].id; e.minute = (uint8_t)r.range(5, C.kind==150?40:90);
             if (std::find(booked.begin(), booked.end(), i) != booked.end()) {
                 // deuxième avertissement : expulsion
                 e.type = 3; C.events.push_back(e);
@@ -930,7 +978,7 @@ void genMatchEvents(Competition& C, int mi) {
             static const float WC[4] = { 0.1f, 2.4f, 1.4f, 0.8f };
             int i = pickPlayer(T, r, WC, false, -1);
             if (i >= 0) {
-                MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side]; e.type = 3; e.pid = T.squad[i].id; e.minute = (uint8_t)r.range(20, 90);
+                MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side]; e.type = 3; e.pid = T.squad[i].id; e.minute = (uint8_t)r.range(20, C.kind==150?40:90);
                 C.events.push_back(e);
                 T.squad[i].suspended = (int8_t)r.range(1, 3); T.squad[i].sRed++;
             }
@@ -939,11 +987,12 @@ void genMatchEvents(Competition& C, int mi) {
             static const float WI[4] = { 0.2f, 1, 1, 1 };
             int i = pickPlayer(T, r, WI, false, -1);
             if (i >= 0) {
-                MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side]; e.type = 4; e.pid = T.squad[i].id; e.minute = (uint8_t)r.range(1, 90);
+                MEv e; e.match = mi; e.side = (uint8_t)side; e.team = ids[side]; e.type = 4; e.pid = T.squad[i].id; e.minute = (uint8_t)r.range(1, C.kind==150?40:90);
                 C.events.push_back(e);
                 T.squad[i].injured = (int8_t)std::max(1, r.range(1, 5) - injuryReduction(ids[side]));
             }
         }
     }
     std::stable_sort(C.events.begin() + start, C.events.end(), [](const MEv& a, const MEv& b) { return a.minute < b.minute; });
+    for(int ci=0;ci<(int)g_career.season.comps.size();ci++)if(&g_career.season.comps[ci]==&C){g_career.museumEvents(ci,mi);break;}
 }

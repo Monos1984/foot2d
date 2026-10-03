@@ -61,6 +61,14 @@ int kickoffMinutes(int comp, int mi) {
     RoundPos rp = findRound(C, mi);
     uint32_t h = mix((uint32_t)(comp * 7919 + mi * 31 + S.year));
     bool finalM = rp.stage >= 0 && rp.stage == (int)C.stages.size() - 1 && C.stages[rp.stage].type == ST_KO && rp.n == 1;
+    if(marneCupPart(C)>=0 || (C.kind==50 && C.tag>=0 && C.tag<22)) {
+        double time=rp.stage>=0?C.stages[rp.stage].rounds[rp.round].time:0;
+        int day=(int)std::lround((time-std::floor(time))*7)%7;
+        bool final=rp.stage>=0 && C.stages[rp.stage].name=="Finale";
+        int part=marneCupPart(C);
+        if(part>=0 && !final && rp.stage>=(part?2:3) && rp.stage<=(part?4:5))return T(day,14,30);
+        return T(day,part>=0 && final?(part==2?13:part==1?16:19):15,0);
+    }
     switch (C.kind) {
     case 3: {       // Ligue des champions : mardi / mercredi 20h45, les matchs d'un même groupe en même temps
         if (finalM) return T(2, 20, 45);

@@ -49,6 +49,8 @@ std::string sanitize(const char* s) {
         p += n;
         if (cp == '_') { o += ' '; continue; }
         if (cp <= 0xFF) { putUtf8(o, cp); continue; }
+        if (cp == 0x153) { o += "oe"; continue; }
+        if (cp == 0x152) { o += "OE"; continue; }
         char rep = '?';
         for (auto& m : MAP) if (m.cp == cp) { rep = m.c; break; }
         o += rep;
@@ -211,6 +213,9 @@ static void addSmallLeagueClubs(World& w) {
         auto& lst = w.countryClubs[L.code];
         int nat = w.nationIndex(L.code);
         if (nat < 0 || lst.size() >= 7) continue;
+        bool real = false;      // championnat réel disponible (section 10) : pas de clubs génériques
+        for (int l = 0; l < NUM_EXT_LEAGUES; l++) if (!strcmp(EXT_LEAGUES[l].country, L.code) && EXT_LEAGUES[l].tier == 1) real = true;
+        if (real) continue;
         float lo = 60; for (int t : lst) lo = std::min(lo, w.teams[t].rating);
         if (lst.empty()) lo = 45;
         std::set<std::string> have; for (int t : lst) have.insert(w.teams[t].name);
@@ -291,6 +296,33 @@ void World::build() {
         worldPool.push_back(id);
         countryClubs[d.dept].push_back(id);
     }
+    // championnats complémentaires (section 10) : un club déjà créé (clubs européens / sud-américains) est repris
+    {
+        std::map<std::string, int> byName;
+        for (int i = firstClub; i < (int)teams.size(); i++) byName.emplace(teams[i].name, i);
+        extLeagueClubs.assign(NUM_EXT_LEAGUES, {});
+        for (int l = 0; l < NUM_EXT_LEAGUES; l++) {
+            const ExtLeagueDef& L = EXT_LEAGUES[l];
+            int nat = nationIndex(L.country);
+            for (auto& cs : splitOn(L.clubs, ';')) {
+                auto f = splitOn(cs.c_str(), '|');
+                if (f.size() < 5 || f[0].empty()) continue;
+                std::string nm = sanitize(f[0].c_str());
+                auto it = byName.find(nm);
+                if (it != byName.end()) { extLeagueClubs[l].push_back(it->second); continue; }
+                ClubDef d{};
+                d.name = f[0].c_str(); d.shortName = f[1].c_str(); d.rating = atoi(f[2].c_str());
+                unsigned c1 = (unsigned)strtoul(f[3].c_str(), nullptr, 16), c2 = (unsigned)strtoul(f[4].c_str(), nullptr, 16);
+                d.shirt = c1; d.shirt2 = c2; d.shorts = c1 == 0xFFFFFF ? c2 : (hashStr(nm) % 3 == 0 ? c1 : c2 == 0xFFFFFF ? 0xFFFFFF : c1);
+                d.pattern = (int)(hashStr(nm + "p") % 5 == 0 ? KP_VSTRIPES : KP_PLAIN);
+                d.dept = ""; d.stadium = f.size() > 5 ? f[5].c_str() : ""; d.dbKey = "";
+                int id = makeClubFromDef(*this, d, nat, nat >= 0 ? NATIONS[nat].culture : CU_EN);
+                if (f.size() <= 5) teams[id].stadium = "Stade " + nm;
+                byName.emplace(nm, id);
+                extLeagueClubs[l].push_back(id);
+            }
+        }
+    }
     // représentants d'outre-mer en Coupe de France (hors championnats simulés)
     {
         struct OM { const char* name; const char* sh; const char* st; unsigned c1, c2; float r; };
@@ -299,6 +331,9 @@ void World::build() {
                                    { "AS Saint-Pierraise", "ASSP", "Stade John-Girardin", 0x00843D, 0xFFFFFF, 26 } };
         int fra = nationIndex("FRA");
         for (int i = 0; i < 3; i++) {
+            int ex = -1;        // déjà créé par un championnat réel (Nouvelle-Calédonie, Tahiti)
+            for (int k = firstClub; k < (int)teams.size(); k++) if (teams[k].name == sanitize(oms[i].name)) ex = k;
+            if (ex >= 0) { omReps[i] = ex; continue; }
             Team t; t.name = sanitize(oms[i].name); t.shortName = oms[i].sh; t.stadium = sanitize(oms[i].st); t.kind = TK_CLUB; t.nation = fra;
             t.rating = oms[i].r; t.culture = CU_FR; t.seed = hashStr(t.name) ^ 0x5151;
             makeKits(t, oms[i].c1, oms[i].c2, oms[i].c2, 0);
@@ -311,6 +346,7 @@ void World::build() {
     addSmallLeagueClubs(*this);
     baseCount = (int)teams.size();
     loadCustomClubs();
+    loadCompEdits();
     assignDistricts(*this);
     applyPresidents();
 }
@@ -477,7 +513,30 @@ void World::generateSquad(Team& t) {
         generateFake(t, 20, fake);
         for (auto& p : fake) { if (!hasGk && p.pos == POS_GK) { t.squad.push_back(p); hasGk = true; continue; } if ((int)t.squad.size() < 20) t.squad.push_back(p); }
     }
-    if (t.youth) {   // équipe U19 : joueurs de 16 à 19 ans (U17 : 15 et 16 ans), fort potentiel ; sélections Espoirs (U21) et olympique (U23)
+    if (t.youth == 6) {   // équipe féminine : joueuses de 18 à 35 ans, prénoms féminins
+        int cu = t.culture >= 0 && t.culture < NUM_CULTURES ? t.culture : CU_FR;
+        std::vector<std::string> fn; { std::string s = FEMALE_FIRST[cu], w; for (char c : s) { if (c == ' ') { if (!w.empty()) fn.push_back(w); w.clear(); } else w += c; } if (!w.empty()) fn.push_back(w); }
+        for (auto& p : t.squad) {
+            p.gender = 1;
+            p.age = (uint8_t)r.range(18, 34);
+            if (t.kind == TK_NATION) p.nation = (int16_t)t.nation;
+            else if (t.nation >= 0 && r.chance(0.8f)) p.nation = (int16_t)t.nation;
+            {   // niveau des joueuses générées : autour du niveau de l'équipe (les joueuses réelles restent les meilleures)
+                int cap = (int)t.rating - 3 + r.range(-4, 3);
+                int ov = p.overall();
+                if (ov > cap && ov > 0) {
+                    float f = (float)cap / ov;
+                    auto sc = [&](uint8_t& v) { v = (uint8_t)std::max(10, (int)(v * f)); };
+                    sc(p.speed); sc(p.shoot); sc(p.pass); sc(p.tackle); sc(p.stamina); if (p.pos == POS_GK) sc(p.keep);
+                }
+            }
+            size_t sp = p.name.find(' ');
+            std::string last = sp == std::string::npos ? p.name : p.name.substr(sp + 1);
+            if (!fn.empty()) p.name = fn[r.range(0, (int)fn.size() - 1)] + " " + last;
+            p.pot = (uint8_t)std::min(99, p.overall() + std::max(0, 27 - p.age) + r.range(0, 4));
+            p.contract = 2;
+        }
+    } else if (t.youth) {   // équipe U19 : joueurs de 16 à 19 ans (U17 : 15 et 16 ans), fort potentiel ; sélections Espoirs (U21) et olympique (U23)
         int k = 0;
         for (auto& p : t.squad) {
             p.age = (uint8_t)(t.youth == 5 ? (k < 3 ? r.range(24, 31) : r.range(20, 23)) : t.youth == 4 ? r.range(18, 21) : t.youth == 3 ? r.range(13, 14) : t.youth == 2 ? r.range(15, 16) : r.range(16, 19));
@@ -487,6 +546,7 @@ void World::generateSquad(Team& t) {
             p.contract = 2;
         }
     }
+    injectWomenStars(t, r);
     realNumbersFix(t.squad);
     for (auto& p : t.squad) p.id = g_world.nextPid++;
     applyPlayerEdits(t);
@@ -506,10 +566,17 @@ Player World::makeYouth(int team, int pos, float level) {
     for (auto& q : t.squad) if (q.num < 100) used[q.num] = true;
     p.num = 1; while (p.num < 99 && used[p.num]) p.num++;
     p.id = nextPid++;
-    if (t.kind == TK_CLUB && t.nation >= 0 && !t.youth) p.nation = (int16_t)t.nation;   // formé au club : nationalité du pays
+    if (t.kind == TK_CLUB && t.nation >= 0 && (!t.youth || t.youth == 6)) p.nation = (int16_t)t.nation;   // formé au club : nationalité du pays
+    if (t.youth == 6) {   // section féminine : une jeune joueuse (prénom féminin)
+        p.gender = 1;
+        int cu = t.culture >= 0 && t.culture < NUM_CULTURES ? t.culture : CU_FR;
+        std::vector<std::string> fn; { std::string s = FEMALE_FIRST[cu], w; for (char c : s) { if (c == ' ') { if (!w.empty()) fn.push_back(w); w.clear(); } else w += c; } if (!w.empty()) fn.push_back(w); }
+        size_t sp = p.name.find(' ');
+        if (!fn.empty()) p.name = fn[r.range(0, (int)fn.size() - 1)] + " " + (sp == std::string::npos ? p.name : p.name.substr(sp + 1));
+    }
     {   // centre de formation du club : meilleurs jeunes
         int club = t.parent >= 0 ? t.parent : team;
-        int ac = club >= 0 && club < (int)teams.size() ? teams[club].academy : 0;
+        int ac = club >= 0 && club < (int)teams.size() ? teams[club].academy + teams[club].sta.annexYouth : 0;   // centre de formation + stade des jeunes
         if (ac > 0) {
             p.pot = (uint8_t)std::min(99, p.pot + ac * 2 + r.range(0, ac));
             auto up = [&](uint8_t& v) { v = (uint8_t)std::min(99, v + ac); };
@@ -535,14 +602,21 @@ void World::ensureSquad(int team) {
     if (!t.squadGen) { generateSquad(t); applyContracts(t, false); }
 }
 
-std::vector<int> World::pickLineup(int team, int formation) const {
+std::vector<int> World::pickLineup(int team, int formation, RuleProfile rules) const {
     const Team& t = teams[team];
     const Formation& F = FORMATIONS[formation];
     std::vector<int> out;
     std::vector<bool> used(t.squad.size(), false);
-    auto avail = [&](int i) { return !used[i] && t.squad[i].suspended <= 0 && t.squad[i].injured <= 0; };
+    // extra-communautaires : quota sur la feuille de match (clubs français)
+    int neLimit = nonEuLimit(team), neUsed = 0;
+    std::vector<bool> ne(t.squad.size(), false);
+    if (neLimit < 99) for (size_t i = 0; i < t.squad.size(); i++) ne[i] = isNonEU(t.squad[i], team);
+    auto availRaw = [&](int i) { return !used[i] && t.squad[i].suspended <= 0 && t.squad[i].injured <= 0; };
+    auto avail = [&](int i) { return availRaw(i) && (!ne[i] || neUsed < neLimit); };
+    auto take = [&](int i) { used[i] = true; if (ne[i]) neUsed++; };
     // valeur de sélection : niveau, pénalisé si le joueur est fatigué
-    auto sv = [&](int i) { int c = playerCond(team, t.squad[i]); return t.squad[i].overall() * 4 - std::max(0, 72 - c); };
+    int desired=DP_GB;
+    auto sv = [&](int i) { int c = playerCond(team, t.squad[i]); return t.squad[i].overall() * 4 - std::max(0, 72 - c)+(rules==RULESET_CAREER?positionFamiliarity(t.squad[i],desired):0); };
     auto best = [&](int pos) {
         int b = -1, bv = -1000;
         for (int i = 0; i < (int)t.squad.size(); i++)
@@ -550,42 +624,56 @@ std::vector<int> World::pickLineup(int team, int formation) const {
         if (b < 0) for (int i = 0; i < (int)t.squad.size(); i++)
             if (avail(i) && sv(i) > bv && t.squad[i].pos != POS_GK) { bv = sv(i); b = i; }
         if (b < 0) for (int i = 0; i < (int)t.squad.size(); i++) if (!used[i]) { b = i; break; }
-        if (b >= 0) used[b] = true;
+        if (b >= 0) take(b);
         return b;
     };
     // titulaires choisis par l'entraîneur : on les place au poste le plus proche
     std::vector<int> manual;
     if (t.xi.size() == 11) {
-        for (int id : t.xi) for (int i = 0; i < (int)t.squad.size(); i++) if (t.squad[i].id == id && avail(i)) manual.push_back(i);
+        int mNe = 0;
+        for (int id : t.xi) for (int i = 0; i < (int)t.squad.size(); i++) if (t.squad[i].id == id && avail(i) && (!ne[i] || mNe++ < neLimit)) manual.push_back(i);
     }
     if (!manual.empty()) {
         // gardien
         int gk = -1;
         for (int i : manual) if (t.squad[i].pos == POS_GK) { gk = i; break; }
-        if (gk >= 0) used[gk] = true; else gk = best(POS_GK);
+        if (gk >= 0) take(gk); else gk = best(POS_GK);
         out.push_back(gk);
         std::vector<int> rest; for (int i : manual) if (i != gk && t.squad[i].pos != POS_GK) rest.push_back(i);
         std::vector<int> slot(10, -1);
         for (int pass = 0; pass < 2; pass++)
             for (int k = 0; k < 10; k++) {
                 if (slot[k] >= 0) continue;
-                int want = F.role[k] == 1 ? POS_DF : F.role[k] == 2 ? POS_MF : POS_FW;
-                for (int i : rest) if (!used[i] && (pass == 1 || t.squad[i].pos == want)) { slot[k] = i; used[i] = true; break; }
+                desired=rules==RULESET_CAREER?teamSlotPosition(t,formation,k+1):slotPosition(formation,k+1);int want=rules==RULESET_CAREER?positionFamily(desired):F.role[k]==1?POS_DF:F.role[k]==2?POS_MF:POS_FW;
+                int selected=-1;for(int i:rest)if(avail(i)&&(pass==1||t.squad[i].pos==want)){if(selected<0||rules==RULESET_CAREER&&sv(i)>sv(selected))selected=i;if(rules==RULESET_SIMPLE)break;}if(selected>=0){slot[k]=selected;take(selected);}
             }
         for (int k = 0; k < 10; k++) if (slot[k] < 0) slot[k] = best(F.role[k] == 1 ? POS_DF : F.role[k] == 2 ? POS_MF : POS_FW);
         for (int k = 0; k < 10; k++) out.push_back(slot[k]);
     } else {
         out.push_back(best(POS_GK));
-        for (int i = 0; i < 10; i++) out.push_back(best(F.role[i] == 1 ? POS_DF : F.role[i] == 2 ? POS_MF : POS_FW));
+        for (int i = 0; i < 10; i++){desired=rules==RULESET_CAREER?teamSlotPosition(t,formation,i+1):slotPosition(formation,i+1);out.push_back(best(rules==RULESET_CAREER?positionFamily(desired):F.role[i]==1?POS_DF:F.role[i]==2?POS_MF:POS_FW));}
     }
     // remplaçants : 1 gardien + 8 meilleurs restants
     int gk = -1;
     for (int i = 0; i < (int)t.squad.size(); i++) if (avail(i) && t.squad[i].pos == POS_GK) { gk = i; break; }
-    if (gk >= 0) { used[gk] = true; out.push_back(gk); }
+    if (gk >= 0) { take(gk); out.push_back(gk); }
     std::vector<int> rest;
     for (int i = 0; i < (int)t.squad.size(); i++) if (avail(i)) rest.push_back(i);
     std::sort(rest.begin(), rest.end(), [&](int a, int b) { return t.squad[a].overall() > t.squad[b].overall(); });
-    for (int i = 0; i < (int)rest.size() && i < 8; i++) out.push_back(rest[i]);
+    for (int i = 0, n = 0; i < (int)rest.size() && n < 8; i++) if (avail(rest[i])) { out.push_back(rest[i]); take(rest[i]); n++; }
+    // règle JFL (football féminin français) : nombre minimal de joueuses formées localement sur la feuille de match
+    int jmin = jflMin(team);
+    if (jmin > 0) {
+        auto jfl = [&](int i) { return i >= 0 && isJfl(t.squad[i], team); };
+        int have = 0; for (int i : out) if (jfl(i)) have++;
+        for (int k = (int)out.size() - 1; k >= 1 && have < jmin; k--) {
+            if (jfl(out[k]) || t.squad[out[k]].pos == POS_GK) continue;
+            int bi = -1;
+            for (int i = 0; i < (int)t.squad.size(); i++) if (!used[i] && availRaw(i) && jfl(i) && t.squad[i].pos != POS_GK && (bi < 0 || sv(i) > sv(bi))) bi = i;
+            if (bi < 0) break;
+            used[out[k]] = false; used[bi] = true; out[k] = bi; have++;
+        }
+    }
     return out;
 }
 

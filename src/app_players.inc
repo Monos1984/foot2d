@@ -1,13 +1,13 @@
 // Fiche joueur (infos personnelles, caractéristiques, historique), éditeur de joueurs, consignes tactiques
 static int g_plTeam = -1, g_plIdx = -1;
 static Screen g_plBack = SC_MAIN;
-static ListW g_plLW;
+static ListW g_plLW;static bool g_psychArchive=false;
 
 static void openPlayer(int team, int idx, Screen back) {
     if (team < 0 || team >= (int)g_world.teams.size()) return;
     g_world.ensureSquad(team);
     if (idx < 0 || idx >= (int)g_world.teams[team].squad.size()) return;
-    g_plTeam = team; g_plIdx = idx; g_plBack = back; g_plLW = ListW();
+    g_plTeam = team; g_plIdx = idx;g_psychArchive=false; g_plBack = back; g_plLW = ListW();
     g_screen = SC_PLAYER;
 }
 
@@ -21,17 +21,31 @@ static void attrBar(int x, int y, const char* lbl, int v) {
     drawTextPx(fmt("%d", v), x + 138, y, 10, C_TXT);
 }
 
+static bool playerNavigation(int selected){
+ if(!g_careerActive||!careerRules())return false;
+ const char* labels[]={"Fiche générale","Postes / apprentissage","Personnalité"};
+ int count=g_career.personalityEnabled()?3:2,w=(VW-32)/count;
+ for(int i=0;i<count;i++){if(i==selected){DrawRectangle(12+i*(w+4),32,w,19,C_SEL);drawTextCentered(labels[i],12+i*(w+4)+w/2,37,10,BLACK);continue;}if(button(12+i*(w+4),32,w,19,labels[i])&&i!=selected){g_rolePlayerTab=i;g_psychArchive=false;return true;}}
+ return false;
+}
+
+#include "app_roles.inc"
+#include "app_personality.inc"
+
 static void screenPlayer() {
     if (g_plTeam < 0 || g_plTeam >= (int)g_world.teams.size() || g_plIdx >= (int)g_world.teams[g_plTeam].squad.size()) { g_screen = g_plBack; return; }
     Team& T = g_world.teams[g_plTeam];
     Player& p = T.squad[g_plIdx];
+    if(g_careerActive&&careerRules()){if(IN.tab)g_rolePlayerTab=(g_rolePlayerTab+1)%(g_career.personalityEnabled()?3:2);if(g_rolePlayerTab==2){screenPlayerPersonality(p,T);return;}if(g_rolePlayerTab==1){screenPlayerPositions(p);return;}}
     drawBackground("Fiche joueur");
-    drawKitIcon(T.home, 12, 32, 2);
-    drawTextPx(fmt("%d. ", p.num) + p.name, 34, 31, 20, C_HI);
-    drawTextPx(T.name + "  -  " + (p.pos == POS_GK ? "Gardien" : p.pos == POS_DF ? "Défenseur" : p.pos == POS_MF ? "Milieu" : "Attaquant"), 34, 52, 10, C_TXT);
+    bool tabs=g_careerActive&&careerRules();if(playerNavigation(0))return;int head=tabs?64:31;
+    drawKitIcon(T.home, 12, head+1, 2);
+    drawTextPx(fitText(fmt("%d. ", p.num) + p.name, 490, 20), 34, head, 20, C_HI);
+    drawPortrait(VW - 76, head, 64, p.skin, p.hair, p.gender, T.home, (unsigned)p.id);
+    drawTextPx(T.name + "  -  " + (p.pos == POS_GK ? "Gardien" : p.pos == POS_DF ? "Défenseur" : p.pos == POS_MF ? "Milieu" : "Attaquant"), 34, head+21, 10, C_TXT);
     int d, m, y; std::string place;
     playerBirth(p, curYear(), d, m, y, place, T.culture, T.dept);
-    int x = 12, yy = 68;
+    int x = 12, yy = head+37;
     auto line = [&](const std::string& k, const std::string& v) { drawTextPx(k, x, yy, 10, C_DIM); drawTextPx(fitText(v, 200, 10), x + 96, yy, 10, C_TXT); yy += 12; };
     line("Âge", fmt("%d ans", p.age));
     line("Genre", p.gender ? "Femme" : "Homme");
@@ -40,19 +54,19 @@ static void screenPlayer() {
     int nat = p.nation >= 0 ? p.nation : T.nation;
     line("Nationalité", nat >= 0 && nat < NUM_NATIONS ? sanitize(NATIONS[nat].name) : std::string("-"));
     static const char* CT[] = { "Professionnel", "Semi-professionnel", "Licence amateur" };
-    line("Contrat", CT[p.contract % 3]);
+    if(g_careerActive&&careerRules()){line("Contrat", CT[p.contract % 3]);
     line("Valeur", money(p.value()));
     if (p.contract < 2) line("Salaire", money(playerWage(p)) + " / an");
     line("Potentiel", fmt("%d", p.pot));
-    line("Condition / moral", fmt("%d / %d", playerCond(g_plTeam, p), p.morale));
+    line("Condition / moral", fmt("%d / %d", playerCond(g_plTeam, p), p.morale));}else line("Énergie",fmt("%d / 100",playerCond(g_plTeam,p)));
     // caractéristiques
-    int ax = 320, ay = 68;
-    drawTextPx(fmt("NOTE %d", p.overall()), ax, 52, 10, C_HI);
+    int ax = 320, ay = head+76;
+    drawTextPx(fmt("NOTE %d", p.overall()), ax, head+60, 10, C_HI);
     struct A { const char* n; int v; } at[] = { { "Vitesse", p.speed }, { "Tir", p.shoot }, { "Passe", p.pass }, { "Tacle", p.tackle }, { "Dribble", p.drib() },
                                                  { "Jeu de tête", p.head() }, { "Placement", p.posi() }, { "Sang-froid", p.comp() }, { "Endurance", p.stamina }, { "Gardien", p.keep } };
     for (int i = 0; i < 10; i++) attrBar(ax + (i / 5) * 160, ay + (i % 5) * 12, at[i].n, at[i].v);
     // historique
-    int hy = 184;
+    int hy = tabs?228:202;
     drawTextPx("Carrière", 12, hy, 10, C_HI);
     hy += 12;
     const int cx[] = { 16, 84, 320, 370, 416, 470, 520 };
@@ -87,7 +101,7 @@ static void screenPlayer() {
         if (button(VW - 150, VH - 34, 138, 14, "Modifier (éditeur)")) { extern void openPlayerEditorFwd(); openPlayerEditorFwd(); return; }
         drawFooter("Tab : modifier le joueur   Retour");
         if (IN.tab) { extern void openPlayerEditorFwd(); openPlayerEditorFwd(); return; }
-    } else drawFooter("Retour   (modification des joueurs : menu Éditeur, avant de lancer une carrière)");
+    } else drawFooter(careerRules()?"Tab : postes puis personnalité   Retour":"Retour");
     if (IN.back) g_screen = g_plBack;
 }
 
@@ -122,9 +136,11 @@ static void screenPlayerEdit() {
     std::vector<Row> rows = {
         { "Nom", g_pe.name, 0, nullptr, 0, 0 },
         { "Genre", g_pe.gender ? "Femme" : "Homme", 1, &g_pe.gender, 0, 1 },
+        { "Couleur de peau", SKIN_NAMES[g_pe.skin % NUM_SKINS], 1, &g_pe.skin, 0, NUM_SKINS - 1 },
+        { "Cheveux", HAIR_NAMES[g_pe.hair % NUM_HAIRS], 1, &g_pe.hair, 0, NUM_HAIRS - 1 },
         { "Poste", PN[posv & 3], 1, &g_pe.pos, 0, 3 },
         { "Numéro", fmt("%d", g_pe.num), 1, &g_pe.num, 1, 99 },
-        { "Âge", fmt("%d", g_pe.age), 1, &g_pe.age, 15, 45 },
+        { "Âge", fmt("%d", g_pe.age), 1, &g_pe.age, 13, 45 },
         { "Jour de naissance", fmt("%d", g_pe.bday), 1, &g_pe.bday, 1, 31 },
         { "Mois de naissance", MONTHS_FR[std::max(1, std::min(12, (int)g_pe.bmonth))], 1, &g_pe.bmonth, 1, 12 },
         { "Lieu de naissance", g_pe.birthPlace, 0, nullptr, 0, 0 },
@@ -149,8 +165,8 @@ static void screenPlayerEdit() {
     int x = 12, w = 400, y = 44;
     for (int i = 0; i < n; i++) {
         bool sel = i == g_peRow;
-        if (IN.click && g_peTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 13) g_peRow = i;
-        DrawRectangle(x, y, w, 12, sel ? C_SEL : C_ITEM);
+        if (IN.click && g_peTyping < 0 && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + 12) g_peRow = i;
+        DrawRectangle(x, y, w, 11, sel ? C_SEL : C_ITEM);
         Color c = sel ? BLACK : C_TXT;
         if (rows[i].kind == 2) drawTextCentered(rows[i].label, x + w / 2, y + 1, 10, c, false);
         else {
@@ -159,11 +175,12 @@ static void screenPlayerEdit() {
             if (g_peTyping == i && fmod(GetTime(), 1.0) < 0.5) v += "_";
             drawTextPx(rows[i].kind == 0 ? fitText(v, w - 160, 10) : "< " + v + " >", x + 150, y + 1, 10, c);
         }
-        y += 13;
+        y += 12;
     }
     // aperçu
     Player pv = g_pe;
     drawTextPx(fmt("Note générale : %d", pv.overall()), 430, 50, 10, C_HI);
+    drawPortrait(VW - 84, 130, 72, pv.skin, pv.hair, pv.gender, T.home, (unsigned)pv.id);
     drawTextPx(fmt("Valeur : %s", money(pv.value()).c_str()), 430, 64, 10, C_TXT);
     if (g_careerActive) { drawTextPx("Modification enregistrée", 430, 84, 10, C_DIM); drawTextPx("dans la sauvegarde de la carrière.", 430, 96, 10, C_DIM); }
     else { drawTextPx("Modification enregistrée dans", 430, 84, 10, C_DIM); drawTextPx("joueurs_perso.txt (appliquée", 430, 96, 10, C_DIM); drawTextPx("à chaque nouvelle partie).", 430, 108, 10, C_DIM); }
@@ -180,7 +197,7 @@ static void screenPlayerEdit() {
     const Row& R = rows[g_peRow];
     if (R.kind == 1 && R.v && dd) *R.v = (uint8_t)std::max(R.lo, std::min(R.hi, (int)*R.v + dd));
     if (R.kind == 3 && dd) { int k = g_pe.nation + dd; if (k < -1) k = NUM_NATIONS - 1; if (k >= NUM_NATIONS) k = -1; g_pe.nation = (int16_t)k; }
-    if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 44 && IN.mouse.y < 44 + n * 13)) {
+    if (IN.ok || (IN.click && IN.mouse.x < x + w && IN.mouse.y >= 44 && IN.mouse.y < 44 + n * 12)) {
         if (R.kind == 0) { g_peTyping = g_peRow; g_textMode = true; while (GetCharPressed() > 0) {} }
         else if (R.kind == 2) {
             if (g_peRow == n - 2) {
@@ -204,7 +221,9 @@ static void screenTactics() {
     int ti = g_career.userTeam;
     if (ti < 0) { g_screen = SC_SQUAD; return; }
     Team& T = g_world.teams[ti];
+    if(careerRules()&&g_rolePlayerTab){screenRolePlan(T);return;}
     drawBackground("Consignes tactiques");
+    if(careerRules()&&button(400,18,220,14,"Postes / rôles individuels")){g_rolePlayerTab=1;return;}
     static const char* LVL3[] = { "Faible", "Normal", "Fort" };
     static const char* LINE[] = { "Basse", "Médiane", "Haute" };
     static const char* WID[] = { "Resserré", "Normal", "Large" };
@@ -223,7 +242,8 @@ static void screenTactics() {
         { "Adjoint : remplacements", g_career.mgr.delegSubs ? "délégués à l'adjoint" : "gérés par vous", "Pendant vos matchs, l'adjoint effectue les changements (fatigue, blessures, score)." },
         { "Mode Full Manager", g_career.mgr.fullManager ? "activé (temps forts)" : "désactivé", "Vous ne jouez plus les matchs : vous regardez les temps forts et donnez vos consignes." },
     };
-    int n = (int)rows.size();
+    if(!careerRules()){rows.resize(7);rows.erase(rows.begin()+5);rows.erase(rows.begin()+3);}
+    int n = (int)rows.size();g_tacRow%=n;
     if (IN.up) g_tacRow = (g_tacRow - 1 + n) % n;
     if (IN.down) g_tacRow = (g_tacRow + 1) % n;
     int x = 20, y = 38, w = VW - 40;
@@ -241,9 +261,10 @@ static void screenTactics() {
     int d = IN.left ? -1 : (IN.right || IN.ok || (IN.click && IN.mouse.y >= 40 && IN.mouse.y < 40 + n * 26)) ? 1 : 0;
     if (d) {
         auto cyc = [&](uint8_t& v, int m) { v = (uint8_t)((v + d + m) % m); };
-        switch (g_tacRow) {
-        case 0: T.formation = (T.formation + d + NUM_FORMATIONS) % NUM_FORMATIONS; T.xi.clear(); break;
-        case 1: T.mentality = (T.mentality + d + 5) % 5; break;
+        int action=careerRules()?g_tacRow:(g_tacRow==3?4:g_tacRow==4?6:g_tacRow);
+        switch (action) {
+        case 0: T.formation = (T.formation + d + NUM_FORMATIONS) % NUM_FORMATIONS; T.xi.clear();T.tactical.customized=0; break;
+        case 1: T.mentality = careerRules()?(T.mentality+d+5)%5:1+(T.mentality-1+d+3)%3; break;
         case 2: cyc(T.pressing, 3); break;
         case 3: cyc(T.defLine, 3); break;
         case 4: cyc(T.width, 3); break;
@@ -270,11 +291,14 @@ static CustomStaff g_dbSt;
 
 static void openEditDb() { g_dbTeam = -1; g_dbPres = -1; g_dbStaffEdit = -1; g_dbTyping = false; g_textMode = false; g_screen = SC_EDITDB; }
 
-static void newPlayerFor(int team) {
+static void newPlayerFor(int team, int gender = -1) {
     g_world.ensureSquad(team);
     Team& T = g_world.teams[team];
     Player p = g_world.makeYouth(team, POS_MF, std::max(20.f, T.rating - 3));
-    p.name = "Nouveau joueur"; p.age = 20; p.nation = (int16_t)(T.nation >= 0 ? T.nation : -1);
+    if (gender < 0) gender = T.youth == 6 ? 1 : 0;          // section féminine : une joueuse par défaut
+    if ((gender == 1) != (T.youth == 6)) { toast(gender ? "Une joueuse évolue dans une équipe féminine (sélection ou club féminin)" : "Équipe féminine : seules des joueuses peuvent y être créées"); return; }
+    p.gender = (uint8_t)gender;
+    p.name = gender ? "Nouvelle joueuse" : "Nouveau joueur"; p.age = T.youth == 3 ? 14 : T.youth == 2 ? 16 : T.youth == 1 ? 18 : 20; p.nation = (int16_t)(T.nation >= 0 ? T.nation : -1);
     T.squad.push_back(p);
     g_plTeam = team; g_plIdx = (int)T.squad.size() - 1; g_plBack = SC_EDITDB;
     openPlayerEditorFwd();
@@ -438,7 +462,8 @@ static void screenEditDb() {
     int root = T.parent >= 0 ? T.parent : g_dbTeam;
     drawTextPx("Président : " + presidentName(root) + fmt(" (%d ans)", presidentAge(root)), 36, 62, 10, C_TXT);
     if (button(VW - 330, 48, 150, 14, "Modifier le président")) { g_dbPres = root; g_dbPresT = g_world.teams[root]; g_dbPresT.president = presidentName(root); g_dbPresT.presAge = presidentAge(root); g_dbPresT.presPlace = presidentPlace(root); g_dbPresRow = 0; g_dbPresTyping = -1; return; }
-    if (button(VW - 174, 48, 162, 14, "Créer un nouveau joueur")) { newPlayerFor(g_dbTeam); return; }
+    if (button(VW - 174, 32, 162, 14, "Créer un nouveau joueur")) { newPlayerFor(g_dbTeam, 0); return; }
+    if (button(VW - 174, 48, 162, 14, "Créer une nouvelle joueuse")) { newPlayerFor(g_dbTeam, 1); return; }
     drawTextPx("N°  P   Joueur", 16, 78, 10, C_DIM);
     const char* cols[] = { "ÂGE", "VIT", "TIR", "PAS", "TAC", "GAR", "NOTE" };
     for (int k = 0; k < 7; k++) drawTextPx(cols[k], 300 + k * 44, 78, 10, C_DIM);

@@ -3,7 +3,7 @@
 #include <cstring>
 
 const char* staffRoleName(int r) {
-    static const char* N[NUM_SR] = { "Entraîneur adjoint", "Préparateur physique", "Entraîneur des gardiens", "Recruteur", "Médecin / kiné", "Directeur du centre de formation", "Entraîneur de la réserve" };
+    static const char* N[NUM_SR] = { "Entraîneur adjoint", "Préparateur physique", "Entraîneur des gardiens", "Recruteur", "Médecin / kiné", "Directeur du centre de formation", "Entraîneur de la réserve", "Directeur sportif" };
     return r >= 0 && r < NUM_SR ? N[r] : "?";
 }
 const char* staffRoleDesc(int r) {
@@ -14,7 +14,8 @@ const char* staffRoleDesc(int r) {
         "Élargit la liste du mercato et révèle le potentiel des joueurs.",
         "Blessures moins longues.",
         "Jeunes du centre de formation plus nombreux et plus talentueux.",
-        "Dirige les équipes réserves quand vous ne les contrôlez pas : meilleurs résultats." };
+        "Dirige les équipes réserves quand vous ne les contrôlez pas : meilleurs résultats.",
+        "Recrutement, négociations et gestion sportive selon les responsabilités déléguées." };
     return r >= 0 && r < NUM_SR ? D[r] : "";
 }
 
@@ -59,6 +60,7 @@ void Career::initStaff() {
     mgr.staff.push_back(makeStaff(SR_ADJOINT, base, U.status, r));
     if (U.status != CS_AMATEUR) { mgr.staff.push_back(makeStaff(SR_PHYSIO_PREP, base, U.status, r)); mgr.staff.push_back(makeStaff(SR_MEDIC, base, U.status, r)); }
     if (U.status == CS_PRO) { mgr.staff.push_back(makeStaff(SR_GK, base, U.status, r)); mgr.staff.push_back(makeStaff(SR_SCOUT, base - 1, U.status, r)); mgr.staff.push_back(makeStaff(SR_YOUTH, base, U.status, r)); }
+    if(directorEnabled())mgr.staff.push_back(makeStaff(SR_DIRECTOR,base,U.status,r));
     // staff créé avec l'éditeur et rattaché au club
     for (auto& c : customStaff()) {
         if (c.club.empty() || c.club != U.name) continue;
@@ -95,6 +97,9 @@ const Referee REFEREES[] = {
     { "Grégory Barre", 42, 50, 72, 60, 2 }, { "Samir Haddad", 64, 47, 61, 63, 2 }, { "Ludovic Pasquier", 88, 60, 38, 50, 2 },
     { "Franck Rigal", 55, 75, 50, 40, 1 }, { "Mickaël Joubert", 60, 66, 55, 45, 1 }, { "Didier Galland", 70, 70, 45, 42, 1 },
     { "Hugo Renard", 47, 52, 68, 55, 1 }, { "Pascal Vidal", 82, 64, 40, 44, 1 }, { "Loïc Morvan", 53, 58, 63, 52, 1 },
+    // arbitres femmes
+    { "Stéphanie Martel", 58, 45, 70, 82, 5, true }, { "Laura Delmas", 64, 48, 62, 78, 4, true }, { "Manon Rivière", 50, 52, 72, 70, 3, true },
+    { "Camille Arnaud", 70, 50, 55, 66, 3, true }, { "Élodie Faure", 46, 55, 74, 64, 2, true }, { "Sarah Benali", 60, 60, 60, 58, 1, true },
 };
 const int NUM_REFEREES = sizeof(REFEREES) / sizeof(REFEREES[0]);
 
@@ -120,11 +125,17 @@ int refereeFor(int comp, int match) {
 void placeInBottomPool(Pyramid& P, int team);
 
 int Career::createReserve(std::string& err) {
-    if (kind != CK_CLUB) { err = "Disponible en carrière club."; return -1; }
+    if (kind != CK_CLUB || userTeam<0 || userTeam>=(int)g_world.teams.size()) { err = "Disponible en carrière club."; return -1; }
     const Team& U = g_world.teams[userTeam];
+    if(U.parent>=0 || U.youth){err="La création de réserves se fait depuis l'équipe fanion.";return -1;}
     int n = 0;
     for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].parent == userTeam && !g_world.teams[i].youth) n++;
     if (n >= 3) { err = "Trois équipes réserves maximum."; return -1; }
+    for(n=0;n<3;n++) {
+        bool used=false;
+        for(const auto& existing:g_world.teams) if(existing.parent==userTeam && !existing.youth && existing.resLevel==n+1)used=true;
+        if(!used)break;
+    }
     Team t;
     bool pro = U.status != CS_AMATEUR;
     static const char* SFX_PRO[] = { " B", " C", " D" };
@@ -140,13 +151,14 @@ int Career::createReserve(std::string& err) {
     g_world.teams.push_back(t);
     initStadium(g_world.teams[idx], 12, -1);
     pendingNewClubs.push_back(idx);
-    season.news.push_back(g_world.teams[idx].name + " est créée : elle débutera la saison prochaine dans la dernière division du district.");
+    season.news.push_back(t.name+" est créée : inscription dans son district pour la saison prochaine.");
     return idx;
+
 }
 
 void Career::syncControlled() {
     std::vector<int> c = { userTeam };
-    for (int t : mgr.ctrlReserves) if (t >= 0 && t < (int)g_world.teams.size() && g_world.teams[t].parent == userTeam) c.push_back(t);
+    for (int t : mgr.ctrlReserves) if (t >= 0 && t < (int)g_world.teams.size() && g_world.teams[t].parent == userTeam && std::find(pendingNewClubs.begin(),pendingNewClubs.end(),t)==pendingNewClubs.end()) c.push_back(t);
     season.controlled = c;
 }
 

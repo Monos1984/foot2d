@@ -78,3 +78,31 @@ const NamePool NAME_POOLS[NUM_CULTURES] = {
     { "Dominik Péter Ádám Roland Milos Willi Loïc Attila Bendegúz Kevin Zsolt Barnabás Dénes Márton Zalán Botond Balázs Gábor László Martin",
       "Szoboszlai Gulácsi Sallai Szalai Kerkez Orbán Nagy Kovács Tóth Szabó Horváth Varga Kiss Molnár Németh Farkas Balogh Papp Takács Juhász Lakatos Mészáros Oláh Simon Rácz Fekete Schäfer Styles Lang Fiola Dárdai Bolla Varga Kleinheisler Botka Csoboth Gazdag" },
 };
+
+// prénoms féminins par culture (sélections et clubs féminins)
+const char* FEMALE_FIRST[NUM_CULTURES] = {
+    "Léa Camille Manon Chloé Inès Sarah Emma Jade Clara Marie Laura Julie Pauline Amandine Kadidiatou Wendie Eugénie Sakina Grace Selma Kenza Aïssatou Delphine Griedge Estelle Marine Élisa Maëlle Sandie Clarisse",
+    "Olivia Amelia Isla Ava Emily Lucy Chloe Ellie Leah Beth Lauren Millie Alessia Georgia Rachel Keira Mary Jess Niamh Hannah",
+    "Lucía Alexia Aitana Irene Laia Mariona Olga Patri Salma Jennifer Cata Claudia Ona Teresa Vicky Maite Esther Misa Eva Athenea",
+    "Ana Beatriz Carolina Inês Jéssica Kika Dolores Diana Andreia Tatiana Lúcia Joana Francisca Mariana Telma",
+    "Marta Debinha Kerolin Adriana Ludmila Gabi Tamires Rafaelle Lauren Yasmim Duda Letícia Bia Luana Ary",
+    "Cristiana Sara Barbara Valentina Manuela Martina Arianna Giulia Elisa Laura Alia Lisa Benedetta Federica Chiara",
+    "Alexandra Lena Giulia Klara Jule Sjoeke Lea Svenja Merle Ann-Katrin Sydney Janina Felicitas Laura Marina",
+    "Vivianne Lieke Danielle Jill Daniëlle Victoria Esmee Lineth Jackie Wieke Damaris Katja Tessa Romée Kerstin",
+    "Ada Caroline Frida Guro Maren Pernille Stina Fridolina Hanna Kosovare Nathalie Magdalena Signe Sofie Emma",
+    "Ewa Natalia Anna Dominika Kateřina Anastasia Olga Tatiana Iryna Daria Paulina Marta",
+    "Ana Iva Maja Ivana Jelena Milica Tijana Mirela Andrea Lucija",
+    "Ece Zeynep Didem Elif Busem Arzu Ebru Sevgi Kader Melike",
+    "Ghizlane Fatima Nouhaila Sanaa Salma Rosella Ibtissam Najat Amira Yasmin Hanane Imane",
+    "Asisat Rasheedat Ashleigh Chiamaka Gabrielle Ajara Evelyn Tosin Onome Uchenna Rita Barbra Christy Aminata",
+    "Barbra Grace Mercy Jane Esther Faith Aisha Neema Zawadi Amani",
+    "Saki Hina Yui Mina Riko Aoba Fuka Moeka Yuka Kiko Hikaru Maika Momoko Miyabi",
+    "Ji-so Min-a Geum-min Ji-yun Soo-a Hye-ri Seo-yeon Da-bin Young-ju Jae-hee",
+    "Wang Shuang Zhang Rui Li Mengwen Wang Shanshan Tang Jiali Yang Lina Zhu Yu Shen Mengyu Wu Haiyan Gao Chen",
+    "Linda Catalina Mayra Daniela Leicy Alexia Jaqueline Sofía Estefanía Florencia Yamila Lorena Gabriela Mariana",
+    "Maryam Zahra Fatemeh Sara Shirin Leila Narges Nazanin",
+    "Thanh Huong My Linh Kanya Siriporn Nurul Dewi Ayu Maria Angelica",
+    "Aditi Manisha Ashalata Bala Dangmei Sanju Pyari Priya Anju Sandhya",
+    "Ali Katie Hannah Ria Olivia Indiah Betsy Rebekah Meikayla Jacqui",
+    "Eleni Maria Anastasia Sofia Christina Katerina Georgia Despoina",
+    "Zsanett Henrietta Anna Fanni Dóra Evelin Réka Lilla" };

@@ -82,7 +82,7 @@ int cwcCreate(Career& K) {
     std::vector<std::pair<float, int>> rk;
     for (int t = 0; t < (int)g_world.teams.size(); t++) {
         const Team& T = g_world.teams[t];
-        if (T.kind != TK_CLUB || T.parent >= 0 || confOf(t) != UEFA) continue;
+        if (T.kind != TK_CLUB || T.parent >= 0 || T.youth || confOf(t) != UEFA) continue;
         float c = T.coefs[1] + T.coefs[2] + T.coefs[3] + T.coefs[4];
         if (c > 0) rk.push_back({ -c, t });
     }
@@ -93,11 +93,13 @@ int cwcCreate(Career& K) {
         std::vector<std::pair<float, int>> v;
         for (int t = 0; t < (int)g_world.teams.size(); t++) {
             const Team& T = g_world.teams[t];
-            if (T.kind != TK_CLUB || T.parent >= 0 || T.custom || confOf(t) != conf) continue;
+            if (T.kind != TK_CLUB || T.parent >= 0 || T.custom || T.youth || confOf(t) != conf) continue;
             v.push_back({ -(T.rating + g_rng.frange(-3, 3)), t });
         }
         std::sort(v.begin(), v.end());
         int k = 0;
+        int cw = continentalWinner(K, conf);          // vainqueur de la coupe continentale : qualifié d'office
+        if (cw >= 0 && k < n && add(cw, true)) k++;
         for (auto& x : v) { if (k >= n) break; if (add(x.second, false)) k++; }
         return k;
     };
