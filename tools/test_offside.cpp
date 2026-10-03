@@ -29,7 +29,7 @@ struct Scene {
         if (human) M.pl[kicker].human = 0;
         M.assistants[0] = M.assistants[1] = ar;
     }
-    bool resolve() { Match& M = *m; for (int k = 0; k < 120 && M.state == MS_PLAY; k++) M.offsideUpdate(1.f / 60); return M.state == MS_STOP && M.msg == "HORS-JEU"; }
+    bool resolve() { Match& M = *m; for (int k = 0; k < 120 && M.state == MS_PLAY; k++) M.offsideUpdate(1.f / 60); return (M.state == MS_STOP || (M.state == MS_REPLAY && M.offReplay)) && M.msg == "HORS-JEU"; }
     bool passAndReceive(int restart = -1) { m->offsidePhotograph(kicker, restart); m->ball.pos = m->pl[att].pos; m->checkOffsideTouch(att); return resolve(); }
 };
 

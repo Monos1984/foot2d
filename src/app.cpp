@@ -1560,7 +1560,7 @@ static void screenMatch(float dt) {
             if (wv >= 0 && lastWave < 0) audioPlay(SFX_OLA);
             lastWave = wv;
         }
-        if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||m.state==MS_REPLAY)&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
+        if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||(m.state==MS_REPLAY&&!m.offReplay))&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
     } else audioCrowd(false, 0);
     if (m.finished && !g_trophyChecked && !g_paused) {
         g_trophyChecked = true;
@@ -4498,6 +4498,7 @@ static void screenMain(float dt) {
         askConfirm("Type de match amical :", []() { g_frEnd = 0; openPick(PM_FRIENDLY_HOME); }, "Match complet", "Séance de tirs au but directe",
                    []() { g_frEnd = 5; openPick(PM_FRIENDLY_HOME); });
         g_confirm.backCancel = true;
+        g_confirm.sel = 0;                 // choix par défaut : match complet
         break;
     case 2: g_careerActive = false; g_lmLW = ListW(); g_screen = SC_LEAGUEMODE; break;
     case 3: {

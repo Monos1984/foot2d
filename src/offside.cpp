@@ -117,6 +117,7 @@ void Match::offsidePhotograph(int kicker, int restart) {
     }
     off.active = true; off.team = t; off.source = kicker; off.seq = ++offSeq; off.restart = restart;
     off.assistant = offsideAssistantFor(t); off.ballAtPlay = ball.pos; off.line = offsideLine(t); off.rebound = false;
+    offRpIdx = rpHead; offLineY = attackDir[t] < 0 ? PITCH_L * (1.f - off.line) : PITCH_L * off.line;   // pour le ralenti
     // avant-dernier défenseur (vitesse de la ligne)
     int ot = 1 - t, d1 = -1, d2 = -1; float b1 = -1, b2 = -1;
     for (int j = ot * 11; j < ot * 11 + 11; j++) {
@@ -234,6 +235,17 @@ void Match::offsideWhistle() {
     state = MS_STOP; stateT = 0;
     nextSp = SP_INDIRECT; nextSpTeam = 1 - pl[i].team; nextSpPos = V2(clampf(offPendPos.x, 1.f, PITCH_W - 1.f), clampf(offPendPos.y, 1.f, PITCH_L - 1.f));
     ball.owner = -1; ball.vel = V2(); ball.vz = 0;
+    // ralenti : on revoit l'action depuis un peu avant la passe, image figée sur les lignes de hors-jeu
+    int back = (rpHead - offRpIdx + REPLAY_N) % REPLAY_N;
+    if (!S.training && !S.highlights && offRpIdx >= 0 && back <= rpCount && back < 420) {
+        int t = pl[i].team;
+        offRepPlayer = i; offRepMargin = offPendMargin;
+        offAttY = offLineY + (attackDir[t] < 0 ? -offPendMargin : offPendMargin);
+        offReplay = true; offRepHold = 0;
+        state = MS_REPLAY; stateT = 0;
+        int pre = std::max(0, std::min(75, rpCount - back - 1));                         // un peu avant la passe (selon l'enregistrement disponible)
+        rpPos = (offRpIdx - pre + REPLAY_N) % REPLAY_N;
+    }
 }
 
 void Match::offsideUpdate(float dt) {

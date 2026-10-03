@@ -366,6 +366,7 @@ static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair,
 }
 
 static bool g_sprLongHair = false;      // joueuse / arbitre : cheveux longs (queue de cheval)
+static int g_sprHairStyle = -1;         // coiffure imposée (arbitres) : -1 = selon le joueur
 // poses particulières (bancs, célébrations) : modifient le sprite debout
 static int g_sprPose = POSE_NONE;
 // dir : 0 bas, 1 haut, 2 droite, 3 gauche
@@ -409,10 +410,19 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     // coiffure : courte, rasée ou longue (déterminée par le joueur)
     char buf[13][8] = {};
     for (int r = 0; r < 12; r++) { strncpy(buf[r], src[r], 7); buf[r][7] = 0; }
-    int style = (hair * 7 + skin * 3) % 4;
+    int style = g_sprHairStyle >= 0 ? g_sprHairStyle : (hair * 7 + skin * 3) % 7;
     if (style == 1 && dir != 1) { for (int c = 0; c < 7; c++) if (buf[0][c] == 'h') buf[0][c] = (c == 2 || c == 4) ? 's' : 'h'; }
     else if (style == 2) { if (buf[2][1] == '.') buf[2][1] = 'h'; if (buf[2][5] == '.') buf[2][5] = 'h'; }
     else if (style == 3 && dir == 1) { buf[3][2] = 'h'; buf[3][3] = 'h'; buf[3][4] = 'h'; }
+    else if (style == 4) {          // coupe afro : volume au-dessus et sur les côtés
+        for (int c = 1; c <= 5; c++) if (buf[0][c] == '.' || buf[0][c] == 'H') buf[0][c] = c == 5 ? 'H' : 'h';
+        if (dir != 2 && dir != 3) { if (buf[1][0] == '.') buf[1][0] = 'h'; if (buf[1][6] == '.') buf[1][6] = 'H'; }
+    } else if (style == 5) {        // crâne rasé
+        for (int c = 0; c < 7; c++) { if (buf[0][c] == 'h' || buf[0][c] == 'H') buf[0][c] = 'H'; if (dir != 1 && buf[1][c] == 'h' && (c == 1 || c == 5)) buf[1][c] = 't'; }
+    } else if (style == 6 && dir != 1) {   // crête / iroquoise
+        for (int c = 0; c < 7; c++) if (buf[0][c] == 'h' || buf[0][c] == 'H') buf[0][c] = c == 3 ? 'h' : 's';
+        if (buf[1][1] == 'h') buf[1][1] = 's'; if (buf[1][5] == 'h') buf[1][5] = 's';
+    }
     if (g_sprLongHair && state != PS_CELEB) {
         auto H = [&](int r, int c) { if (buf[r][c] == '.' || buf[r][c] == ' ' || buf[r][c] == 0) buf[r][c] = 'h'; };
         if (dir == 1) { buf[3][2] = buf[3][3] = buf[3][4] = 'h'; buf[4][3] = 'h'; }
@@ -463,7 +473,11 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
             auto lift = [&](int v) { col.r = (unsigned char)std::min(255, col.r + v); col.g = (unsigned char)std::min(255, col.g + v); col.b = (unsigned char)std::min(255, col.b + v); };
             // revers des manches dans la 2e couleur du maillot (maillots unis)
             if (ch == 'S' && !gk && r == 4 && (c == 0 || c == 6) && kit.shirt2 != kit.shirt && kit.shirt2 != 0 && kit.pattern == KP_PLAIN && state != PS_CELEB) col = hexc(kit.shirt2);
+            // liseré latéral du short dans la 2e couleur, revers des chaussettes
+            if (ch == 'P' && !gk && r == NR - 4 && (c == 1 || c == 5) && kit.shirt2 != kit.shorts && (dir == 0 || dir == 1)) col = hexc(kit.shirt2);
+            if (ch == 'k' && filled(r - 1, c) && spr[r - 1][c] == 'P') { Color k2 = pixelColor('K', c, r, kit, skin, hair, gk, gkShirt); col = Color{ (unsigned char)((col.r + k2.r) / 2), (unsigned char)((col.g + k2.g) / 2), (unsigned char)((col.b + k2.b) / 2), 255 }; }
             if (shade) { col.r = (unsigned char)(col.r * 0.72f); col.g = (unsigned char)(col.g * 0.72f); col.b = (unsigned char)(col.b * 0.72f); }
+            else if (ch == 's' && r >= 4 && (mirror ? !filled(r, c - 1) : !filled(r, c + 1)) && c > 3) { col.r = (unsigned char)(col.r * 0.84f); col.g = (unsigned char)(col.g * 0.84f); col.b = (unsigned char)(col.b * 0.84f); }   // bras : ombre côté droit
             else if (ch == 'S' && r == 3 && scale >= 2) lift(25);
             else {
                 // lumière venant de la gauche : reflet sur le bord éclairé du maillot, du short et dans les cheveux
@@ -873,7 +887,7 @@ static uint32_t mix32(uint32_t h) { h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15;
 // excitation du public de chaque camp (0 calme ... 1 explosion de joie), selon le score, l'action et les chants
 static float crowdExcite(const Match& m, int side, int chant) {
     if (m.S.training) return 0;
-    if (m.state == MS_GOAL || (m.state == MS_REPLAY && m.lastScorerTeam >= 0)) return m.lastScorerTeam == side ? 1.f : 0.f;
+    if (m.state == MS_GOAL || (m.state == MS_REPLAY && !m.offReplay && m.lastScorerTeam >= 0)) return m.lastScorerTeam == side ? 1.f : 0.f;
     if (m.trophyActive || m.lapActive) return (m.trophyActive ? m.trophyTeam : m.lapTeam) == side ? 0.9f : 0.05f;
     if (m.finished) { int d = m.score[side] - m.score[1 - side]; return d > 0 ? 0.8f : 0.03f; }
     float e = 0.12f + m.S.supporterAtmosphere * 0.002f;
@@ -1069,7 +1083,7 @@ static void drawBenchesLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
     auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
     if (SX(-0.2f) < -30 || SX(-4.f) > MWZ + 30) return;
-    bool goal = m.state == MS_GOAL || (m.state == MS_REPLAY && m.lastScorerTeam >= 0);
+    bool goal = m.state == MS_GOAL || (m.state == MS_REPLAY && !m.offReplay && m.lastScorerTeam >= 0);
     for (int tm = 0; tm < 2; tm++) {
         float yc = PITCH_L / 2 + (tm ? 7.5f : -7.5f);
         if (SY(yc + 9) < -20 || SY(yc - 9) > MHZ + 20) continue;
@@ -1198,7 +1212,7 @@ static void drawShowEffects(const Match& m, int ox, int oy, int MWZ, int MHZ) {
         }
     }
     // fumée des fumigènes qui dérive sur le terrain après un but du club local
-    if ((m.state == MS_GOAL || m.state == MS_REPLAY) && m.lastScorerTeam == 0 && !m.S.neutral && m.stateT > 0.8f) {
+    if ((m.state == MS_GOAL || (m.state == MS_REPLAY && !m.offReplay)) && m.lastScorerTeam == 0 && !m.S.neutral && m.stateT > 0.8f) {
         float a = std::min(1.f, (m.stateT - 0.8f) * 0.5f);
         for (int k = 0; k < 10; k++) {
             float wx = 4.f + k * 6.5f + std::sin(t * 0.3f + k) * 3.f, wy = -4.f + std::fmod(t * 0.9f + k * 0.7f, 9.f);
@@ -1465,7 +1479,7 @@ void renderMatch(const Match& m, bool radar) {
     bool replay = m.state == MS_REPLAY;
     // position caméra
     V2 cam = m.cam;
-    if (replay) { const BallSnap& b = m.rb[m.rpPos]; cam = V2(b.x, b.y); }
+    if (replay) { const BallSnap& b = m.rb[m.rpPos]; cam = V2(b.x, b.y); if (m.offReplay) cam = V2(b.x * 0.4f + PITCH_W * 0.3f, (b.y + m.offLineY) * 0.5f); }   // hors-jeu : ballon et ligne à l'image
     float TW = (PITCH_W + 2 * MARGIN) * PPM, TH = (PITCH_L + 2 * MARGIN) * PPM;
     float cx = (cam.x + MARGIN) * PPM, cy = (cam.y + MARGIN) * PPM;
     int ox = (int)std::round(std::max(0.f, std::min(TW - MWZ, cx - MWZ / 2)));
@@ -1642,6 +1656,14 @@ void renderMatch(const Match& m, bool radar) {
                 DrawCircle(fx, fy - hgt / 2, 6, Color{ fl.r, fl.g, fl.b, 50 });
             }
         }
+    }
+    // bombe aérosol de l'arbitre : marque du ballon et ligne du mur à 9,15 m (disparaît après la frappe)
+    if (!replay && m.state == MS_SETPIECE && (m.sp == SP_FREEKICK || m.sp == SP_INDIRECT) && (m.goalCenter(m.spTeam) - m.spPos).len() < 38.f) {
+        V2 d = (m.goalCenter(m.spTeam) - m.spPos).norm(), pp = d.perp();
+        Color foam{ 250, 250, 250, 200 };
+        for (int k = 0; k < 10; k++) { float a = k * 0.628f; DrawPixel(SX(m.spPos.x + std::cos(a) * 0.7f), SY(m.spPos.y + std::sin(a) * 0.7f), foam); }
+        V2 c = m.spPos + d * 9.15f;
+        for (float u = -3.6f; u <= 3.6f; u += 0.35f) { V2 q = c + pp * u; if (((int)((u + 4) * 3)) % 3 != 2) DrawPixel(SX(q.x), SY(q.y), foam); }
     }
     drawGoal(0, true, ox, oy);
     // ombres
@@ -1826,9 +1848,24 @@ void renderMatch(const Match& m, bool radar) {
             bool fem = m.S.referee >= 0 && m.S.referee < NUM_REFEREES && REFEREES[m.S.referee].female;
             static const int MS[6][2] = { { 0, 0 }, { 0, 4 }, { 1, 3 }, { 2, 2 }, { 2, 6 }, { 3, 1 } };      // (peau, cheveux) donnant une coupe courte
             int rs = fem ? 1 : MS[(m.S.referee + 6) % 6][0], rh = fem ? 3 : MS[(m.S.referee + 6) % 6][1];
-            g_sprLongHair = fem;
-            drawPlayerSprite(rx, ry, rk, rs, rh, showCard ? 0 : dirOf(m.refFace), rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
-            g_sprLongHair = false;
+            g_sprLongHair = fem; g_sprHairStyle = fem ? 0 : (m.S.referee % 3 == 2 ? 5 : 0);
+            int rdir = showCard ? 0 : dirOf(m.refFace);
+            drawPlayerSprite(rx, ry, rk, rs, rh, rdir, rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
+            g_sprLongHair = false; g_sprHairStyle = -1;
+            if (!showCard && rdir == 0) {                       // écusson de la fédération et sifflet au cou
+                DrawPixel(rx - 2, ry - 7, Color{ 250, 210, 60, 255 });
+                DrawPixel(rx + 1, ry - 7, Color{ 205, 210, 220, 255 });
+            }
+            if (!replay && !showCard && ((m.state == MS_STOP && m.stateT < 0.7f) || (m.state == MS_BREAK && m.stateT < 1.f) || (m.state == MS_GOAL && m.stateT < 0.6f))) {
+                // coup de sifflet : main à la bouche, ondes sonores
+                Color skc = Color{ 230, 190, 150, 255 };
+                DrawRectangle(rx + (rdir == 3 ? -2 : 1), ry - 10, 1, 1, skc);
+                DrawPixel(rx + (rdir == 3 ? -2 : 1), ry - 11, Color{ 220, 225, 235, 255 });
+                float ph = std::fmod((float)GetTime() * 6.f, 1.f);
+                Color wv{ 255, 255, 255, (unsigned char)(200 * (1 - ph)) };
+                int wx = rx + (rdir == 3 ? -4 : 3) + (rdir == 3 ? -(int)(ph * 4) : (int)(ph * 4)), wy = ry - 13;
+                DrawPixel(wx, wy, wv); DrawPixel(wx + (rdir == 3 ? -1 : 1), wy - 1, wv); DrawPixel(wx, wy - 2, wv);
+            }
             if (!replay && (m.refCarry || m.ballStage == 2)) {   // le ballon dans la main (sous le bras) de l'arbitre
                 int d = dirOf(m.refFace);
                 int hx = rx + (d == 2 ? -4 : d == 3 ? 3 : 3), hy = ry - 7;
@@ -2075,9 +2112,10 @@ void renderMatch(const Match& m, bool radar) {
     // visée sur coup de pied arrêté
     if (!replay && m.state == MS_SETPIECE && m.spReady && m.spKicker >= 0 && m.pl[m.spKicker].human >= 0 && m.sp != SP_KICKOFF) {
         Color cc = CTRL_COL[m.pl[m.spKicker].human];
-        if (m.sp == SP_FREEKICK) {
+        if (m.sp == SP_FREEKICK || (m.sp == SP_CORNER && std::fabs(m.spCurl) > 0.02f)) {
             // flèche courbe : trajectoire prévue avec l'effet choisi
-            V2 q = m.ball.pos, v = m.spAim * 26.f, prev = q; float spin = m.spCurl * 6.5f;
+            bool cor = m.sp == SP_CORNER;
+            V2 q = m.ball.pos, v = m.spAim * (cor ? 20.f : 26.f), prev = q; float spin = m.spCurl * (cor ? 5.5f : 6.5f);
             float len = 0; const float dtp = 0.02f;
             for (int k = 0; k < 60; k++) {
                 v += v.norm().perp() * (spin * dtp); spin *= (1 - 0.9f * dtp);
@@ -2428,7 +2466,7 @@ void renderMatch(const Match& m, bool radar) {
         DrawRectangle(rx + (int)(bpos.x / PITCH_W * rw), ry + (int)(bpos.y / PITCH_L * rh), 1, 1, WHITE);
     }
     if (replay) {
-        if (((int)(GetTime() * 2)) % 2) drawTextShadow("REPLAY", MW - 44, 4, 10, Color{ 255, 80, 80, 255 });
+        if (((int)(GetTime() * 2)) % 2) { int ry = m.S.tv && !m.S.channel.empty() ? 18 : 4; DrawRectangle(MW - 48, ry - 1, 45, 12, Color{ 0, 0, 0, 140 }); drawTextShadow("REPLAY", MW - 44, ry, 10, Color{ 255, 80, 80, 255 }); }   // sous le logo de la chaîne
     }
     // combat (façon hockey rétro) : ring entouré du public, deux joueurs en gros plan, jauges d'énergie, onomatopées
     if (m.duel && m.fightT > 0 && !replay && m.fightA >= 0 && m.fightB >= 0) {
@@ -2514,6 +2552,24 @@ void renderMatch(const Match& m, bool radar) {
             int ct = m.refCardSecond && m.refCardT > 1.75f ? 1 : m.refCardType;
             band(m.refCardSecond ? (ct == 1 ? "2E CARTON JAUNE" : "2E JAUNE = CARTON ROUGE") : ct == 2 ? "CARTON ROUGE" : "CARTON JAUNE", m.playerName(m.refCardFor) + " (" + m.team(cp.team).shortName + ")", ct == 2 ? Color{ 230, 40, 40, 255 } : Color{ 255, 220, 0, 255 }, a);
         }
+    }
+    // ralenti du hors-jeu : ligne de l'avant-dernier défenseur (rouge) et de l'attaquant (jaune), écart mesuré
+    if (replay && m.offReplay) {
+        int x0 = SX(0), x1 = SX(PITCH_W);
+        bool frozen = m.rpPos == m.offRpIdx;
+        int yl = SY(m.offLineY), ya = SY(m.offAttY);
+        if (frozen || ((int)(GetTime() * 4)) % 2) {
+            DrawRectangle(x0, yl, x1 - x0, 1, Color{ 255, 60, 60, 230 });
+            DrawRectangle(x0, ya, x1 - x0, 1, Color{ 255, 230, 60, 230 });
+            if (std::abs(ya - yl) > 1) DrawRectangle(x0, std::min(ya, yl), x1 - x0, std::abs(ya - yl), Color{ 255, 230, 60, 40 });
+        }
+        DrawRectangle(4, MH - 40, 190, 26, Color{ 8, 12, 30, 220 }); DrawRectangle(4, MH - 40, 2, 26, Color{ 255, 60, 60, 255 });
+        drawTextPx(frozen ? "ARRÊT SUR IMAGE" : "RALENTI - HORS-JEU", 9, MH - 39, 10, Color{ 255, 225, 90, 255 });
+        float mg = std::fabs(m.offRepMargin);
+        std::string t = mg < 0.01f ? std::string("à la limite") : m.offRepMargin > 0 ? fmt("hors-jeu de %.2f m", mg) : fmt("en jeu de %.2f m : l'assistant s'est trompé", mg);
+        for (auto& c : t) if (c == '.') c = ',';
+        drawTextPx(fitText(t, 182, 5), 9, MH - 26, 5, WHITE);
+        drawTextPx("Rouge : avant-dernier défenseur   Jaune : attaquant", 9, MH - 20, 5, Color{ 200, 210, 230, 255 });
     }
     // messages
     if (m.msgT > 0 && !m.msg.empty() && !replay && !(m.state == MS_GOAL && m.stateT < 1.8f) && !(m.ceremony && m.tossUI > 0) && m.tossKind == 0 && !m.lapActive && !(m.duel && m.fightT > 0)) {
@@ -2627,36 +2683,50 @@ void drawFanGirl(int x, int y, int size, int skin, int hair, int style, Color c1
     R(4, 25, 24, 7, c1); R(13, 25, 6, 3, sk);
     R(6, 23, 20, 3, c2); for (int k = 0; k < 5; k++) R(6 + k * 4, 23, 2, 3, c1);
     R(20, 25, 3, 7, c2); R(20, 28, 3, 1, c1);
-    R(13, 20, 6, 4, skd);
-    R(10, 8, 12, 14, sk);
-    R(9, 12, 1, 4, skd); R(22, 12, 1, 4, skd);
-    // frange / dessus
-    if (style == 2) { R(9, 5, 14, 4, hc); R(9, 8, 3, 3, hc); R(20, 8, 3, 3, hc); }
-    else { R(9, 5, 14, 3, hc); R(9, 8, 2, 8, hc); R(21, 8, 2, 8, hc); R(11, 7, 5, 2, hc); }
-    R(12, 5, 4, 1, hl);
-    // maquillage aux couleurs du club sur les joues
-    R(10, 16, 2, 1, c1); R(10, 17, 2, 1, c2); R(20, 16, 2, 1, c1); R(20, 17, 2, 1, c2);
-    // yeux (clin d'œil), cils, sourcils
-    Color eye = { 40, 28, 30, 255 }, lash = { 20, 14, 16, 255 };
+    R(14, 20, 4, 4, skd); R(14, 20, 4, 1, Color{ (unsigned char)(skd.r * 0.9f), (unsigned char)(skd.g * 0.9f), (unsigned char)(skd.b * 0.9f), 255 });   // cou
+    // visage ovale : joues arrondies, menton fin
+    R(10, 9, 12, 10, sk); R(11, 8, 10, 1, sk); R(11, 19, 10, 1, sk); R(12, 20, 8, 1, sk); R(14, 21, 4, 1, skd);
+    R(10, 17, 1, 2, skd); R(21, 17, 1, 2, skd);
+    R(9, 12, 1, 3, sk); R(22, 12, 1, 3, sk);                              // oreilles
+    R(9, 15, 1, 2, Color{ 250, 215, 90, 255 }); R(22, 15, 1, 2, Color{ 250, 215, 90, 255 });   // boucles d'oreilles dorées
+    // frange / dessus, mèches qui encadrent le visage
+    if (style == 2) { R(9, 5, 14, 4, hc); R(9, 8, 3, 3, hc); R(20, 8, 3, 3, hc); R(13, 8, 2, 1, hc); R(17, 8, 2, 1, hc); }
+    else { R(9, 5, 14, 3, hc); R(9, 8, 2, 9, hc); R(21, 8, 2, 9, hc); R(11, 7, 6, 2, hc); R(17, 7, 3, 1, hc); R(10, 16, 1, 2, hc); R(21, 16, 1, 2, hc); }
+    R(12, 5, 5, 1, hl); R(10, 9, 1, 3, hl);
+    // maquillage aux couleurs du club : petit cœur sur la joue
+    R(19, 16, 1, 1, c1); R(21, 16, 1, 1, c1); R(19, 17, 3, 1, c1); R(20, 18, 1, 1, c1);
+    // yeux en amande : iris clair + reflet, cils recourbés, sourcils fins
+    Color lash = { 22, 14, 18, 255 }, white = { 250, 248, 245, 255 };
+    Color iris = (skin + hair) % 3 == 0 ? Color{ 70, 130, 90, 255 } : (skin + hair) % 3 == 1 ? Color{ 80, 120, 175, 255 } : Color{ 110, 70, 40, 255 };
     bool wink = mood == 1 && std::fmod(t, 2.4f) < 0.9f;
     bool blink = std::fmod(t + skin * 0.7f, 3.1f) < 0.12f;
-    R(12, 11, 3, 1, Color{ hc.r, hc.g, hc.b, 220 }); R(17, 11, 3, 1, Color{ hc.r, hc.g, hc.b, 220 });
-    if (blink) { R(12, 14, 2, 1, lash); R(18, 14, 2, 1, lash); }
-    else {
-        R(12, 13, 2, 2, eye); R(12, 13, 1, 1, WHITE); R(11, 12, 1, 1, lash);
-        if (wink) { R(18, 14, 3, 1, lash); R(20, 13, 1, 1, lash); }
-        else { R(18, 13, 2, 2, eye); R(18, 13, 1, 1, WHITE); R(20, 12, 1, 1, lash); }
-    }
-    R(15, 15, 2, 2, skd);
-    R(11, 17, 1, 1, Color{ 240, 150, 150, 120 }); R(20, 17, 1, 1, Color{ 240, 150, 150, 120 });   // pommettes
-    Color lip = { 205, 60, 80, 255 };
-    if (mood == 0) { R(14, 18, 4, 2, Color{ 120, 30, 40, 255 }); R(14, 18, 4, 1, lip); R(15, 19, 2, 1, WHITE); }   // elle chante
-    else if (mood == 2) { R(15, 18, 2, 2, lip); }                                // baiser
-    else { R(13, 18, 6, 1, lip); R(13, 17, 1, 1, lip); R(18, 17, 1, 1, lip); }   // sourire
+    Color brow = { (unsigned char)(hc.r * 0.8f), (unsigned char)(hc.g * 0.8f), (unsigned char)(hc.b * 0.8f), 230 };
+    R(12, 10.6f, 3, 0.6f, brow); R(17, 10.6f, 3, 0.6f, brow);
+    auto eyeAt = [&](float ex, bool closed, bool left) {
+        if (closed) { R(ex, 13.5f, 3, 0.7f, lash); R(left ? ex - 0.5f : ex + 2.8f, 13, 0.7f, 0.7f, lash); return; }
+        R(ex, 12.5f, 3, 2, white);
+        R(ex + 0.8f, 12.4f, 1.6f, 2.1f, iris); R(ex + 1.2f, 12.9f, 0.8f, 1.2f, lash);
+        R(ex + 1.f, 12.5f, 0.6f, 0.6f, WHITE);
+        R(ex - 0.2f, 12, 3.4f, 0.7f, lash);                                       // trait d'eye-liner
+        R(left ? ex - 0.7f : ex + 3.f, 11.6f, 0.7f, 0.7f, lash);                 // cil extérieur
+    };
+    eyeAt(12, blink, true); eyeAt(17, blink || wink, false);
+    R(15.6f, 15.4f, 0.8f, 1.2f, skd);                                             // nez discret
+    R(11, 16.5f, 2, 1, Color{ 245, 140, 150, 110 }); R(19, 16.5f, 2, 1, Color{ 245, 140, 150, 70 });   // blush
+    Color lip = { 214, 70, 96, 255 }, lipd = { 170, 40, 70, 255 };
+    if (mood == 0) { R(14, 18, 4, 2.2f, Color{ 120, 30, 45, 255 }); R(14, 17.8f, 4, 0.8f, lip); R(14.5f, 19.6f, 3, 0.8f, lip); R(15, 18.5f, 2, 0.6f, WHITE); }   // elle chante
+    else if (mood == 2) { R(15, 18, 2, 2, lip); R(15.2f, 18.2f, 0.7f, 0.7f, Color{ 255, 200, 210, 255 }); }      // baiser
+    else { R(13.5f, 18, 5, 1, lip); R(13, 17.4f, 0.8f, 0.8f, lipd); R(18.2f, 17.4f, 0.8f, 0.8f, lipd); R(15, 18.7f, 2, 0.6f, lipd); R(14.5f, 18, 1, 0.5f, Color{ 255, 190, 200, 255 }); }   // sourire
     // mains
-    if (mood == 0) {          // main qui salue
-        float wv = std::sin(t * 9) * 2;
-        R(26 + wv * 0.3f, 15, 3, 5, sk); R(26 + wv, 12, 1, 3, sk); R(27 + wv, 11, 1, 4, sk); R(28 + wv, 12, 1, 3, sk); R(26, 20, 3, 6, c1);
+    if (mood == 0) {          // écharpe tendue au-dessus de la tête, à deux mains, qui se balance
+        float wv = std::sin(t * 6) * 1.5f;
+        R(5, 9 + wv, 3, 14 - wv, c1); R(24, 9 - wv, 3, 14 + wv, c1);           // bras levés (manches du maillot)
+        R(5, 6 + wv, 3, 3, sk); R(24, 6 - wv, 3, 3, sk);                         // mains fermées sur l'écharpe
+        for (int k = 0; k < 8; k++) {
+            float yy = 3.f + wv - (wv * 2) * k / 7.f;
+            R(4 + k * 3, yy, 3, 3, (k & 1) ? c1 : c2);
+        }
+        R(2, 4 + wv, 2, 4, c2); R(28, 4 - wv, 2, 4, c2);                         // franges
     } else if (mood == 2) {   // baiser envoyé : main près des lèvres, cœur qui s'envole
         R(18, 19, 4, 3, sk);
         float hp = std::fmod(t * 0.8f, 1.f);

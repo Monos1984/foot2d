@@ -627,6 +627,12 @@ void Match::updateReferee(float dt) {
         // coup franc : l'arbitre se rend sur place et recule de 9,15 m pour placer le mur
         V2 g = goalCenter(nextSpTeam);
         target = nextSpPos + (g - nextSpPos).norm() * 6.5f + V2(nextSpPos.x < PITCH_W / 2 ? 2.f : -2.f, 0);
+    } else if ((state == MS_STOP && nextSp == SP_CORNER) || (state == MS_SETPIECE && sp == SP_CORNER)) {
+        // corner : l'arbitre ne colle pas le tireur, il se poste à l'angle opposé de la surface pour voir les duels
+        V2 c = state == MS_SETPIECE ? spPos : nextSpPos;
+        float gy = c.y < PITCH_L / 2 ? 0.f : PITCH_L, in = c.y < PITCH_L / 2 ? 1.f : -1.f;
+        float far = c.x < PITCH_W / 2 ? PITCH_W / 2 + 13.f : PITCH_W / 2 - 13.f;
+        target = V2(far, gy + in * 15.f);
     } else if (state == MS_STOP && nextSp == SP_PENALTY) {
         target = nextSpPos + V2(nextSpPos.x < PITCH_W / 2 ? 3.f : -3.f, nextSpPos.y < PITCH_L / 2 ? 4.f : -4.f);   // désigne le point puis se place à l'entrée de la surface
     } else {
@@ -637,6 +643,11 @@ void Match::updateReferee(float dt) {
         target = V2(b.x + side * 9.f, b.y + (b.y < PITCH_L / 2 ? 7.f : -7.f) + ahead);
         // ne pas rester sur la trajectoire d'une passe
         if (ball.owner < 0 && ball.vel.len() > 6.f) { V2 bd = ball.vel.norm(); V2 rp = refPos - ball.pos; float u = rp.dot(bd); if (u > 0 && u < 20.f && (rp - bd * u).len() < 2.f) target = refPos + V2(-bd.y, bd.x) * 3.f; }
+    }
+    // jamais collé au tireur d'un coup de pied arrêté
+    if (state == MS_SETPIECE && sp != SP_KICKOFF && sp != SP_PENALTY && sp != SP_SHOOTOUT) {
+        V2 o = target - spPos; float ol = o.len();
+        if (ol < 9.f) target = spPos + (ol > 0.1f ? o * (1.f / ol) : (V2(PITCH_W / 2, PITCH_L / 2) - spPos).norm()) * 9.f;
     }
     target.x = clampf(target.x, 2.f, PITCH_W - 2.f); target.y = clampf(target.y, 2.f, PITCH_L - 2.f);
     V2 d = target - refPos;
@@ -2184,7 +2195,11 @@ void Match::updateSetPiece(float dt) {
             break;
         }
         case SP_CORNER: case SP_GOALKICK: case SP_FREEKICK: case SP_INDIRECT: {
-            if (kind == 1) {
+            if (sp == SP_CORNER && human >= 0 && std::fabs(spCurl) > 0.02f) {
+                // corner brossé (L2 / R2) : centre rentrant ou sortant, le ballon suit la flèche courbe
+                if (kind == 1) kickBall(k, aim, 20.f, 6.5f, true, false); else kickBall(k, aim, 15.f, 0.6f, true, false);
+                ball.spin = spCurl * 5.5f;
+            } else if (kind == 1) {
                 int tgt = bestPassTarget(k, aim, true, 55);
                 if (tgt >= 0 && human < 0) passTo(k, tgt, true);
                 else if (tgt >= 0 && human >= 0) passTo(k, tgt, true);
@@ -2269,6 +2284,10 @@ void Match::updateSetPiece(float dt) {
         ctrlPlayer[human] = k;
         p.human = human;
         // coup franc : effet (flèche courbe) - stick latéral pendant la prise d'élan, ou boutons L / R
+        if (sp == SP_CORNER) {
+            if (c.curlL) spCurl = clampf(spCurl - dt * 1.6f, -1.f, 1.f);
+            if (c.curlR) spCurl = clampf(spCurl + dt * 1.6f, -1.f, 1.f);
+        }
         if (sp == SP_FREEKICK) {
             if (p.charging && c.dir.len2() > 0.01f) { float side = c.dir.norm().dot(spAim.perp()); spCurl = clampf(spCurl + (side - spCurl) * std::min(1.f, dt * 5.f), -1.f, 1.f); }
             // L2 / R2 maintenus : la flèche se courbe progressivement d'un côté ou de l'autre
@@ -3714,6 +3733,14 @@ void Match::update(float dt) {
         }
         break;
     case MS_REPLAY:
+        if (offReplay) {   // ralenti du hors-jeu : demi-vitesse, arrêt sur image au moment de la passe, puis coup franc indirect
+            if (stateT > 9) { offReplay = false; state = MS_STOP; stateT = 0; break; }      // passé par le joueur
+            if (rpPos == offRpIdx && offRepHold < 2.2f) { offRepHold += dt; break; }
+            static float halfStep = 0; halfStep += 0.5f;
+            if (halfStep >= 1.f) { halfStep -= 1.f; rpPos = (rpPos + 1) % REPLAY_N; }
+            if (rpPos == rpHead || stateT > 9 || (offRepHold >= 2.2f && (rpPos - offRpIdx + REPLAY_N) % REPLAY_N > 70)) { offReplay = false; state = MS_STOP; stateT = 0; }
+            break;
+        }
         rpPos = (rpPos + 1) % REPLAY_N;
         if (rpPos == rpHead || stateT > 7) {
             for (auto& p : pl) if (p.state == PS_CELEB) p.state = PS_NORMAL;

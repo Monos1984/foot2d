@@ -268,6 +268,8 @@ struct Match {
     struct EndPair { int a, b, round; V2 meet; float t = 0; bool active = false, done = false, swap = false; };
     std::vector<EndPair> endPairs;
     bool refCarry = false;
+    // ralenti du hors-jeu : lignes de détection (avant-dernier défenseur / attaquant) au moment de la passe
+    int offRpIdx = -1; bool offReplay = false; float offLineY = 0, offAttY = 0, offRepMargin = 0, offRepHold = 0; int offRepPlayer = -1;
     void updateEndScene(float dt);
     V2 pedestal;
     float msgT = 0;
