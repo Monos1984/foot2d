@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -350,6 +350,7 @@ static int g_legendEd = -1;              // légendes de la Coupe du monde : éd
 static bool g_leagueModePick = false;   // choix des clubs du mode Championnat
 static bool g_euroModePick = false;     // choix des clubs du mode Coupes d'Europe
 static bool g_coachModePick = false;    // carrière de sélectionneur : choix de la sélection
+static bool g_contPick = false;         // Coupe des Continents : choix des sélections continentales
 static int g_coachCatPick = 0;          // catégorie : 0 A, 1 Espoirs / olympique, 2 U19, 3 U17
 static void autosave();
 static void openCallup(Screen back);
@@ -537,7 +538,7 @@ static void openPick(PickMode m) {
     g_stack.clear();
     Node root;
     if (m == PM_CAREER || m == PM_BROWSE) { root.kind = K_CLUBROOT; root.title = m == PM_CAREER ? "Choisissez votre club" : "Championnats"; }
-    else if (m == PM_INTL) { root.kind = K_INTLLIST; root.title = g_coachModePick ? "Carrière de sélectionneur : choisissez votre sélection" : g_euroModePick ? "Coupes d'Europe : choisissez vos clubs (1 à 4)" : g_leagueModePick ? "Choisissez vos clubs (1 à 4)" : "Choisissez vos sélections"; }
+    else if (m == PM_INTL) { root.kind = K_INTLLIST; root.title = g_contPick ? "Coupe des Continents : choisissez vos sélections (1 à 4)" : g_coachModePick ? "Carrière de sélectionneur : choisissez votre sélection" : g_euroModePick ? "Coupes d'Europe : choisissez vos clubs (1 à 4)" : g_leagueModePick ? "Choisissez vos clubs (1 à 4)" : "Choisissez vos sélections"; }
     else if (m == PM_CUSTOM) { root.kind = K_ROOT; root.title = "Équipes de la compétition"; }
     else if (m == PM_EDIT) { root.kind = K_CLUBROOT; root.title = "Club à modifier"; }
     else if (m == PM_FICHE) { root.kind = K_ROOT; root.title = "Fiches des clubs et sélections"; }
@@ -600,7 +601,7 @@ static void screenPick() {
         else if (g_pickMode == PM_BROWSE) g_screen = SC_COMPS;
         else if (g_pickMode == PM_CAREER && g_lifePick) g_screen = SC_LIFENEW;
         else if (g_pickMode == PM_INTL && g_legendEd >= 0) { g_screen = SC_LEGENDS; g_legendEd = -1; }
-        else if (g_pickMode == PM_INTL) { g_screen = g_euroModePick || g_coachModePick ? SC_MAIN : g_leagueModePick ? SC_LEAGUEMODE : SC_INTL; g_leagueModePick = false; g_euroModePick = false; g_coachModePick = false; }
+        else if (g_pickMode == PM_INTL) { g_screen = g_euroModePick || g_coachModePick || g_contPick ? SC_MAIN : g_leagueModePick ? SC_LEAGUEMODE : SC_INTL; g_leagueModePick = false; g_euroModePick = false; g_coachModePick = false; g_contPick = false; }
         else if (g_pickMode == PM_CUSTOM) g_screen = SC_CUSTOM;
         else if (g_pickMode == PM_EDIT) g_screen = SC_EDITMENU;
         else if (g_pickMode == PM_INVITE) g_screen = SC_FRIENDLIES;
@@ -688,6 +689,16 @@ static void screenPick() {
             return;
         }
         if (g_leagueModePick) { startLeagueMode(); return; }
+        if (g_contPick) {
+            std::vector<int> ctrl = g_intlSel; if (ctrl.size() > 4) ctrl.resize(4);
+            g_contPick = false;
+            g_career.coach = false; g_career.nlLeague.clear();
+            continentsStart(g_career, ctrl);
+            g_careerActive = true; g_needAdvance = true;
+            g_hubNotice = "Coupe des Continents : groupe unique de 6, matchs aller-retour, puis Final Four";
+            openHub();
+            return;
+        }
         if (g_coachModePick) {
             if (g_coachCatPick >= 2 && NATIONS[g_intlSel[0]].conf != UEFA) { toast("Catégorie U19 / U17 : réservée aux sélections européennes (Euro U19 / U17)"); return; }
             if (!requireManager(SC_PICK)) return;
@@ -2299,6 +2310,7 @@ static void drawSection(int x, int y, int w, const std::string& t) {
 }
 
 #include "app_press.inc"
+#include "app_media.inc"
 static void screenHub() {
     if(showSupporterParty(SC_HUB))return;
     if(g_career.sportingMode()){openSporting(0);return;}
@@ -2330,6 +2342,11 @@ static void screenHub() {
         g_career.directorTick();
         if(g_career.ballonPending()>=0){openBallon();return;}
         if (collectDraws()) { g_screen = SC_DRAW; return; }
+    }
+    if (!g_confirm.active) {   // coupures de journal (vainqueurs de coupes), puis invitation dans les médias
+        int cn = cupNewsPending();
+        if (cn >= 0) { openCupNews(cn); return; }
+        if (mediaInviteDue()) { openMediaInvite(); return; }
     }
     bool euro = g_career.kind == 0 && g_career.euroOnly;
     bool club = g_career.kind == 0 && !euro;
@@ -4263,6 +4280,7 @@ static void screenMain(float dt) {
         { "Compétitions internationales", "Coupe du monde, Euro, CAN, Copa América, Gold Cup... ; Espoirs, U19, U17, tournois olympiques ; Euro et Coupe du monde féminins.", 4, 0 },
         { "Carrière de sélectionneur", "Dirigez une sélection (A, Espoirs, U19 ou U17) : convocations, Ligue des nations, qualifications, phases finales.", 5, 1 },
         { "Légendes de la Coupe du monde", "Mode hors-série : rejouez les phases finales de 1930 à 2026 avec les joueurs, la formule, les stades et les règles de l'époque.", 12, 0 },
+        { "Coupe des Continents", "Chaque confédération (UEFA, CONMEBOL, CONCACAF, CAF, AFC, OFC) envoie ses meilleurs joueurs : un groupe de 6 en matchs aller-retour, puis Final Four pour les 4 premiers.", 13, 0 },
         { "< Retour", "Revenir au menu principal.", 0, 3 } };
     static const MI SUB3[] = {
         { "Carrière club : JEU + MANAGER", "Vous gérez le club (effectif, mercato, finances, stade) et vous jouez les matchs. Championnats masculins et féminins du monde entier.", 6, 1 },
@@ -4277,7 +4295,7 @@ static void screenMain(float dt) {
         { "Fiches des clubs et sélections", "Fiches complètes des clubs et sélections : effectifs, stades, palmarès, archives.", 11, 2 },
         { "< Retour", "Revenir au menu principal.", 0, 3 } };
     const MI* M = sub == 1 ? SUB1 : sub == 2 ? SUB2 : sub == 3 ? SUB3 : sub == 4 ? SUB4 : ROOT;
-    int NM = sub == 1 ? 3 : sub == 2 ? 4 : sub == 3 ? 7 : sub == 4 ? 3 : 12;
+    int NM = sub == 1 ? 3 : sub == 2 ? 5 : sub == 3 ? 7 : sub == 4 ? 3 : 12;
     static const Color GC[4] = { { 60, 190, 90, 255 }, { 240, 190, 50, 255 }, { 80, 150, 240, 255 }, { 150, 160, 180, 255 } };
     static const char* GN[4] = { "JOUER", "CARRIÈRES", "DONNÉES", "SYSTÈME" };
     static const char* SUBN[5] = { "MENU PRINCIPAL", "CHAMPIONNAT", "INTERNATIONAL", "CARRIÈRE", "ÉDITEUR" };
@@ -4345,6 +4363,12 @@ static void screenMain(float dt) {
     case 10: g_edMenuLW = ListW(); g_screen = SC_EDITMENU; break;
     case 11: openPick(PM_FICHE); break;
     case 12: g_screen = SC_LEGENDS; break;
+    case 13:
+        g_careerActive = false;
+        g_intlCandidates = continentTeams();
+        g_intlSel.clear(); g_contPick = true; g_coachModePick = false; g_euroModePick = false; g_leagueModePick = false;
+        openPick(PM_INTL);
+        break;
     case 20: g_customLW = ListW(); g_screen = SC_CUSTOM; break;
     case 21: g_careerActive = false; openPick(PM_TRAIN); break;
     case 30: g_optBack = SC_MAIN; g_screen = SC_OPTIONS; break;
@@ -4443,6 +4467,8 @@ void appFrame(float dt) {
     case SC_TVADS: screenTvAds(); break;
     case SC_ADSEDIT: screenAdsEdit(); break;
     case SC_PRESS: screenPress(); break;
+    case SC_MEDIA: screenMedia(); break;
+    case SC_CUPNEWS: screenCupNews(); break;
     case SC_HELP: screenHelp(); break;
     case SC_FICHE: screenFiche(dt); break;
     case SC_EDITMENU: screenEditMenu(); break;
@@ -4644,6 +4670,9 @@ void appTestStart(const char* mode) {
     } else if (m == "adsedit") { g_screen = SC_ADSEDIT; if (getenv("FOOT_AE_ROW")) g_aeLW.cur = atoi(getenv("FOOT_AE_ROW"));
     } else if (m == "setup") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("BRA"), false, -1, -1);
+    } else if (m == "continents" || m == "contmatch") {
+        auto T = continentTeams(); continentsStart(g_career, { T[0] }); g_careerActive = true; g_needAdvance = true; openHub();
+        if (m == "contmatch") { g_pending = g_career.season.advance(false); g_needAdvance = false; const MatchRes& mr = g_career.season.comps[g_pending.comp].matches[g_pending.match]; startSetup(mr.home, mr.away, true, g_pending.comp, g_pending.match); for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1; launchMatch(); }
     } else if (m == "hub") {
         int user = -1;
         for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Stade Brestois") user = i;
@@ -4653,6 +4682,12 @@ void appTestStart(const char* mode) {
             g_career.ballonTick(); for (auto& e : g_career.ballonEditions) e.presented = 1; g_needAdvance = true;
         }
         openHub();
+        if (getenv("FOOT_MEDIA")) { g_needAdvance = false; openMediaInvite(); if (getenv("FOOT_MEDIA_A")) { g_mediaA = std::max(0, std::min(2, atoi(getenv("FOOT_MEDIA_A")))); mediaApply(g_mediaA); } if (getenv("FOOT_MEDIA_END")) g_mediaStep = 3; }
+        if (getenv("FOOT_CUPNEWS")) {
+            int want = atoi(getenv("FOOT_CUPNEWS"));
+            int guard = 0; while (guard++ < 20000 && !g_career.season.finished) { int c = cupNewsPending(); if (c >= 0 && (want == 0 || g_career.season.comps[c].kind == want)) break; if (c >= 0) { Career::KeyVal kv; kv.k = c; kv.v = g_career.year; g_career.monthly.cupNews.push_back(kv); } g_career.season.advance(true); }
+            int c = cupNewsPending(); g_needAdvance = false; if (c >= 0) openCupNews(c);
+        }
         if (getenv("FOOT_PRESS")) { g_pending = g_career.season.advance(false); g_needAdvance = false; if (g_pending.comp >= 0) { openPress(g_pending.comp, g_pending.match); if (getenv("FOOT_PRESS_Q")) g_pressQ = std::max(0, std::min(9, atoi(getenv("FOOT_PRESS_Q")))); if (getenv("FOOT_PRESS_A")) { g_pressA = std::max(0, std::min(2, atoi(getenv("FOOT_PRESS_A")))); pressApply(g_pressA); } } }
     } else if (m == "coach" || m == "callup" || m == "hosts" || m == "coachlog" || m == "coachend") {
         g_career.newCoachCareer(g_world.nationIndex("FRA")); g_careerActive = true; g_needAdvance = true;
@@ -4923,7 +4958,7 @@ void appTestStart(const char* mode) {
         int rm = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == "Real Madrid") rm = i;
         startSetup(user, rm, false, -1, -1);
         g_setup.studio = true; g_setup.stadium = "Parc des Princes"; g_setup.title = "Ligue des Champions - Phase de groupes";
-        g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" };
+        g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }; tvCrew();
         g_studioPhase = 0; g_studioT = 0; g_screen = SC_STUDIO;
     } else if (m == "help") g_screen = SC_HELP;
     else if (m == "main") g_screen = SC_MAIN;

@@ -726,7 +726,9 @@ struct Career {
     PersonalityState personalities;
     // build 18 : états mensuels persistants (conférence de presse, discussions individuelles, trophées du mois)
     struct KeyVal { int k = 0, v = 0; };
-    struct MonthlyState { int pressYear = -1, pressComp = -1, pressMatch = -1, awMonth = -1, awYear = -1, awTeam = -1; std::vector<KeyVal> awGoals, awPts, talked; };
+    struct MonthlyState { int pressYear = -1, pressComp = -1, pressMatch = -1, awMonth = -1, awYear = -1, awTeam = -1; std::vector<KeyVal> awGoals, awPts, talked;
+                          int mediaYear = -1, mediaCount = 0;   // version 36 : invitations TV / radio de la saison
+                          std::vector<KeyVal> cupNews; };       // version 36 : coupures de journal déjà montrées (compétition, saison)
     MonthlyState monthly;
     bool personalityEnabled() const;
     PersonalityPlayer& personalityPlayer(const Player& p,int club);
@@ -1120,6 +1122,14 @@ int youthNationTeam(int nation, int cat);      // sélection de jeunes d'une nat
 int nationOfTeam(int team);
 extern const char* INTL_NAMES[NUM_INTL];
 bool nationEligible(int n);
+// Coupe des Continents (continents.cpp) : sélections de chaque confédération, groupe unique de 6 puis Final Four
+const int KIND_CONTINENTS = 61, CUSTOM_CONTINENTS = 40;
+int continentTeam(int conf);
+bool isContinentTeam(int team);
+std::vector<int> continentTeams();
+struct Career;
+void continentsStart(Career& K, const std::vector<int>& ctrl);
+int addCompPublic(Season& S, Competition c);
 bool nlActive(const Career& K);                     // nations.cpp : Ligue des nations UEFA en cours
 std::vector<int> nlRanking(const Career& K);
 std::vector<int> nlGroupWinners(const Career& K);

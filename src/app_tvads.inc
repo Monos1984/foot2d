@@ -226,4 +226,5 @@ static void setFriendlyTv(int chan) {
     static const TvInfo TV[4] = { { "FRANCE SPORT", "Michel Larrieu", "Bernard Castagnet" }, { "CANAL FOOT+", "Stéphane Guy-Durand", "Patrice Vannier" },
                                   { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }, { "FOOT 2 TV", "Julien Morvan", "Éric Castel" } };
     g_tv = TV[std::max(0, std::min(3, chan))];
+    tvCrew();
 }

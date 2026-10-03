@@ -3122,7 +3122,7 @@ void Career::update() {}
 #include "packio.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 35;
+static const unsigned SAVE_VERSION = 36;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -3281,6 +3281,7 @@ bool Career::saveRaw(const char* path) const {
     personalitySave(w,*this); // version 33
     profMark(f, "PERSONALITY", (long)personalities.players.size());
     w.pod(monthly.pressYear);w.pod(monthly.pressComp);w.pod(monthly.pressMatch);w.pod(monthly.awMonth);w.pod(monthly.awYear);w.pod(monthly.awTeam);w.vpod(monthly.awGoals);w.vpod(monthly.awPts);w.vpod(monthly.talked); // version 34
+    w.pod(monthly.mediaYear);w.pod(monthly.mediaCount);w.vpod(monthly.cupNews); // version 36
     profMark(f, "MONTHLY");
     fclose(f);
     if (getenv("FOOT_SAVE_PROFILE")) saveProfileReport(stderr);
@@ -3440,6 +3441,7 @@ bool Career::loadRaw(const char* path) {
     lt("personality");
     monthly=MonthlyState();if(ver>=34&&r.ok){r.pod(monthly.pressYear);r.pod(monthly.pressComp);r.pod(monthly.pressMatch);r.pod(monthly.awMonth);r.pod(monthly.awYear);r.pod(monthly.awTeam);r.vpod(monthly.awGoals);r.vpod(monthly.awPts);r.vpod(monthly.talked);
         if(!r.ok||monthly.awGoals.size()>400000||monthly.awPts.size()>2000||monthly.talked.size()>20000)r.ok=false;}
+    if(ver>=36&&r.ok){r.pod(monthly.mediaYear);r.pod(monthly.mediaCount);r.vpod(monthly.cupNews);if(!r.ok||monthly.cupNews.size()>5000||monthly.mediaCount<0||monthly.mediaCount>10)r.ok=false;}
     for(const auto& e:ballonEditions) if(e.presented>1 || e.count[0]>3 || e.count[1]>3) r.ok=false;
     g_world.rebuildCountryClubs(pyramids);
     if (!hasDncg()) { mgr.dncg=0; mgr.bankrupt=0; mgr.wageCapK=0; }

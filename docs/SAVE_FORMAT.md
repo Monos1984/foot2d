@@ -1,4 +1,6 @@
-# Format des sauvegardes — version 35 (build 21)
+# Format des sauvegardes — version 36 (build 23)
+
+Version 36 : ajout, en fin de fichier, de l'état des invitations dans les médias (saison, nombre d'invitations) et de la liste des coupures de journal déjà montrées (compétition, saison). Les sauvegardes des versions 21 à 35 se chargent toujours.
 
 ## Conteneur (`src/savefile.cpp`)
 

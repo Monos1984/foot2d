@@ -1246,6 +1246,7 @@ static void drawPitchsideLive(const Match& m, int ox, int oy, int MWZ, int MHZ) 
 
 // ------------------------------------------------------------------ scénettes TV pendant les arrêts de jeu
 // incrustations façon réalisation télé : supporters, kop, banc, échauffement, mascotte, loge, parcage, jeune supporter, presse
+static unsigned g_fanSeed = 1; static int g_fanTeam = 0;     // supportrice filmée : apparence et camp, tirés à chaque plan
 static void drawSceneInset(const Match& m, int kind, float t, int x, int y, int w, int h) {
     Color hk = hexc(m.kit[0].shirt), hk2 = hexc(m.kit[0].shirt2 ? m.kit[0].shirt2 : m.kit[0].shorts);
     Color ak = hexc(m.kit[1].shirt), ak2 = hexc(m.kit[1].shirt2 ? m.kit[1].shirt2 : m.kit[1].shorts);
@@ -1330,6 +1331,42 @@ static void drawSceneInset(const Match& m, int kind, float t, int x, int y, int 
         DrawRectangle(fx + 1, y + 6 + wv, 16, 5, hk); DrawRectangle(fx + 1, y + 11 + wv, 16, 5, hk2);
         break;
     }
+    case 9: {   // « fan cam » : le caméraman s'attarde sur une supportrice
+        Color c1 = g_fanTeam ? ak : hk, c2 = g_fanTeam ? ak2 : hk2;
+        fxCrowd(x, y, w, h, c1, c2, t, 0.4f, 17 + g_fanSeed % 5, 3);
+        DrawRectangle(x, y, w, h, Color{ 10, 10, 30, 120 });
+        unsigned v = g_fanSeed * 2654435761u;
+        int skin = (int)(v % NUM_SKINS), hair = (int)((v >> 5) % 5), style = (int)((v >> 9) % 4);
+        if (skin == 3 || skin == 5) hair = (int)((v >> 11) % 2) ? 0 : 4;
+        int myTeam = g_fanTeam, d = m.score[myTeam] - m.score[1 - myTeam];
+        int mood = m.state == MS_GOAL && m.lastScorerTeam == myTeam ? 0 : d < 0 ? 3 : (int)((v >> 13) % 3);
+        int ps = h - 2;
+        drawFanGirl(x + w / 2 - ps / 2, y + 2, ps, skin, hair, style, c1, c2, t, mood);
+        // viseur de la caméra
+        Color vf = { 255, 255, 255, 170 };
+        DrawRectangle(x + 3, y + 3, 6, 1, vf); DrawRectangle(x + 3, y + 3, 1, 6, vf);
+        DrawRectangle(x + w - 9, y + 3, 6, 1, vf); DrawRectangle(x + w - 4, y + 3, 1, 6, vf);
+        DrawRectangle(x + 3, y + h - 4, 6, 1, vf); DrawRectangle(x + 3, y + h - 9, 1, 6, vf);
+        DrawRectangle(x + w - 9, y + h - 4, 6, 1, vf); DrawRectangle(x + w - 4, y + h - 9, 1, 6, vf);
+        if (((int)(t * 2)) % 2) { DrawCircle(x + 8, y + 12, 1.5f, Color{ 255, 40, 40, 255 }); drawTextPx("REC", x + 11, y + 10, 5, WHITE); }
+        break;
+    }
+    case 10: {  // deux supportrices, drapeau du club
+        Color c1 = g_fanTeam ? ak : hk, c2 = g_fanTeam ? ak2 : hk2;
+        fxCrowd(x, y, w, h, c1, c2, t, 0.4f, 23, 3);
+        DrawRectangle(x, y, w, h, Color{ 10, 10, 30, 110 });
+        unsigned v = g_fanSeed * 2246822519u;
+        int ps = h * 4 / 5;
+        int wv = (int)(std::sin(t * 6) * 2);
+        int fx = x + w / 2 - 1;
+        DrawLine(fx, y + 2, fx, y + h, Color{ 220, 220, 220, 255 });
+        DrawRectangle(fx + 1, y + 3 + wv, 14, 4, c1); DrawRectangle(fx + 1, y + 7 + wv, 14, 4, c2);
+        for (int k = 0; k < 2; k++) {
+            unsigned vv = v >> (k * 7);
+            drawFanGirl(x + (k ? w - ps - 1 : 1), y + h - ps - 1, ps, (int)(vv % NUM_SKINS), (int)((vv >> 4) % 5), (int)((vv >> 8) % 4), c1, c2, t + k * 0.7f, k ? 0 : (m.score[g_fanTeam] < m.score[1 - g_fanTeam] ? 3 : 1));
+        }
+        break;
+    }
     default: {  // tribune de presse : journalistes, ordinateurs, flashs
         DrawRectangle(x, y, w, h, Color{ 30, 34, 46, 255 });
         DrawRectangle(x, y + h - 18, w, 18, Color{ 90, 70, 50, 255 });
@@ -1346,21 +1383,31 @@ static void drawSceneInset(const Match& m, int kind, float t, int x, int y, int 
 }
 static void drawMatchScenes(const Match& m) {
     static const Match* sm = nullptr; static float st = -1, wait = 0, lastClock = -100; static int kind = 0;
-    if (sm != &m) { sm = &m; st = -1; wait = 0; lastClock = -100; }
+    static int goalCamSum = -1;
+    if (sm != &m) { sm = &m; st = -1; wait = 0; lastClock = -100; goalCamSum = -1; }
+    if (m.score[0] + m.score[1] < goalCamSum) goalCamSum = -1;
+    bool goalCam = m.S.tv && m.state == MS_GOAL && m.stateT > 2.6f && m.lastScorerTeam >= 0 && !m.S.neutral && m.score[0] + m.score[1] != goalCamSum;   // après un but : la caméra cherche la joie en tribune
     bool stop = !m.S.training && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.boardT <= 0 && m.pendCardOff < 0 &&
-                (m.state == MS_STOP || (m.state == MS_SETPIECE && !m.spReady && m.sp != SP_KICKOFF));
+                (m.state == MS_STOP || goalCam || (m.state == MS_SETPIECE && !m.spReady && m.sp != SP_KICKOFF));
     float dt = GetFrameTime();
-    if (getenv("FOOT_SCENE")) { kind = atoi(getenv("FOOT_SCENE")) % 9; st = 1.f; stop = true; dt = 0; }
+    if (getenv("FOOT_SCENE")) { kind = atoi(getenv("FOOT_SCENE")) % 11; st = 1.f; stop = true; dt = 0; g_fanSeed = (unsigned)atoi(getenv("FOOT_FANSEED") ? getenv("FOOT_FANSEED") : "3"); }
     if (st < 0) {
         if (stop) {
             wait += dt;
-            if (wait > 0.6f && m.clock - lastClock > 5.f) {
+            if (wait > 0.6f && (goalCam || m.clock - lastClock > 5.f)) {
                 lastClock = m.clock;
-                if (((int)(m.clock * 7.3f)) % 3 != 0) {
+                if (goalCam) {
+                    goalCamSum = m.score[0] + m.score[1];
+                    kind = 9; st = 0; g_fanTeam = m.lastScorerTeam; g_fanSeed = (unsigned)(m.clock * 977.f) + 11;
+                } else if (((int)(m.clock * 7.3f)) % 3 != 0) {
                     // le contexte oriente le choix : score, minute, équipe qui pousse
                     int base = (int)(m.clock * 13.f + m.score[0] * 5 + m.score[1] * 3) % 9;
                     if (m.score[1] > m.score[0] && base == 0) base = 6;
+                    // en télé, les caméramans aiment s'attarder sur les supportrices (un plan sur trois environ)
+                    if (m.S.tv && ((int)(m.clock * 3.1f)) % 3 == 0) base = ((int)(m.clock * 5.f)) % 4 == 0 ? 10 : 9;
                     kind = base; st = 0;
+                    g_fanSeed = (unsigned)(m.clock * 977.f) + 7;
+                    g_fanTeam = m.S.neutral ? ((int)m.clock % 2) : ((int)(m.clock * 2.3f)) % 4 == 0 ? 1 : 0;
                 }
             }
         } else wait = 0;
@@ -1368,9 +1415,10 @@ static void drawMatchScenes(const Match& m) {
     }
     st += dt;
     if (st > 3.4f || (!stop && st > 1.2f)) { st = -1; return; }
-    static const char* LAB[9] = { "EN TRIBUNE", "LE KOP", "SUR LE BANC", "ÉCHAUFFEMENT", "LA MASCOTTE", "EN LOGE", "LE PARCAGE VISITEUR", "JEUNE SUPPORTER", "TRIBUNE DE PRESSE" };
+    static const char* LAB[11] = { "EN TRIBUNE", "LE KOP", "SUR LE BANC", "ÉCHAUFFEMENT", "LA MASCOTTE", "EN LOGE", "LE PARCAGE VISITEUR", "JEUNE SUPPORTER", "TRIBUNE DE PRESSE", "FAN CAM", "LES SUPPORTRICES" };
     float in = std::min(1.f, st * 4.f), out = std::min(1.f, (3.4f - st) * 4.f);
-    int w = 76, h = 46, x = 4 - (int)((1.f - std::min(in, out)) * 100), y = 22;
+    bool fan = kind >= 9;
+    int w = fan ? 92 : 76, h = fan ? 58 : 46, x = 4 - (int)((1.f - std::min(in, out)) * 120), y = 22;
     float t = (float)GetTime();
     DrawRectangle(x + 2, y + 2, w + 4, h + 14, Color{ 0, 0, 0, 120 });
     DrawRectangle(x - 2, y - 2, w + 4, h + 4, Color{ 230, 230, 240, 255 });
@@ -2513,4 +2561,95 @@ void drawPortrait(int x, int y, int size, int skin, int hair, int gender, const 
     R(14, 19, 4, 1, gender ? Color{ 190, 70, 80, 255 } : Color{ 120, 60, 50, 255 });   // bouche
     if (!gender && (v >> 12) % 4 == 0) R(11, 19, 10, 3, Color{ hc.r, hc.g, hc.b, 170 });   // barbe
     DrawRectangleLines(x, y, size, size, Color{ 240, 200, 60, 200 });
+}
+
+// buste sans fond (plateau TV, cabine) : veste, chemise, visage ; la bouche s'ouvre quand la personne parle
+void drawBust(int x, int y, int size, int skin, int hair, int gender, unsigned outfit, unsigned seed, bool talking) {
+    float u = size / 32.f;
+    auto R = [&](float a, float b, float w, float h, Color c) { DrawRectangle(x + (int)(a * u), y + (int)(b * u), std::max(1, (int)(w * u + 0.5f)), std::max(1, (int)(h * u + 0.5f)), c); };
+    Color sk = hexc(SKIN[skin % NUM_SKINS]), skd = Color{ (unsigned char)(sk.r * 0.82f), (unsigned char)(sk.g * 0.82f), (unsigned char)(sk.b * 0.82f), 255 };
+    Color hc = hexc(HAIR[hair % NUM_HAIRS]), jc = hexc(outfit), jd = Color{ (unsigned char)(jc.r * 0.75f), (unsigned char)(jc.g * 0.75f), (unsigned char)(jc.b * 0.75f), 255 };
+    unsigned v = seed * 2654435761u;
+    int style = (int)(v >> 7) % 3;
+    if (gender) { R(8, 6, 16, style == 1 ? 14 : 20, hc); }                    // cheveux longs (ou carré)
+    R(3, 24, 26, 8, jc); R(3, 24, 2, 8, jd); R(27, 24, 2, 8, jd);             // veste
+    R(12, 24, 8, 8, gender ? jc : Color{ 240, 240, 245, 255 });              // chemise
+    if (!gender) { R(15, 25, 2, 6, (v >> 9) % 2 ? Color{ 150, 30, 40, 255 } : Color{ 30, 50, 120, 255 }); }   // cravate
+    else { R(12, 24, 8, 3, sk); R(14, 27, 4, 1, Color{ 240, 210, 120, 255 }); }   // encolure, collier
+    R(13, 20, 6, 5, skd);
+    R(10, 8, 12, 14, sk);
+    R(9, 12, 1, 4, skd); R(22, 12, 1, 4, skd);
+    if (gender) { R(9, 5, 14, 4, hc); R(9, 8, 2, style == 2 ? 16 : 10, hc); R(21, 8, 2, style == 2 ? 16 : 10, hc); if (style == 2) R(10, 4, 12, 2, hc); }
+    else if (style == 0) R(10, 5, 12, 4, hc);
+    else if (style == 1) { R(9, 5, 14, 5, hc); R(9, 9, 1, 3, hc); R(22, 9, 1, 3, hc); }
+    else R(11, 6, 10, 2, hc);
+    bool blink = ((int)(GetTime() * 1.3 + (v >> 3) % 7)) % 9 == 0;
+    Color eye = { 30, 24, 24, 255 };
+    if (blink) { R(12, 14, 2, 1, eye); R(18, 14, 2, 1, eye); }
+    else { R(12, 13, 2, 2, eye); R(18, 13, 2, 2, eye); }
+    if (gender) { R(11, 12, 1, 1, eye); R(20, 12, 1, 1, eye); }               // cils
+    R(15, 15, 2, 3, skd);
+    int mo = talking ? ((int)(GetTime() * 9) % 2) : 0;
+    R(14, 19, 4, 1 + mo, gender ? Color{ 190, 60, 75, 255 } : Color{ 120, 60, 50, 255 });
+    if (!gender && (v >> 12) % 5 == 0) R(11, 19, 10, 3, Color{ hc.r, hc.g, hc.b, 150 });
+}
+
+// gros plan « caméra en tribune » sur une supportrice : coiffure, maquillage aux couleurs du club, écharpe, réaction animée
+// mood : 0 elle chante et agite la main, 1 clin d'œil à la caméra, 2 elle envoie un baiser, 3 mains sur les joues (suspense)
+void drawFanGirl(int x, int y, int size, int skin, int hair, int style, Color c1, Color c2, float t, int mood) {
+    float u = size / 32.f;
+    auto R = [&](float a, float b, float w, float h, Color c) { DrawRectangle(x + (int)(a * u), y + (int)(b * u), std::max(1, (int)(w * u + 0.5f)), std::max(1, (int)(h * u + 0.5f)), c); };
+    Color sk = hexc(SKIN[skin % NUM_SKINS]), skd = Color{ (unsigned char)(sk.r * 0.85f), (unsigned char)(sk.g * 0.85f), (unsigned char)(sk.b * 0.85f), 255 };
+    Color hc = hexc(HAIR[hair % NUM_HAIRS]);
+    Color hl = Color{ (unsigned char)std::min(255, hc.r + 40), (unsigned char)std::min(255, hc.g + 35), (unsigned char)std::min(255, hc.b + 30), 255 };
+    float bob = std::sin(t * (mood == 0 ? 7.f : 3.f)) * (mood == 0 ? 1.2f : 0.5f);
+    y += (int)(bob * u);
+    // cheveux derrière
+    if (style == 0) R(7, 6, 18, 22, hc);                                  // longs et lisses
+    else if (style == 1) { R(9, 6, 14, 10, hc); float sw = std::sin(t * 5) * 2; R(22 + sw, 8, 4, 12, hc); R(23 + sw, 19, 3, 4, hl); }   // queue de cheval qui bat
+    else if (style == 2) { R(5, 4, 22, 22, hc); R(4, 10, 2, 12, hc); R(26, 10, 2, 12, hc); }   // bouclés, volume
+    else { R(8, 6, 16, 12, hc); R(7, 16, 3, 12, hc); R(22, 16, 3, 12, hc); for (int k = 0; k < 4; k++) { R(7, 17 + k * 3, 3, 1, hl); R(22, 17 + k * 3, 3, 1, hl); } }   // tresses
+    // maillot du club, écharpe
+    R(4, 25, 24, 7, c1); R(13, 25, 6, 3, sk);
+    R(6, 23, 20, 3, c2); for (int k = 0; k < 5; k++) R(6 + k * 4, 23, 2, 3, c1);
+    R(20, 25, 3, 7, c2); R(20, 28, 3, 1, c1);
+    R(13, 20, 6, 4, skd);
+    R(10, 8, 12, 14, sk);
+    R(9, 12, 1, 4, skd); R(22, 12, 1, 4, skd);
+    // frange / dessus
+    if (style == 2) { R(9, 5, 14, 4, hc); R(9, 8, 3, 3, hc); R(20, 8, 3, 3, hc); }
+    else { R(9, 5, 14, 3, hc); R(9, 8, 2, 8, hc); R(21, 8, 2, 8, hc); R(11, 7, 5, 2, hc); }
+    R(12, 5, 4, 1, hl);
+    // maquillage aux couleurs du club sur les joues
+    R(10, 16, 2, 1, c1); R(10, 17, 2, 1, c2); R(20, 16, 2, 1, c1); R(20, 17, 2, 1, c2);
+    // yeux (clin d'œil), cils, sourcils
+    Color eye = { 40, 28, 30, 255 }, lash = { 20, 14, 16, 255 };
+    bool wink = mood == 1 && std::fmod(t, 2.4f) < 0.9f;
+    bool blink = std::fmod(t + skin * 0.7f, 3.1f) < 0.12f;
+    R(12, 11, 3, 1, Color{ hc.r, hc.g, hc.b, 220 }); R(17, 11, 3, 1, Color{ hc.r, hc.g, hc.b, 220 });
+    if (blink) { R(12, 14, 2, 1, lash); R(18, 14, 2, 1, lash); }
+    else {
+        R(12, 13, 2, 2, eye); R(12, 13, 1, 1, WHITE); R(11, 12, 1, 1, lash);
+        if (wink) { R(18, 14, 3, 1, lash); R(20, 13, 1, 1, lash); }
+        else { R(18, 13, 2, 2, eye); R(18, 13, 1, 1, WHITE); R(20, 12, 1, 1, lash); }
+    }
+    R(15, 15, 2, 2, skd);
+    R(11, 17, 1, 1, Color{ 240, 150, 150, 120 }); R(20, 17, 1, 1, Color{ 240, 150, 150, 120 });   // pommettes
+    Color lip = { 205, 60, 80, 255 };
+    if (mood == 0) { R(14, 18, 4, 2, Color{ 120, 30, 40, 255 }); R(14, 18, 4, 1, lip); R(15, 19, 2, 1, WHITE); }   // elle chante
+    else if (mood == 2) { R(15, 18, 2, 2, lip); }                                // baiser
+    else { R(13, 18, 6, 1, lip); R(13, 17, 1, 1, lip); R(18, 17, 1, 1, lip); }   // sourire
+    // mains
+    if (mood == 0) {          // main qui salue
+        float wv = std::sin(t * 9) * 2;
+        R(26 + wv * 0.3f, 15, 3, 5, sk); R(26 + wv, 12, 1, 3, sk); R(27 + wv, 11, 1, 4, sk); R(28 + wv, 12, 1, 3, sk); R(26, 20, 3, 6, c1);
+    } else if (mood == 2) {   // baiser envoyé : main près des lèvres, cœur qui s'envole
+        R(18, 19, 4, 3, sk);
+        float hp = std::fmod(t * 0.8f, 1.f);
+        int hx = (int)(23 + hp * 8), hy = (int)(14 - hp * 12);
+        Color hr = { 240, 60, 90, (unsigned char)(255 * (1 - hp)) };
+        R(hx, hy, 1.5f, 1.5f, hr); R(hx + 2, hy, 1.5f, 1.5f, hr); R(hx, hy + 1, 3.5f, 1.5f, hr); R(hx + 1, hy + 2.5f, 1.5f, 1, hr);
+    } else if (mood == 3) {   // suspense : mains sur les joues
+        R(7, 15, 3, 6, sk); R(22, 15, 3, 6, sk);
+    }
 }

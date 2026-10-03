@@ -1,6 +1,33 @@
 // ------------------------------------------------------------------ contexte d'un match : date, météo, horaire, télévision ; présentation TV ; article de presse
-struct TvInfo { std::string channel, com1, com2; };
+struct TvInfo { std::string channel, com1, com2; int host = 0; int c2gender = 0; };
 static TvInfo g_tv;
+// équipe de l'émission : présentateur ou présentatrice tirés au hasard à chaque match, consultant(e) parfois remplacé(e)
+struct TvPerson { const char* name; int gender, skin, hair; unsigned outfit; };
+static const TvPerson TV_HOSTS[] = {
+    { "Claire Vasseur", 1, 0, 2, 0x8A1D3A }, { "Sonia Benali", 1, 1, 0, 0x1F5FA8 }, { "Marc Dufresne", 0, 0, 1, 0x2B2F3A }, { "Aïssatou Diallo", 1, 3, 0, 0xE0A020 },
+    { "Julie Fontaine", 1, 4, 3, 0x1E8C6A }, { "Karim Haddad", 0, 2, 0, 0x3A2A5A }, { "Élodie Marchetti", 1, 0, 4, 0xC03050 }, { "Paul Lambert", 0, 4, 5, 0x24324A },
+    { "Inès Moreau", 1, 5, 4, 0x6A2C8A }, { "Thomas Nguyen", 0, 1, 0, 0x14532D }, { "Laëtitia Rocher", 1, 0, 1, 0xF07A20 }, { "Yasmine Kaci", 1, 2, 0, 0x0E7490 } };
+static const int NUM_TV_HOSTS = (int)(sizeof TV_HOSTS / sizeof TV_HOSTS[0]);
+static const TvPerson TV_CONSULTANTS[] = {
+    { "Nadia Brahimi", 1, 2, 0, 0x2A2F44 }, { "Sandrine Leclerc", 1, 0, 2, 0x3A3A3A }, { "Fatou Ndiaye", 1, 3, 0, 0x5A1D3A },
+    { "Olivier Kerjean", 0, 0, 5, 0x2A2F44 }, { "Rachid Belkacem", 0, 2, 0, 0x2A2A2A }, { "Camille Durand", 1, 4, 3, 0x1F3F6A } };
+static const int NUM_TV_CONSULTANTS = (int)(sizeof TV_CONSULTANTS / sizeof TV_CONSULTANTS[0]);
+static unsigned tvLookHash(const std::string& s) { unsigned h = 2166136261u; for (unsigned char c : s) h = (h ^ c) * 16777619u; return h; }
+static void tvCrew() {
+    static unsigned salt = (unsigned)GetRandomValue(1, 1 << 30);
+    unsigned h = tvLookHash(g_tv.channel + g_tv.com1) ^ (unsigned)(g_setup.home * 7919 + g_setup.away * 131) ^ salt;
+    h = h * 2654435761u;
+    g_tv.host = (int)((h >> 8) % NUM_TV_HOSTS);
+    g_tv.c2gender = 0;
+    if ((h >> 20) % 3 == 0) { const TvPerson& c = TV_CONSULTANTS[(h >> 4) % NUM_TV_CONSULTANTS]; g_tv.com2 = std::string(c.name); g_tv.c2gender = c.gender; }
+}
+// apparence d'un commentateur (stable pour un même nom)
+static TvPerson tvLook(const std::string& name, int gender) {
+    for (auto& c : TV_CONSULTANTS) if (name == c.name) return c;
+    unsigned h = tvLookHash(name) * 2654435761u;
+    static const unsigned SUITS[5] = { 0x2A2F44, 0x3A2A24, 0x22252E, 0x2E3A2A, 0x3A3A3A };
+    return TvPerson{ "", gender, (int)((h >> 5) % 6), (int)((h >> 9) % 6), SUITS[(h >> 13) % 5] };
+}
 static void launchMatch();
 static void finishMatchToResult();
 static std::vector<std::string> wrapText(const std::string& s, int maxw);
@@ -17,7 +44,7 @@ static void crowdContext(MatchSetup& s) {
 static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     s.tv = false; s.night = false; s.channel.clear(); s.kickoffTime = "20h45"; s.kickoffDate.clear(); s.weather = 0;
     const Team& H = g_world.teams[s.home];
-    s.anthems = H.kind == TK_NATION && g_world.teams[s.away].kind == TK_NATION;   // hymnes entre sélections nationales
+    s.anthems = H.kind == TK_NATION && g_world.teams[s.away].kind == TK_NATION && !isContinentTeam(s.home) && !isContinentTeam(s.away);   // hymnes entre sélections nationales (pas pour les sélections continentales)
     ensureStadium(s.home);
     float fill = 0.35f + H.rating / 160.f;
     if (!career || comp < 0) {
@@ -25,7 +52,7 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
         s.crowdFill = std::max(0.2f, std::min(1.f, fill));
         s.tv = g_world.teams[s.home].kind == TK_NATION || H.rating >= 70;
         s.proMedia = s.tv || H.rating >= 62;
-        if (s.tv) { s.channel = "FRANCE SPORT"; g_tv = { "FRANCE SPORT", "Michel Larrieu", "Bernard Castagnet" }; }
+        if (s.tv) { s.channel = "FRANCE SPORT"; g_tv = { "FRANCE SPORT", "Michel Larrieu", "Bernard Castagnet" }; tvCrew(); }
         s.night = true;
         static const int PM[6] = { 2, 1, 3, 3, 5, -1 };        // météo cohérente avec le terrain choisi
         s.meteo = s.pitch >= 0 && s.pitch < 5 ? PM[s.pitch] : meteoForMonth(0, 0, (uint64_t)g_rng.range(1, 1 << 30));
@@ -94,7 +121,7 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
     else if (C.kind == 6) { s.tv = true; g_tv = { "CANAL FOOT+", "Stéphane Guy-Durand", "Patrice Vannier" }; }
     else if (C.kind == 50 || C.name.find("Coupe du monde") != std::string::npos) { s.tv = true; g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }; }   // Coupe du monde : toujours télévisée
     else if (g_career.kind == CK_INTL) { s.tv = true; g_tv = { "TF SPORT", "Thierry Delorme", "Jean-Michel Lavaud" }; }
-    if (s.tv) s.channel = g_tv.channel;
+    if (s.tv) { s.channel = g_tv.channel; tvCrew(); }
     // médias pro (caméras, photographes) : football professionnel et grandes coupes ; plateau TV en Ligue des champions et phases finales
     s.proMedia = s.tv || lvl <= 2 || C.kind == 3 || C.kind == 8 || C.kind == 7 || C.kind == 6 || C.kind == 11 || C.kind == 14 || cdf32 || g_career.kind == CK_INTL;
     s.studio = C.kind == 3 || C.kind == 7 || (g_career.kind == CK_INTL && comp == g_career.finalComp) || C.kind == 50;
@@ -177,8 +204,11 @@ static void drawCommentaryBooth(float t) {
     DrawRectangle(0, 214, VW, 146, Color{ 50, 40, 36, 255 }); DrawRectangle(0, 214, VW, 6, Color{ 90, 72, 60, 255 });
     for (int k = 0; k < 2; k++) {
         int cx = k ? VW - 190 : 190;
-        Kit suit; suit.shirt = k ? 0x2A2F44 : 0x3A2A24; suit.shirt2 = 0xE8E8E8; suit.shorts = 0x1A1C22; suit.socks = 0x111111;
-        drawPortrait(cx - 40, 140, 80, k ? 3 : 0, k ? 5 : 4, 0, suit, 31u + k);
+        TvPerson lk = tvLook(k ? g_tv.com2 : g_tv.com1, k ? g_tv.c2gender : 0);
+        DrawRectangleGradientV(cx - 40, 140, 80, 80, Color{ 70, 100, 160, 255 }, Color{ 24, 34, 60, 255 });
+        bool talk = ((int)(t / 2.2f)) % 2 == k;
+        drawBust(cx - 40, 140, 80, lk.skin, lk.hair, lk.gender, lk.outfit, tvLookHash(k ? g_tv.com2 : g_tv.com1), talk);
+        DrawRectangleLines(cx - 40, 140, 80, 80, Color{ 240, 200, 60, 200 });
         // casque et micro
         DrawRectangle(cx - 30, 138, 60, 5, Color{ 30, 30, 34, 255 }); DrawRectangle(cx - 34, 160, 8, 18, Color{ 30, 30, 34, 255 }); DrawRectangle(cx + 26, 160, 8, 18, Color{ 30, 30, 34, 255 });
         DrawLine(cx + 30, 176, cx + 10, 196, Color{ 30, 30, 34, 255 }); DrawCircle(cx + 9, 197, 4, Color{ 40, 40, 44, 255 });
@@ -189,7 +219,7 @@ static void drawCommentaryBooth(float t) {
         // bandeau du nom
         DrawRectangle(cx - 90, 262, 180, 18, speaking ? Color{ 190, 30, 40, 255 } : Color{ 60, 60, 80, 255 });
         drawTextCentered(fitText(k ? g_tv.com2 : g_tv.com1, 176, 10), cx, 266, 10, WHITE, false);
-        drawTextCentered(k ? "Consultant" : "Commentaires", cx, 284, 10, C_DIM, false);
+        drawTextCentered(k ? (g_tv.c2gender ? "Consultante" : "Consultant") : "Commentaires", cx, 284, 10, C_DIM, false);
     }
     tvLogo(8, 2, g_tv.channel, t);
     tvLive(VW - 8, 6, t, "EN DIRECT DE LA CABINE");
@@ -408,9 +438,14 @@ static void screenStudio(float dt) {
     int dy = 172;
     int speaker = std::max(0, (int)(t / 1.1f)) % 3;
     int bob[3]; for (int k = 0; k < 3; k++) bob[k] = k == speaker ? (int)(std::fabs(std::sin(t * 9)) * 2) : 0;
-    drawPlayerSprite(VW / 2 - 120, dy + 8 - bob[0], suit2, 2, 1, 0, 0, PS_NORMAL, false, 0, 4);
-    drawPlayerSprite(VW / 2, dy + 4 - bob[1], dress, 0, 2, 0, 0, PS_NORMAL, false, 0, 4);
-    drawPlayerSprite(VW / 2 + 120, dy + 8 - bob[2], suit2, 1, 0, 0, 0, PS_NORMAL, false, 0, 4);
+    (void)suit2; (void)dress;
+    const TvPerson& HOST = TV_HOSTS[std::max(0, std::min(NUM_TV_HOSTS - 1, g_tv.host))];
+    {   // les trois intervenants en buste derrière le bureau (le présentateur ou la présentatrice au centre)
+        TvPerson l0 = tvLook(g_tv.com1, 0), l2 = tvLook(g_tv.com2, g_tv.c2gender);
+        const TvPerson* P[3] = { &l0, &HOST, &l2 };
+        const std::string N3[3] = { g_tv.com1, HOST.name, g_tv.com2 };
+        for (int k = 0; k < 3; k++) drawBust(VW / 2 - 120 + k * 120 - 26, dy - 58 - bob[k], 52, P[k]->skin, P[k]->hair, P[k]->gender, P[k]->outfit, tvLookHash(N3[k]), k == speaker);
+    }
     // bureau en verre avec bandeau lumineux
     DrawRectangle(VW / 2 - 200, dy - 14, 400, 30, Color{ 180, 200, 235, 200 });
     DrawRectangle(VW / 2 - 200, dy - 14, 400, 3, Color{ 240, 245, 255, 255 });
@@ -421,7 +456,7 @@ static void screenStudio(float dt) {
     DrawRectangle(0, dy + 16, VW, 200 - dy - 16, Color{ 12, 16, 44, 255 });
     DrawRectangle(VW / 2 - 200, dy + 17, 400, 6, Color{ 120, 150, 220, 40 });
     // plaques nominatives
-    const char* NM[3] = { g_tv.com1.c_str(), "Claire Vasseur", g_tv.com2.c_str() };
+    const char* NM[3] = { g_tv.com1.c_str(), HOST.name, g_tv.com2.c_str() };
     for (int k = 0; k < 3; k++) {
         int x = VW / 2 - 120 + k * 120;
         DrawRectangle(x - 56, dy - 8, 112, 12, k == speaker ? Color{ 255, 205, 60, 255 } : Color{ 20, 30, 70, 255 });
@@ -450,7 +485,7 @@ static void screenStudio(float dt) {
         static int lastSp = -1; static float spT = 0;
         if (speaker != lastSp) { lastSp = speaker; spT = 0; }
         spT += dt;
-        static const char* ROLE[3] = { "Commentateur", "Présentatrice", "Consultant" };
+        const char* ROLE[3] = { "Commentateur", HOST.gender ? "Présentatrice" : "Présentateur", g_tv.c2gender ? "Consultante" : "Consultant" };
         float e = std::min(1.f, spT * 5.f); e = 1 - (1 - e) * (1 - e);
         int lw = 190, lx = 12 - (int)((1 - e) * 220), ly = 186;
         ly = 180;
