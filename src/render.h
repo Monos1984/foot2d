@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include "match.h"
 #include <string>
+#include <vector>
 
 const int VW = 640, VH = 360;       // résolution virtuelle
 const int MW = 320, MH = 180;       // résolution du match (style Amiga, affichée x2)
@@ -10,6 +11,7 @@ const float MARGIN = 12.0f;         // bordure autour du terrain (m)
 
 Color hexc(unsigned rgb, unsigned char a = 255);
 void renderInit();
+void setCustomBoardAds(const std::vector<std::string>& paths);   // images de l'éditeur de publicités (panneaux du stade)
 void renderShutdown();
 void renderMatch(const Match& m, bool radar);
 float crowdWavePhase(const Match& m);   // la ola : -1 si inactive, sinon position (0..1) du tour du stade

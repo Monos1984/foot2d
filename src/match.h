@@ -397,6 +397,7 @@ struct Match {
     bool trainingUpdate(float dt);
     // bagarres : jauge d'énervement, bousculade, bagarre (combat au corps à corps si un joueur humain est impliqué)
     int fightLevel = 0;
+    int fightExtra[2] = { -1, -1 };        // joueurs qui se mêlent à l'échauffourée générale (avertis à la fin)
     bool duel = false; float duelHp[2] = { 100, 100 }, duelCool[2] = { 0, 0 }, duelAtkT[2] = { 0, 0 }, duelHitFx[2] = { 0, 0 };
     int duelGuard[2] = { 0, 0 }, duelAtk[2] = { 0, 0 }, duelCtl[2] = { -1, -1 }; float duelT = 0; int duelLoser = -1;
     void addAnger(int i, float a);
@@ -404,6 +405,11 @@ struct Match {
     bool updateFight(float dt);
     void endFight();
     float refSeverity() const;
+    // envahissement de terrain (fête de la montée, dernier match à domicile)
+    struct Fan { V2 pos, target; unsigned shirt, shirt2; uint8_t skin, hair; float delay, anim; bool flag; };
+    std::vector<Fan> fans; bool invasion = false; int invTeam = 0; float invT = 0;
+    void startInvasion(int team);
+    void updateInvasion(float dt);
     // tour d'honneur après une qualification
     bool lapActive = false; int lapTeam = -1; float lapT = 0; float lapS[22] = {};
     void startLap(int team);

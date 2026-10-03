@@ -368,6 +368,10 @@ static const int BASSP1[2] = { 0, 7 }, BASSP2[2] = { 0, 5 }, BASSP3[2] = { 5, 0 
 static const Track JINGLE_AD1 = { "Pub 1", 140.f, MELP1, 16, BASSP1, 2, 523.25f, 0.25f, 0, 1, 0.9f };
 static const Track JINGLE_AD2 = { "Pub 2", 150.f, MELP2, 16, BASSP2, 2, 523.25f, 0.125f, 2, 0, 0.9f };
 static const Track JINGLE_AD3 = { "Pub 3", 120.f, MELP3, 16, BASSP3, 2, 440.00f, 0.5f, 1, 1, 0.9f };
+// musique de but de la sono du stade (composition originale)
+static const int MELG[32] = { 0, 0, 4, 7, -98, 4, 7, 12, -98, -98, 11, 12, 14, 16, -98, -98, 12, -98, 7, -98, 12, -98, 16, -98, 19, -98, -98, -98, -99, -99, -99, -99 };
+static const int BASSG[4] = { 0, 5, 7, 0 };
+static const Track JINGLE_GOAL = { "Sono : but", 150.f, MELG, 32, BASSG, 4, 392.00f, 0.25f, 0, 0, 0.85f };
 static const Track TRACKS[] = {
     { "Super Soccer World", 138.f, MEL1, 128, BASS1, 16, 523.25f, 0.25f, 0, 0, 1.0f },
     { "Vestiaire", 112.f, MEL2, 128, BASS2, 16, 440.00f, 0.5f, 1, 1, 0.95f },
@@ -391,7 +395,7 @@ static const int BASSP[8] = { 0, 4, 5, 7, 0, 9, 7, 0 };
 static const Track JINGLE_PODIUM = { "Podium", 126.f, MELP, 64, BASSP, 8, 523.25f, 0.25f, 3, 2, 1.0f };
 static const Track JINGLE_TROPHY = { "Trophée", 100.f, MELC, 32, BASSC, 4, 523.25f, 0.25f, 3, 2, 1.0f };
 static Sound g_tracks[NUM_TRACKS];
-static Sound g_jingles[8];
+static Sound g_jingles[9];
 static int g_curTrack = 0, g_trackMode = 0;   // 0 = enchaînement automatique, 1..N = thème fixe
 
 static std::vector<float> renderTrack(const Track& T) {
@@ -570,6 +574,7 @@ void audioInit() {
     g_jingles[5] = makeSound(renderTrack(JINGLE_AD1));
     g_jingles[6] = makeSound(renderTrack(JINGLE_AD2));
     g_jingles[7] = makeSound(renderTrack(JINGLE_AD3));
+    g_jingles[8] = makeSound(renderTrack(JINGLE_GOAL));
     g_ok = true;
 }
 
@@ -852,7 +857,7 @@ void audioUpdate() {
 }
 
 void audioJingle(int j) {
-    if (!g_ok || !g_musicOn || j < 0 || j > 7) return;
+    if (!g_ok || !g_musicOn || j < 0 || j > 8) return;
     if (g_musicOk && IsSoundPlaying(g_music)) StopSound(g_music);
     SetSoundVolume(g_jingles[j], 0.6f);
     PlaySound(g_jingles[j]);

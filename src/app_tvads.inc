@@ -9,8 +9,11 @@ static void openTvAds(int phase, Screen next) {
     g_adsNext = next; g_adsIdx = 0; g_adsT = 0; g_adsCount = phase == 0 ? 3 : 2;
     // tirage sans répétition, différent selon le match et la période
     unsigned seed = (unsigned)(g_setup.home * 131 + g_setup.away * 17 + phase * 7 + (unsigned)GetTime());
-    int pool[NUM_AD_SPOTS]; for (int i = 0; i < NUM_AD_SPOTS; i++) pool[i] = i;
-    for (int i = NUM_AD_SPOTS - 1; i > 0; i--) { seed = seed * 1103515245u + 12345u; int j = (int)((seed >> 16) % (unsigned)(i + 1)); std::swap(pool[i], pool[j]); }
+    // spots de la chaîne + pages de l'éditeur de publicités (une page perso passe en priorité)
+    int nCustom = (int)customTvAds().size();
+    std::vector<int> pool; for (int i = 0; i < NUM_AD_SPOTS + nCustom; i++) pool.push_back(i);
+    for (int i = (int)pool.size() - 1; i > 0; i--) { seed = seed * 1103515245u + 12345u; int j = (int)((seed >> 16) % (unsigned)(i + 1)); std::swap(pool[i], pool[j]); }
+    if (nCustom > 0) { seed = seed * 1103515245u + 12345u; int c = NUM_AD_SPOTS + (int)((seed >> 16) % (unsigned)nCustom); auto it = std::find(pool.begin(), pool.end(), c); std::iter_swap(pool.begin(), it); }
     for (int i = 0; i < 3; i++) g_adsSpots[i] = pool[i];
     g_screen = SC_TVADS;
     audioJingle(5 + g_adsSpots[0] % 3);
@@ -24,6 +27,14 @@ static void adSlogan(const std::string& brand, const std::string& slogan, Color 
 }
 static void drawAdSpot(int spot, float t) {
     const Team& H = g_world.teams[g_setup.home]; const Team& A = g_world.teams[g_setup.away];
+    if (spot >= NUM_AD_SPOTS) {     // page de l'éditeur de publicités
+        DrawRectangle(0, 0, VW, VH, BLACK);
+        auto tv = customTvAds();
+        int i = spot - NUM_AD_SPOTS;
+        if (i < (int)tv.size()) drawFitted(adTexture(tv[i]), 0, 0, VW, VH);
+        float a = std::min(1.f, t * 3.f); DrawRectangle(0, 0, VW, VH, Color{ 0, 0, 0, (unsigned char)(255 * (1 - a)) });
+        return;
+    }
     switch (spot) {
     case 0: {   // PIXEL COLA : canette géante, rayons, bulles
         DrawRectangle(0, 0, VW, VH, Color{ 170, 20, 30, 255 });

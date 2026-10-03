@@ -40,12 +40,26 @@ void Match::escalate(int a, int b, bool provoked) {
 // bagarre en cours : vrai tant que le jeu est interrompu
 bool Match::updateFight(float dt) {
     if (fightT <= 0) return false;
-    // les coéquipiers accourent (bagarre générale évitée de justesse)
+    // les coéquipiers accourent : le plus proche de chaque camp ceinture son partenaire, les autres font cercle ;
+    // les joueurs qui s'en mêlent se bousculent au contact ; l'arbitre s'interpose
+    V2 mid = (pl[fightA].pos + pl[fightB].pos) * 0.5f;
+    int peace[2] = { -1, -1 };
+    for (int k = 0; k < 2; k++) {
+        int f = k ? fightB : fightA, tm = pl[f].team; float bd = 16.f;
+        for (int j = tm * 11; j < tm * 11 + 11; j++) if (pl[j].onPitch && !pl[j].gk && j != fightA && j != fightB && j != fightExtra[0] && j != fightExtra[1]) { float d = (pl[j].pos - mid).len(); if (d < bd) { bd = d; peace[k] = j; } }
+    }
     for (int i = 0; i < 22; i++) {
         if (!pl[i].onPitch || i == fightA || i == fightB || pl[i].gk) continue;
-        V2 d = pl[fightA].pos - pl[i].pos;
-        if (d.len() < 14 && d.len() > 2.5f) { pl[i].vel = d.norm() * 3.5f; pl[i].pos += pl[i].vel * dt; pl[i].anim += dt * 3; }
+        V2 tg; bool near = (pl[i].pos - mid).len() < 18.f;
+        if (!near) continue;
+        if (i == peace[0] || i == peace[1]) { int f = i == peace[0] ? fightA : fightB; tg = pl[f].pos + (pl[f].pos - mid).norm() * 0.75f + V2(0, 0.35f); }
+        else if (i == fightExtra[0] || i == fightExtra[1]) { int o = i == fightExtra[0] ? fightB : fightA; tg = pl[o].pos + (pl[i].pos - pl[o].pos).norm() * 0.9f; if ((pl[i].pos - tg).len() < 0.5f) { pl[i].state = PS_FIGHT; pl[i].st += dt; } }
+        else { float ang = i * 0.57f + std::sin(duelT + fightT + i) * 0.1f; tg = mid + V2(std::cos(ang), std::sin(ang)) * (2.6f + (i % 3) * 0.5f); }
+        V2 d = tg - pl[i].pos;
+        if (d.len() > 0.25f) { pl[i].vel = d.norm() * std::min(4.5f, d.len() * 3.f); pl[i].pos += pl[i].vel * dt; pl[i].anim += pl[i].vel.len() * dt; pl[i].face = d.norm(); }
+        else { pl[i].vel = V2(); pl[i].face = (mid - pl[i].pos).norm(); }
     }
+    refMove(mid + V2(0, -1.3f), 6.5f, V2(0, 1), dt);
     for (int k : { fightA, fightB }) if (k >= 0) { pl[k].st += dt; pl[k].anim += dt * 8; }
     if (duel) {
         duelT += dt;
@@ -119,6 +133,16 @@ void Match::endFight() {
         if (R2.chance(0.25f + sev * 0.3f)) giveCard(a, 2); else giveCard(a, 1);
         if (pl[b].onPitch) { float r2 = R2.f(); if (r2 < 0.1f + sev * 0.15f) giveCard(b, 2); else if (r2 < 0.65f) giveCard(b, 1); }
     }
+    // échauffourée générale : les joueurs qui s'en sont mêlés sont avertis
+    for (int k = 0; k < 2; k++) {
+        int x = fightExtra[k];
+        if (x < 0 || !pl[x].onPitch) continue;
+        if (pl[x].state == PS_FIGHT) pl[x].state = PS_NORMAL;
+        if (R2.chance(0.55f + sev * 0.3f)) { giveCard(x, 1); say(playerName(x) + " est averti pour s'être mêlé de l'échauffourée.", 3.f); }
+    }
+    fightExtra[0] = fightExtra[1] = -1;
+    // les capitaines calment leurs coéquipiers
+    for (int t = 0; t < 2; t++) if (captain[t] >= 0 && pl[captain[t]].onPitch) for (int j = t * 11; j < t * 11 + 11; j++) if (pl[j].onPitch) pl[j].anger = std::max(0.f, pl[j].anger - 0.12f);
     for (int k : { a, b }) if (pl[k].onPitch) { pl[k].anger = std::min(pl[k].anger, 0.35f); pl[k].angerLvl = 0; }
     fightT = 0; duel = false; fightLevel = 0;
     state = MS_STOP; stateT = 0.2f;
@@ -355,4 +379,56 @@ void meteoApply(MatchSetup& s, bool heated, int turf) {
     default: s.pitch = r.chance(0.2f) ? 1 : 0; break;
     }
     s.weather = s.meteo == 3 || s.meteo == 4 ? 2 : s.meteo == 5 ? 3 : 0;
+}
+
+// ------------------------------------------------------------------ envahissement de terrain : les supporters fêtent la montée avec leurs joueurs
+void Match::startInvasion(int tm) {
+    int team = tm;
+    invasion = true; invTeam = team; invT = 0; fans.clear();
+    const Kit& k = kit[team];
+    for (int i = 0; i < 90; i++) {
+        Fan f;
+        int side = R2.range(0, 3);
+        if (side == 0) f.pos = V2(R2.frange(0, PITCH_W), -7.f);
+        else if (side == 1) f.pos = V2(R2.frange(0, PITCH_W), PITCH_L + 7.f);
+        else if (side == 2) f.pos = V2(PITCH_W + 7.f, R2.frange(5, PITCH_L - 5));
+        else f.pos = V2(-7.f, R2.chance(0.5f) ? R2.frange(5, PITCH_L / 2 - 14) : R2.frange(PITCH_L / 2 + 14, PITCH_L - 5));
+        // autour des joueurs de l'équipe qui monte, ou au milieu du terrain
+        int j = team * 11 + R2.range(0, 10);
+        V2 base = pl[j].onPitch && R2.chance(0.6f) ? pl[j].pos : V2(PITCH_W / 2 + R2.frange(-18, 18), PITCH_L / 2 + R2.frange(-25, 25));
+        f.target = base + V2(R2.frange(-3.5f, 3.5f), R2.frange(-3.5f, 3.5f));
+        float r = R2.f();
+        f.shirt = r < 0.6f ? k.shirt : r < 0.8f ? (k.shirt2 ? k.shirt2 : 0xF2F2F2) : (R2.chance(0.5f) ? 0x222222 : 0xE8E8E8);
+        f.shirt2 = f.shirt;
+        f.skin = (uint8_t)R2.range(0, 5); f.hair = (uint8_t)R2.range(0, 6);
+        f.delay = R2.frange(0.f, 3.f); f.anim = 0; f.flag = R2.chance(0.12f);
+        fans.push_back(f);
+    }
+    for (int i = team * 11; i < team * 11 + 11; i++) if (pl[i].onPitch) { pl[i].state = PS_CELEB; pl[i].st = 0; }
+    say("Envahissement de terrain ! Les supporters de " + this->team(tm).name + " déferlent sur la pelouse pour fêter la montée avec leurs joueurs !", 6.f, true);
+    msg = "ENVAHISSEMENT DE TERRAIN !"; msg2 = "La fête de la montée"; msgT = 4.f;
+    playSfx(SFX_GOAL);
+}
+void Match::updateInvasion(float dt) {
+    invT += dt;
+    V2 centre;
+    int n = 0;
+    for (int i = invTeam * 11; i < invTeam * 11 + 11; i++) if (pl[i].onPitch) { centre += pl[i].pos; n++; pl[i].anim += dt * 4; if (pl[i].state != PS_CELEB) pl[i].state = PS_CELEB; }
+    if (n) centre = centre * (1.f / n);
+    // l'adversaire regagne le tunnel
+    for (int i = (1 - invTeam) * 11; i < (1 - invTeam) * 11 + 11; i++) {
+        if (!pl[i].onPitch) continue;
+        V2 d = V2(-3.f, PITCH_L / 2) - pl[i].pos;
+        if (d.len() > 0.5f) { pl[i].vel = d.norm() * 3.f; pl[i].pos += pl[i].vel * dt; pl[i].face = d.norm(); pl[i].anim += 3.f * dt; } else pl[i].onPitch = pl[i].onPitch;
+    }
+    for (auto& f : fans) {
+        if (invT < f.delay) continue;
+        V2 d = f.target - f.pos;
+        if (d.len() > 0.4f) { f.pos += d.norm() * std::min(6.5f, d.len() * 3.f) * dt; f.anim += 6.5f * dt; }
+        else if (R2.chance(dt * 0.4f)) f.target = f.target + V2(R2.frange(-2.f, 2.f), R2.frange(-2.f, 2.f));
+    }
+    cam = cam + (centre - cam) * std::min(1.f, dt * 1.5f);
+    if (msgT > 0) msgT -= dt;
+    if (comT > 0) comT -= dt;
+    if (invT > 14.f) invasion = false;
 }

@@ -375,11 +375,11 @@ static void screenEditMenu() {
     for (int i = 0; i < (int)g_world.teams.size(); i++) { if (g_world.teams[i].custom) nCustom++; else if (g_world.teams[i].edited) nEdited++; }
     drawTextCentered(fmt("%d club%s créé%s   -   %d club%s modifié%s", nCustom, nCustom > 1 ? "s" : "", nCustom > 1 ? "s" : "", nEdited, nEdited > 1 ? "s" : "", nEdited > 1 ? "s" : ""), VW / 2, 32, 10, C_DIM);
     // tuiles regroupées par thème : CLUBS / JOUEURS ET PERSONNES / PARTENAIRES
-    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Compétitions de carrière", "Sponsors", "Hymnes nationaux", "Musiques d'entrée", "Retour" };
-    static const int GRP[10] = { 0, 0, 0, 1, 1, 2, 2, 2, 2, 3 };
+    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Compétitions de carrière", "Sponsors", "Hymnes nationaux", "Musiques d'entrée", "Publicités (images)", "Retour" };
+    static const int GRP[11] = { 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 3 };
     static const char* GN[3] = { "CLUBS", "PERSONNES", "COMPÉTITIONS" };
     static const Color GC[3] = { { 80, 150, 240, 255 }, { 60, 190, 90, 255 }, { 240, 190, 50, 255 } };
-    static const char* DESC[10] = {
+    static const char* DESC[11] = {
         "Nom, pays, région, district, division de départ, couleurs, stade et président. Un club peut être créé dans toute pyramide masculine éditable.",
         "Reprendre une carrière avec un club créé, le modifier ou le supprimer.",
         "Renommer un club, changer ses maillots (dont un 3e maillot), son stade et son président.",
@@ -389,6 +389,7 @@ static void screenEditMenu() {
         "Ajouter des sponsors (nom et logo PNG/JPG) proposés aux clubs.",
         "Écouter les hymnes et associer à une sélection un fichier musical (OGG, MP3, WAV, FLAC) joué avant ses matchs.",
         "Associer à une compétition existante une musique (OGG, MP3, WAV, FLAC) jouée quand les équipes entrent sur le terrain.",
+        "Ajouter vos images : panneaux autour du terrain (taille conseillée 276 x 40 px) et pages de publicité des matchs télévisés (640 x 360 px).",
         "Revenir au menu principal." };
     int mx = 40, mw = 290, my = 50, rh = 20;
     int s = listRun(g_edMenuLW, (int)items.size(), mx, my, mw, (int)items.size(), rh, [&](int i, int x, int y, bool sel) {
@@ -397,8 +398,8 @@ static void screenEditMenu() {
         if (GRP[i] < 3 && (i == 0 || GRP[i] != GRP[i - 1])) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 5, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ GC[GRP[i]].r, GC[GRP[i]].g, GC[GRP[i]].b, 170 }); }
     });
     {   // panneau de description
-        int cur = std::max(0, std::min(9, g_edMenuLW.cur));
-        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 10;
+        int cur = std::max(0, std::min(10, g_edMenuLW.cur));
+        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 11;
         Color gc = GRP[cur] < 3 ? GC[GRP[cur]] : Color{ 150, 160, 180, 255 };
         DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
         DrawRectangle(px, py, pw, 16, gc);
@@ -408,7 +409,7 @@ static void screenEditMenu() {
         int yy = py + 42;
         for (auto& l : wrapText(DESC[cur], pw - 18)) { drawTextPx(l, px + 8, yy, 10, C_TXT); yy += 12; }
     }
-    int y = my + rh * 10 + 14;
+    int y = my + rh * 11 + 10;
     const char* txt[] = {
         "Clubs, pays/régions/districts et compétitions personnalisés sont conservés dans les fichiers perso à côté du jeu.",
         "Joueurs et présidents : joueurs_perso.txt ; staff : staff_perso.txt ; managers : managers.txt.",
@@ -416,7 +417,8 @@ static void screenEditMenu() {
     };
     for (auto l : txt) { drawTextCentered(l, VW / 2, y, 10, C_DIM, false); y += 13; }
     drawFooter("OK : valider   Retour");
-    if (IN.back || s == 9) { g_screen = SC_MAIN; return; }
+    if (IN.back || s == 10) { g_screen = SC_MAIN; return; }
+    if (s == 9) { g_aeLW = ListW(); g_aeSel = -1; g_aeBrowse = -1; g_screen = SC_ADSEDIT; return; }
     if (s == 8) { g_wmLW = ListW(); g_wmName.clear(); g_screen = SC_WALKMUSIC; return; }
     if (s == 5) { openCompEditor(); return; }
     if (s == 7) { g_anLW = ListW(); g_anSel = -1; g_screen = SC_ANTHEMS; return; }

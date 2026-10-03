@@ -112,9 +112,63 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
 
 
 // ---------------- présentation télévisée
+// cabine des commentateurs : vue sur le stade, les deux voix de la chaîne présentent l'affiche
+static void drawCommentaryBooth(float t) {
+    const Team& H = g_world.teams[g_setup.home]; const Team& A = g_world.teams[g_setup.away];
+    MatchSetup tmp = g_setup; Kit kits[2]; matchKits(tmp, kits);
+    // la baie vitrée : tribunes, pelouse, joueurs à l'échauffement
+    DrawRectangle(0, 0, VW, VH, Color{ 30, 30, 40, 255 });
+    int wx = 20, wy = 30, ww = VW - 40, wh = 170;
+    DrawRectangleGradientV(wx, wy, ww, 40, g_setup.night ? Color{ 10, 14, 40, 255 } : Color{ 120, 170, 230, 255 }, g_setup.night ? Color{ 30, 30, 70, 255 } : Color{ 180, 210, 240, 255 });
+    fxCrowd(wx, wy + 24, ww, 50, hexc(kits[0].shirt), hexc(kits[1].shirt), t, 0.5f, (unsigned)(g_setup.home + g_setup.away), 4);
+    DrawRectangle(wx, wy + 84, ww, wh - 84, Color{ 50, 140, 60, 255 });
+    for (int k = 0; k < 8; k++) if (k % 2) DrawRectangle(wx + k * ww / 8, wy + 84, ww / 8, wh - 84, Color{ 56, 150, 66, 255 });
+    DrawLine(wx, wy + 92, wx + ww, wy + 92, WHITE); DrawLine(wx + ww / 2, wy + 92, wx + ww / 2, wy + wh, WHITE);
+    for (int k = 0; k < 8; k++) { float u = std::fmod(t * 0.2f + k * 0.13f, 1.f); int side = k % 2; drawPlayerSprite(wx + (side ? ww / 2 + 20 : 30) + (int)(u * (ww / 2 - 60)), wy + 110 + (k * 13) % 50, kits[side], k % 6, k % 7, side ? 3 : 2, (int)(t * 6) + k, PS_NORMAL, false, 0, 1); }
+    if (g_setup.night) for (int k = 0; k < 2; k++) DrawCircleGradient(wx + (k ? ww - 30 : 30), wy + 10, 50, Color{ 255, 250, 210, 70 }, Color{ 255, 250, 210, 0 });
+    for (int k = 0; k < 4; k++) DrawLine(wx + 60 + k * 150, wy, wx + 120 + k * 150, wy + wh, Color{ 255, 255, 255, 30 });   // reflets de la vitre
+    DrawRectangleLines(wx, wy, ww, wh, Color{ 80, 80, 90, 255 }); DrawRectangle(wx + ww / 2 - 2, wy, 4, wh, Color{ 60, 60, 70, 255 });
+    // pupitre, écrans, micros
+    DrawRectangle(0, 214, VW, 146, Color{ 50, 40, 36, 255 }); DrawRectangle(0, 214, VW, 6, Color{ 90, 72, 60, 255 });
+    for (int k = 0; k < 2; k++) {
+        int cx = k ? VW - 190 : 190;
+        Kit suit; suit.shirt = k ? 0x2A2F44 : 0x3A2A24; suit.shirt2 = 0xE8E8E8; suit.shorts = 0x1A1C22; suit.socks = 0x111111;
+        drawPortrait(cx - 40, 140, 80, k ? 3 : 0, k ? 5 : 4, 0, suit, 31u + k);
+        // casque et micro
+        DrawRectangle(cx - 30, 138, 60, 5, Color{ 30, 30, 34, 255 }); DrawRectangle(cx - 34, 160, 8, 18, Color{ 30, 30, 34, 255 }); DrawRectangle(cx + 26, 160, 8, 18, Color{ 30, 30, 34, 255 });
+        DrawLine(cx + 30, 176, cx + 10, 196, Color{ 30, 30, 34, 255 }); DrawCircle(cx + 9, 197, 4, Color{ 40, 40, 44, 255 });
+        bool speaking = ((int)(t / 2.2f)) % 2 == k;
+        if (speaking) DrawRectangle(cx - 6, 196, 12, 3 + (int)(std::fabs(std::sin(t * 14)) * 3), Color{ 60, 20, 20, 255 });
+        DrawRectangle(cx - 50, 222, 100, 30, Color{ 20, 24, 34, 255 }); DrawRectangle(cx - 46, 226, 92, 22, Color{ 40, 90, 160, 255 });
+        drawTextCentered(k ? fmt("%s", A.shortName.c_str()) : fmt("%s", H.shortName.c_str()), cx, 232, 10, WHITE, false);
+        // bandeau du nom
+        DrawRectangle(cx - 90, 262, 180, 18, speaking ? Color{ 190, 30, 40, 255 } : Color{ 60, 60, 80, 255 });
+        drawTextCentered(fitText(k ? g_tv.com2 : g_tv.com1, 176, 10), cx, 266, 10, WHITE, false);
+        drawTextCentered(k ? "Consultant" : "Commentaires", cx, 284, 10, C_DIM, false);
+    }
+    DrawRectangle(0, 0, VW, 24, Color{ 180, 20, 30, 240 });
+    drawTextShadow(g_tv.channel, 10, 3, 20, WHITE);
+    drawTextPx("EN DIRECT DE LA CABINE", VW - 160, 8, 10, ((int)(t * 2)) % 2 ? WHITE : Color{ 255, 200, 200, 255 });
+    // phrase d'ouverture
+    std::string l1 = "Bonsoir à tous et bienvenue " + std::string(g_setup.stadium.empty() ? "au stade" : "au " + g_setup.stadium) + " pour " + H.name + " - " + A.name + " !";
+    std::string l2 = (g_setup.title.empty() ? std::string("Une belle affiche") : g_setup.title) + fmt(" : %d spectateurs attendus, ambiance %s.", g_setup.attendance, g_setup.supporterAtmosphere >= 70 ? "électrique" : g_setup.supporterAtmosphere >= 45 ? "chaleureuse" : "calme");
+    std::string line = ((int)(t / 2.2f)) % 2 == 0 ? l1 : l2;
+    DrawRectangle(20, 304, VW - 40, 34, Color{ 0, 0, 0, 170 });
+    int ly = 308; for (auto& l : wrapText(line, VW - 60)) { if (ly > 330) break; drawTextPx(l, 30, ly, 10, WHITE); ly += 12; }
+}
+
 static void screenTvIntro(float dt) {
     static float t = 0; t += dt;
+    static int phase = 0; static float pt = 0;
     const Team& H = g_world.teams[g_setup.home]; const Team& A = g_world.teams[g_setup.away];
+    if (phase == 0) {   // la cabine des commentateurs, puis les compositions
+        pt += dt;
+        drawCommentaryBooth(t);
+        drawFooter("OK : compositions   Retour : avant-match");
+        if (pt > 6.5f || IN.ok || IN.start || IN.click) { phase = 1; pt = 0; IN.ok = IN.start = IN.click = false; }
+        if (IN.back) { phase = 0; pt = 0; g_screen = SC_SETUP; }
+        return;
+    }
     // plateau TV
     for (int y = 0; y < VH; y += 4) { unsigned char k = (unsigned char)(y * 40 / VH); DrawRectangle(0, y, VW, 4, Color{ (unsigned char)(8 + k / 3), (unsigned char)(10 + k / 3), (unsigned char)(30 + k), 255 }); }
     for (int i = 0; i < 12; i++) { float a = t * 0.3f + i * 0.52f; DrawLine(VW / 2, -40, VW / 2 + (int)(std::cos(a) * 700), VH, Color{ 60, 90, 200, 30 }); }
@@ -152,11 +206,11 @@ static void screenTvIntro(float dt) {
     drawTextPx("Commentaires : " + g_tv.com1 + " et " + g_tv.com2, VW / 2 + 20, VH - 32, 10, C_DIM);
     drawFooter("OK : coup d'envoi   Retour : avant-match");
     if (IN.ok || IN.start || IN.click) {
-        t = 0;
+        t = 0; phase = 0; pt = 0;
         if (g_setup.studio) { g_studioPhase = 0; g_studioT = 0; g_screen = SC_STUDIO; audioJingle(3); }
         else launchMatch();
     }
-    if (IN.back) g_screen = SC_SETUP;
+    if (IN.back) { phase = 0; pt = 0; g_screen = SC_SETUP; }
 }
 
 // ---------------- plateau TV (avant-match, mi-temps, fin de match)

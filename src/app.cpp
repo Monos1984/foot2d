@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -789,12 +789,14 @@ static const char* DIFF_NAMES[] = { "Facile", "Normal", "Difficile" };
 
 static bool g_trophyChecked = false, g_trophyShown = false, g_podiumMusic = false, g_htShown = false;
 static void openTvAds(int phase, Screen next);
+static void loadCustomAds();
 static std::string walkMusicFor(const std::string& comp);
 static std::vector<std::string> wrapText(const std::string& s, int maxw);
 #include "app_locker.inc"
 static int g_matchSerial = 0;
 static void launchMatch() {
     g_matchSerial++;
+    loadCustomAds();
     MatchSetup s = g_setup;
     if(g_mctx.career&&g_career.sportingMode()){g_career.sportingPrepare(s.home);g_career.sportingPrepare(s.away);for(auto& side:s.side)side=-1;s.managed=-1;s.delegSubs=true;s.highlights=false;}
     s.snes = g_settings.controlStyle == 1;
@@ -1179,6 +1181,33 @@ static bool trophyCheck(const Match& m, int& side, int& kind, int& style, std::s
     return true;
 }
 
+// dernier match à domicile d'un club qui termine (ou est assuré de terminer) à une place de montée :
+// les supporters peuvent envahir le terrain au coup de sifflet final (une fois sur deux environ)
+static bool invasionCheck(const Match& m) {
+    if (!g_mctx.career || g_mctx.comp < 0 || m.S.training || m.S.neutral || (getenv("FOOT_TEST") && !getenv("FOOT_INVASION"))) return false;
+    Season& S = g_career.season;
+    Competition& C = S.comps[g_mctx.comp];
+    if (C.format != FMT_LEAGUE) return false;
+    int home = m.S.home, p, q, g;
+    if (g_career.tierOfTeam(home, &p, &q, &g) < 0) return false;
+    const Pyramid& P = g_career.pyramids[p];
+    if (P.pools[q].comps[g] != g_mctx.comp) return false;
+    int tier = P.pools[q].tier;
+    int up = tier > 0 ? std::max(1, P.tiers[tier].up) : 0;
+    if (up <= 0) return false;
+    for (int x = 0; x < (int)C.matches.size(); x++) if (x != g_mctx.match && !C.matches[x].played && C.matches[x].home == home) return false;   // ce n'est pas le dernier match à domicile
+    MatchRes& r = C.matches[g_mctx.match];
+    int st = C.stageOfMatch(g_mctx.match);
+    if (st < 0) return false;
+    MatchRes save = r;
+    r.hg = (int16_t)m.score[0]; r.ag = (int16_t)m.score[1]; r.played = true;
+    auto tb = C.table(st, std::max(0, (int)r.group));
+    r = save;
+    int pos = -1; for (int i = 0; i < (int)tb.size(); i++) if (tb[i].team == home) pos = i;
+    if (pos < 0 || pos >= up) return false;
+    return getenv("FOOT_INVASION") || GetRandomValue(0, 99) < 55;
+}
+
 // tour de coupe passé (hors finale) : l'équipe qualifiée fait un tour d'honneur
 static bool qualifyCheck(const Match& m, int& side) {
     if (!g_mctx.career || g_mctx.comp < 0 || m.S.training || !m.S.decisive) return false;
@@ -1195,6 +1224,60 @@ static bool qualifyCheck(const Match& m, int& side) {
     else if (m.shootout) side = m.pens[0] > m.pens[1] ? 0 : 1;
     else return false;
     return true;
+}
+
+// menu pause : tableau d'affichage, mini-terrain en direct et statistiques clés
+static MStats statsOf(const Match& m);
+static void drawPauseBoard(const Match& m) {
+    float t = (float)GetTime();
+    // titre
+    DrawRectangle(0, 28, VW, 24, Color{ 10, 18, 40, 230 }); DrawRectangle(0, 51, VW, 2, C_HI);
+    drawTextShadow("PAUSE", 18, 31, 20, C_HI);
+    drawTextPx(fitText(m.S.title + (m.S.stadium.empty() ? std::string() : "  -  " + m.S.stadium), VW - 140, 10), 120, 37, 10, C_DIM);
+    int px = 320, pw = VW - px - 14;
+    // tableau d'affichage
+    DrawRectangle(px, 58, pw, 48, Color{ 6, 10, 24, 235 }); DrawRectangleLines(px, 58, pw, 48, Color{ 90, 130, 200, 255 });
+    drawKitIcon(m.kit[0], px + 8, 66, 3); drawKitIcon(m.kit[1], px + pw - 32, 66, 3);
+    drawTextCentered(fitText(m.team(0).shortName, 90, 10), px + 80, 64, 10, C_TXT, false);
+    drawTextCentered(fitText(m.team(1).shortName, 90, 10), px + pw - 80, 64, 10, C_TXT, false);
+    DrawRectangle(px + pw / 2 - 36, 62, 72, 26, Color{ 0, 0, 0, 200 });
+    drawTextCentered(fmt("%d - %d", m.score[0], m.score[1]), px + pw / 2, 65, 20, C_HI, false);
+    static const char* PER[4] = { "1re mi-temps", "2e mi-temps", "prolongation 1", "prolongation 2" };
+    drawTextCentered(m.S.training ? std::string("Entraînement") : fmt("%d'  -  %s", std::max(0, (int)m.clock), PER[std::max(0, std::min(3, m.period))]), px + pw / 2, 92, 10, C_DIM, false);
+    // mini-terrain : position des joueurs et du ballon
+    int mx = px, my = 112, mw = pw, mh = 104;
+    DrawRectangle(mx, my, mw, mh, Color{ 40, 120, 50, 255 });
+    for (int k = 0; k < 8; k++) if (k % 2) DrawRectangle(mx + k * mw / 8, my, mw / 8, mh, Color{ 46, 132, 56, 255 });
+    DrawRectangleLines(mx + 4, my + 4, mw - 8, mh - 8, Color{ 230, 240, 230, 200 });
+    DrawLine(mx + mw / 2, my + 4, mx + mw / 2, my + mh - 4, Color{ 230, 240, 230, 200 });
+    DrawCircleLines(mx + mw / 2, my + mh / 2, 12, Color{ 230, 240, 230, 200 });
+    DrawRectangleLines(mx + 4, my + mh / 2 - 22, 22, 44, Color{ 230, 240, 230, 200 }); DrawRectangleLines(mx + mw - 26, my + mh / 2 - 22, 22, 44, Color{ 230, 240, 230, 200 });
+    auto MP = [&](V2 p) { float ux = std::max(0.f, std::min(1.f, p.y / PITCH_L)), uy = std::max(0.f, std::min(1.f, p.x / PITCH_W)); return Vector2{ mx + 4 + ux * (mw - 8), my + 4 + uy * (mh - 8) }; };   // terrain couché (but à gauche et à droite)
+    for (int i = 0; i < 22; i++) if (m.pl[i].onPitch) {
+        Vector2 q = MP(m.pl[i].pos);
+        Color c = hexc(m.pl[i].gk ? m.gkShirt[m.pl[i].team] : m.kit[m.pl[i].team].shirt);
+        DrawCircle((int)q.x, (int)q.y, 3, BLACK); DrawCircle((int)q.x, (int)q.y, 2, c);
+        if (m.pl[i].human >= 0 && (int)(t * 3) % 2) DrawCircleLines((int)q.x, (int)q.y, 5, WHITE);
+    }
+    { Vector2 b = MP(m.ball.pos); DrawCircle((int)b.x, (int)b.y, 2, WHITE); }
+    // statistiques clés
+    MStats st = statsOf(m);
+    float tot = m.possTime[0] + m.possTime[1];
+    int poss = tot > 0 ? (int)std::lround(m.possTime[0] / tot * 100) : 50;
+    int sy = my + mh + 8;
+    DrawRectangle(px, sy - 4, pw, 98, Color{ 6, 10, 24, 235 });
+    auto bar = [&](const char* lab, int a, int b, int y) {
+        int tw = std::max(1, a + b);
+        drawTextCentered(lab, px + pw / 2, y, 10, C_DIM, false);
+        drawTextPx(fmt("%d", a), px + 8, y, 10, C_TXT); std::string bs = fmt("%d", b); drawTextPx(bs, px + pw - 8 - textWidth(bs, 10), y, 10, C_TXT);
+        DrawRectangle(px + 30, y + 11, pw - 60, 3, hexc(m.kit[1].shirt)); DrawRectangle(px + 30, y + 11, (pw - 60) * a / tw, 3, hexc(m.kit[0].shirt));
+    };
+    bar("Possession %", poss, 100 - poss, sy);
+    bar("Tirs", m.shots[0], m.shots[1], sy + 18);
+    bar("Tirs cadrés", m.onTarget[0], m.onTarget[1], sy + 36);
+    bar("Corners", m.corners[0], m.corners[1], sy + 54);
+    bar("Fautes", m.fouls[0], m.fouls[1], sy + 72);
+    (void)st;
 }
 
 static std::vector<std::string> wrapText(const std::string& s, int maxw);
@@ -1270,6 +1353,7 @@ static void screenMatch(float dt) {
         }
         for (int i = 0; i < m.sfxN; i++) {
             audioPlay(m.sfxQueue[i]);
+            if (m.sfxQueue[i] == SFX_GOAL && m.lastScorerTeam == 0 && !m.S.neutral && !m.S.training && !m.invasion && (m.S.proMedia || m.S.supporterAtmosphere >= 60)) audioJingle(8);   // la sono du stade
             // vibrations des manettes des joueurs humains : but, poteau ou barre
             int sfx = m.sfxQueue[i];
             if (g_settings.vibration && (sfx == SFX_GOAL || sfx == SFX_POST))
@@ -1318,6 +1402,7 @@ static void screenMatch(float dt) {
         int side = -1, kind = 0, style = 0; std::string title;
         if (trophyCheck(m, side, kind, style, title)) { m.startTrophy(side, kind, style, title); g_trophyShown = true; }
         else if (!m.abandoned && qualifyCheck(m, side)) m.startLap(side);     // qualification en coupe : tour d'honneur
+        else if (!m.abandoned && invasionCheck(m)) m.startInvasion(0);        // montée : envahissement de terrain (aléatoire)
     }
     if (m.lapActive) {
         if (IN.start || IN.back) m.lapActive = false;
@@ -1357,6 +1442,8 @@ static void screenMatch(float dt) {
     if (m.finished) {
         bool motm = m.S.tv && !m.abandoned && !m.S.training && !g_trophyShown;
         if (motm) drawManOfMatch(m);
+        if (m.invasion && !(IN.start || IN.back)) { m.stateT = 0; if (m.invT < 1.f) audioSupporters(CH_CELEBRATE, 1.f); return; }
+        if (m.invasion) m.invasion = false;
         if (m.stateT > (g_trophyShown ? 2.5f : motm ? 9.0f : 5.0f) || IN.ok || IN.click) { audioCrowd(false, 0); finishMatchToResult(); }
         m.stateT += dt;
         return;
@@ -1366,8 +1453,8 @@ static void screenMatch(float dt) {
     // ---- menu pause
     DrawRectangle(0, 0, VW, VH, Color{ 0, 0, 20, 160 });
     if (g_pauseMenu == 0) {
-        drawTextCentered("PAUSE", VW / 2, 60, 20, C_HI);
         int ht = m.coachSide(0) ? 0 : m.coachSide(1) ? 1 : -1;
+        drawPauseBoard(m);
         std::vector<std::string> items = { "Reprendre", "Remplacements", fmt("Radar : %s", g_settings.radar ? "oui" : "non"),
                                            fmt("Son : %s", g_settings.sound ? "oui" : "non"), m.S.training ? "Changer d'exercice" : "Terminer le match (simuler la fin)" };
         if (!g_mctx.career) items.push_back(m.S.training ? "Quitter l'entraînement" : "Quitter le match");
@@ -1378,10 +1465,26 @@ static void screenMatch(float dt) {
             m.setMentality(ht, m.mentality[ht] + (IN.left ? -1 : 1), false);
             g_world.teams[ht == 0 ? m.S.home : m.S.away].mentality = m.mentality[ht];
         }
+        // consignes rapides : pressing et hauteur de la ligne défensive
+        static const char* LV3[3] = { "faible", "normal", "fort" };
+        static const char* LN3[3] = { "basse", "normale", "haute" };
+        int pressIdx = -1, lineIdx = -1;
+        if (ht >= 0 && !m.S.training) {
+            pressIdx = (int)items.size(); items.push_back(std::string("Pressing : < ") + LV3[std::min(2, (int)m.S.tac[ht][0])] + " >");
+            lineIdx = (int)items.size(); items.push_back(std::string("Ligne défensive : < ") + LN3[std::min(2, (int)m.S.tac[ht][1])] + " >");
+            for (int k = 0; k < 2; k++) {
+                int idx = k ? lineIdx : pressIdx;
+                if (g_pauseLW.cur == idx && (IN.left || IN.right)) { int v = (int)m.S.tac[ht][k] + (IN.left ? -1 : 1); m.S.tac[ht][k] = (uint8_t)std::max(0, std::min(2, v)); }
+            }
+        }
         int statIdx = -1;
         if (!m.S.training) { statIdx = (int)items.size(); items.push_back("Statistiques du match (buteurs, cartons, blessés)"); }
         int ctlIdx = (int)items.size(); items.push_back("Commandes et configuration des touches");
-        int s = menuRun(g_pauseLW, items, 100);
+        int s = listRun(g_pauseLW, (int)items.size(), 18, 58, 290, (int)items.size(), 20, [&](int i, int xx, int yy, bool sel) {
+            DrawRectangle(xx + 4, yy + 6, 6, 8, sel ? BLACK : i == 0 ? C_GOOD : (i == pressIdx || i == lineIdx || i == mentIdx) ? C_HI : Color{ 90, 130, 200, 255 });
+            drawTextPx(fitText(items[i], 266, 10), xx + 16, yy + 5, 10, sel ? Color{ 20, 20, 40, 255 } : C_TXT);
+        });
+        if (pressIdx >= 0 && (s == pressIdx || s == lineIdx)) { int k = s == lineIdx; m.S.tac[ht][k] = (uint8_t)((m.S.tac[ht][k] + 1) % 3); return; }
         if (statIdx >= 0 && s == statIdx) { g_pauseMenu = 2; return; }
         if (s == ctlIdx) { g_ctlBack = SC_MATCH; g_ctlLW = ListW(); g_ctlCapture = -1; g_screen = SC_CONTROLS; return; }
         if (mentIdx >= 0 && s == mentIdx) {
@@ -1547,6 +1650,7 @@ struct PostInfo { int home, away, hg, ag, ph = -1, pa = -1; bool aet = false; st
 static int g_postPage = 0;
 static PostInfo g_post;
 #include "app_tv.inc"
+#include "app_adsedit.inc"
 #include "app_tvads.inc"
 
 
@@ -1746,6 +1850,15 @@ static void postExit() {
 static void screenPost() {
     drawBackground("Résultat");
     const Team& H = g_world.teams[g_post.home]; const Team& A = g_world.teams[g_post.away];
+    {   // bandeau du stade : tribunes aux couleurs des deux clubs, confettis pour le vainqueur
+        float t = (float)GetTime();
+        DrawRectangleGradientV(8, 46, VW - 16, 32, Color{ 18, 30, 70, 255 }, Color{ 40, 26, 60, 255 });
+        fxCrowd(8, 48, VW - 16, 28, hexc(H.home.shirt), hexc(A.home.shirt), t, g_post.hg != g_post.ag ? 0.6f : 0.2f, (unsigned)(g_post.home + g_post.away * 3), 4);
+        DrawRectangle(8, 46, VW - 16, 32, Color{ 0, 0, 0, 120 });
+        int w = g_post.hg > g_post.ag || (g_post.hg == g_post.ag && g_post.ph > g_post.pa) ? 0 : g_post.ag > g_post.hg || (g_post.hg == g_post.ag && g_post.pa > g_post.ph) ? 1 : -1;
+        if (w >= 0) { Color cc[3] = { hexc(w ? A.home.shirt : H.home.shirt), WHITE, C_HI }; fxConfetti(w ? VW / 2 : 8, 30, VW / 2 - 8, 60, t, cc, 3, 40, 21); }
+        DrawRectangle(8, 46, (VW - 16) / 2, 2, hexc(H.home.shirt)); DrawRectangle(VW / 2, 46, (VW - 16) / 2, 2, hexc(A.home.shirt));
+    }
     drawTextCentered(fitText(g_post.title, VW - 20, 10), VW / 2, 34, 10, C_DIM);
     drawKitIcon(H.home, 40, 52, 3); drawKitIcon(A.home, VW - 64, 52, 3);
     drawTextCentered(fitText(H.name, 200, 10), 170, 54, 10, C_TXT);
@@ -4115,6 +4228,7 @@ void appFrame(float dt) {
     case SC_LOCKER: screenLocker(); break;
     case SC_WALKMUSIC: screenWalkMusic(); break;
     case SC_TVADS: screenTvAds(); break;
+    case SC_ADSEDIT: screenAdsEdit(); break;
     case SC_HELP: screenHelp(); break;
     case SC_FICHE: screenFiche(dt); break;
     case SC_EDITMENU: screenEditMenu(); break;
@@ -4227,7 +4341,7 @@ void appTestStart(const char* mode) {
             return;
         }
     }
-    if (m == "anthem" || m == "duel" || m == "lap" || m == "ettoss" || m == "reds" || m == "setupfr" || m == "hl" || m == "medic" || m == "card" || m == "pstats" || m == "fk") {
+    if (m == "anthem" || m == "duel" || m == "lap" || m == "ettoss" || m == "reds" || m == "setupfr" || m == "hl" || m == "medic" || m == "card" || m == "pstats" || m == "fk" || m == "brawl" || m == "corner" || m == "throwin" || m == "pen") {
         int a = g_world.nationIndex("FRA"), b = g_world.nationIndex("ARG");
         startSetup(a, b, false, -1, -1);
         if (m == "setupfr") { g_setupRow = 9; return; }
@@ -4242,6 +4356,14 @@ void appTestStart(const char* mode) {
         if (m == "anthem") { M.cerPhase = 10; M.cerT = 0; for (int k = 0; k < 22; k++) M.pl[k].pos = anthemSpot(k / 11, k % 11); return; }
         M.ceremony = false; M.startPeriod(0); M.state = MS_PLAY;
         if (m == "duel") { M.fightLevel = 2; M.startFight(5, 16); M.duelHp[1] = 55; }
+        if (m == "brawl") { for (int k = 0; k < 22; k++) { V2 o; M.formationTarget(k, o); M.pl[k].pos = o; } M.pl[16].pos = M.pl[5].pos + V2(0.8f, 0.3f); M.fightLevel = 2; M.startFight(5, 16); }
+        if (m == "corner" || m == "throwin" || m == "pen") {
+            for (int k = 0; k < 22; k++) { V2 o; M.formationTarget(k, o); M.pl[k].pos = o; }
+            V2 g = M.goalCenter(0); bool top = g.y < 1;
+            if (m == "corner") M.beginSetPiece(SP_CORNER, 0, V2(0.3f, top ? 0.3f : PITCH_L - 0.3f));
+            else if (m == "throwin") M.beginSetPiece(SP_THROWIN, 0, V2(0.f, top ? 30.f : PITCH_L - 30.f));
+            else M.beginSetPiece(SP_PENALTY, 0, V2(PITCH_W / 2, top ? 11.f : PITCH_L - 11.f));
+        }
         if (m == "lap") { M.startPeriod(1); M.clock = 90; M.finishMatch(); g_trophyChecked = true; M.startLap(0); }
         if (m == "ettoss") { M.S.decisive = true; M.startPeriod(1); M.state = MS_BREAK; M.stateT = 1.9f; M.nextSp = 2; }
         if (m == "hl") { M.S.highlights = true; }
@@ -4254,7 +4376,7 @@ void appTestStart(const char* mode) {
         if (m == "reds") { M.giveCard(3, 2); M.giveCard(4, 2); M.giveCard(14, 2); M.state = MS_PLAY; }
         return;
     }
-    if (m == "match" || m == "match2" || m == "board" || m == "subtest" || m == "goaltest" || m == "cardtest" || m == "photo" || m == "toss" || m == "trophy" || m == "trophy2" || m == "motm" || m == "locker") {
+    if (m == "match" || m == "match2" || m == "board" || m == "subtest" || m == "goaltest" || m == "cardtest" || m == "photo" || m == "toss" || m == "trophy" || m == "trophy2" || m == "motm" || m == "locker" || m == "invasion") {
         int a = g_world.nationIndex("FRA"), b = g_world.nationIndex("ARG");
         startSetup(a, b, false, -1, -1);
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;
@@ -4272,6 +4394,7 @@ void appTestStart(const char* mode) {
             M.finishMatch(); g_trophyChecked = true;
             if (m == "trophy") M.startTrophy(1, 0, 0, "Coupe de France"); else M.startTrophy(0, 1, 2, "Ligue 1");
         }
+        if (m == "invasion") { Match& M = *g_match; M.ceremony = false; M.startPeriod(1); M.clock = 90; M.score[0] = 3; M.score[1] = 1; for (int i = 0; i < 22; i++) { V2 o; M.formationTarget(i, o); M.pl[i].pos = o; } M.finishMatch(); g_trophyChecked = true; M.startInvasion(0); }
         if (m == "locker") {   // FOOT_LOCKER=1 FOOT_LOCKER_PHASE=0/1/2 FOOT_SCORE=ab
             Match& M = *g_match; M.ceremony = false; const char* sc = getenv("FOOT_SCORE"); if (sc && strlen(sc) >= 2) { M.score[0] = sc[0] - '0'; M.score[1] = sc[1] - '0'; }
             int ph = getenv("FOOT_LOCKER_PHASE") ? atoi(getenv("FOOT_LOCKER_PHASE")) : 0; g_screen = SC_MATCH; openLocker(ph);
@@ -4281,7 +4404,7 @@ void appTestStart(const char* mode) {
             for (int k = 0; k < 2400 && M.clock < 89.5f; k++) { M.update(1.f / 60); M.sfxN = 0; }
             M.clock = 90; M.finishMatch(); g_trophyChecked = true;
         }
-        if (m == "board") { g_match->ceremony = false; g_match->startPeriod(0); g_match->clock = getenv("FOOT_CLOCK") ? (float)atof(getenv("FOOT_CLOCK")) : 43.7f; }
+        if (m == "board") { g_match->ceremony = false; g_match->startPeriod(0); g_match->clock = getenv("FOOT_CLOCK") ? (float)atof(getenv("FOOT_CLOCK")) : 43.7f; if (getenv("FOOT_PAUSE")) { g_paused = true; g_pauseMenu = 0; g_setup.side[IN_KB1] = 0; g_match->S.side[IN_KB1] = 0; } }
         if (m == "subtest" || m == "goaltest" || m == "cardtest") {
             Match& M = *g_match; M.ceremony = false; M.startPeriod(0);
             M.state = MS_PLAY; M.clock = 20;
@@ -4293,6 +4416,7 @@ void appTestStart(const char* mode) {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("ARG"), false, -1, -1); setFriendlyTv(0);
         openTvAds(0, SC_TVINTRO); if (getenv("FOOT_AD")) { g_adsSpots[0] = atoi(getenv("FOOT_AD")); g_adsSpots[1] = (g_adsSpots[0] + 1) % NUM_AD_SPOTS; g_adsSpots[2] = (g_adsSpots[0] + 2) % NUM_AD_SPOTS; }
     } else if (m == "walkmusic") { g_screen = SC_WALKMUSIC;
+    } else if (m == "adsedit") { g_screen = SC_ADSEDIT; if (getenv("FOOT_AE_ROW")) g_aeLW.cur = atoi(getenv("FOOT_AE_ROW"));
     } else if (m == "setup") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("BRA"), false, -1, -1);
     } else if (m == "hub") {
