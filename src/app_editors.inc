@@ -1,6 +1,6 @@
 // ------------------------------------------------------------------ messagerie, éditeurs de sponsors et de managers, à propos, mode championnat
 static const char* GAME_VERSION = "00.03.00";
-static const int GAME_BUILD = 25;          // incrémenté à chaque livraison
+static const int GAME_BUILD = 26;          // incrémenté à chaque livraison
 
 // ---------------- messagerie : lire, effacer, non lus
 static int g_newsOpen = -1;           // index (dans season.news) du message ouvert

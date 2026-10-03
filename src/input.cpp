@@ -152,6 +152,7 @@ void inputPoll(MenuInput& mi, Controls ctl[NUM_INPUTS]) {
             c.pause = anyPressed({ k[ACT_PAUSE] });
         }
         c.f3 = anyDown({ k[ACT_FIRE3] }); c.f4 = anyDown({ k[ACT_FIRE4] }); c.sprint = anyDown({ k[ACT_SPRINT] });
+        c.curlL = kb == 0 ? anyDown({ KEY_K }) : anyDown({ KEY_A }); c.curlR = kb == 0 ? anyDown({ KEY_L }) : anyDown({ KEY_E });   // effet du coup franc
         if (g_settings.controlStyle == 0) { c.f2 = c.f2 || c.f3; c.f3 = c.f4 = c.sprint = false; }
     }
     for (int p = 0; p < 4; p++) {
@@ -170,6 +171,9 @@ void inputPoll(MenuInput& mi, Controls ctl[NUM_INPUTS]) {
         c.f3 = IsGamepadButtonDown(p, g_settings.pad[p][PA_LOB]);
         c.f4 = IsGamepadButtonDown(p, g_settings.pad[p][PA_THROUGH]);
         c.sprint = IsGamepadButtonDown(p, g_settings.pad[p][PA_SPRINT]) || IsGamepadButtonDown(p, GAMEPAD_BUTTON_RIGHT_TRIGGER_2);
+        // L2 / R2 (bouton ou gâchette analogique) : effet au coup franc
+        c.curlL = IsGamepadButtonDown(p, GAMEPAD_BUTTON_LEFT_TRIGGER_2) || GetGamepadAxisMovement(p, GAMEPAD_AXIS_LEFT_TRIGGER) > 0.3f;
+        c.curlR = IsGamepadButtonDown(p, GAMEPAD_BUTTON_RIGHT_TRIGGER_2) || GetGamepadAxisMovement(p, GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.3f;
         if (g_settings.controlStyle == 0) { c.f2 = c.f2 || c.f3; c.f3 = c.f4 = c.sprint = false; }
         c.pause = IsGamepadButtonPressed(p, g_settings.pad[p][PA_PAUSE]);
     }
@@ -178,7 +182,7 @@ void inputPoll(MenuInput& mi, Controls ctl[NUM_INPUTS]) {
         if (c.dir.len2() > 1.01f) c.dir = c.dir.norm();
         c.f1p = c.f1 && !prev[i].f1; c.f2p = c.f2 && !prev[i].f2;
         c.f1r = !c.f1 && prev[i].f1; c.f2r = !c.f2 && prev[i].f2;
-        c.f3p = c.f3 && !prev[i].f3; c.f4p = c.f4 && !prev[i].f4;
+        c.f3p = c.f3 && !prev[i].f3; c.f4p = c.f4 && !prev[i].f4; c.f3r = !c.f3 && prev[i].f3;
     }
     // ---- menus
     if (!g_textMode) {

@@ -806,6 +806,75 @@ void Match::walkToTunnel(float dt, float spd) {
     if (rd.len() > 0.2f) { refVel = rd.norm() * std::min(spd, rd.len() * 3); refPos += refVel * dt; refFace = rd.norm(); } else refVel = V2();
 }
 
+// fin du match : les joueurs des deux équipes se cherchent sur le terrain pour se serrer la main (pas en ligne),
+// certains échangent leur maillot ; l'arbitre ramasse le ballon et rentre au vestiaire avec, sous le bras
+void Match::updateEndScene(float dt) {
+    walkT += dt;
+    if (msgT > 0) msgT -= dt;
+    auto walk = [&](V2& pos, V2& vel, float& anim, V2& face, V2 tg, float spd) {
+        V2 d = tg - pos;
+        if (d.len() > 0.12f) { vel = d.norm() * std::min(spd, d.len() * 3.f); pos += vel * dt; anim += vel.len() * dt; face = d.norm(); return false; }
+        vel = V2(); return true;
+    };
+    // l'arbitre va chercher le ballon, puis le porte
+    if (!refCarry) {
+        V2 bp = ball.inNet ? V2(clampf(ball.pos.x, 1.f, PITCH_W - 1.f), clampf(ball.pos.y, 0.5f, PITCH_L - 0.5f)) : ball.pos;
+        float dummyAnim = refAnim;
+        if (walk(refPos, refVel, dummyAnim, refFace, bp, 3.f) || (refPos - bp).len() < 0.7f) { refCarry = true; ball.inNet = false; }
+        refAnim = dummyAnim;
+    }
+    if (refCarry) { ball.owner = -1; ball.vel = V2(); ball.vz = 0; }
+    // appariements : deux tours de poignées de main avec des adversaires tirés au hasard
+    if (endPairs.empty() && walkT > 0.6f) {
+        std::vector<int> A, B;
+        for (int i = 0; i < 22; i++) if (pl[i].onPitch) (pl[i].team ? B : A).push_back(i);
+        if (!A.empty() && !B.empty()) {
+            for (int r = 0; r < 2; r++) {
+                std::vector<int> a = A, b = B;
+                for (int k = (int)b.size() - 1; k > 0; k--) std::swap(b[k], b[R.range(0, k)]);
+                for (size_t k = 0; k < a.size(); k++) {
+                    EndPair e; e.a = a[k]; e.b = b[k % b.size()]; e.round = r;
+                    e.swap = r == 0 && R.chance(0.22f) && pl[e.a].shirtOf < 0 && pl[e.b].shirtOf < 0 && !pl[e.a].gk && !pl[e.b].gk;
+                    endPairs.push_back(e);
+                }
+            }
+        }
+    }
+    bool allDone = !endPairs.empty();
+    std::vector<int> busy(22, -1);
+    for (int pi = 0; pi < (int)endPairs.size(); pi++) {
+        EndPair& e = endPairs[pi];
+        if (e.done) continue;
+        allDone = false;
+        if (busy[e.a] >= 0 || busy[e.b] >= 0) continue;           // un joueur ne fait qu'une poignée de main à la fois
+        busy[e.a] = busy[e.b] = pi;
+        if (!e.active) { e.active = true; e.meet = (pl[e.a].pos + pl[e.b].pos) * 0.5f; e.meet.x = clampf(e.meet.x, 2.f, PITCH_W - 2.f); e.meet.y = clampf(e.meet.y, 2.f, PITCH_L - 2.f); }
+        MPlayer& a = pl[e.a]; MPlayer& b = pl[e.b];
+        bool ia = walk(a.pos, a.vel, a.anim, a.face, e.meet + V2(-0.45f, 0), 2.6f + (e.a % 3) * 0.3f);
+        bool ib = walk(b.pos, b.vel, b.anim, b.face, e.meet + V2(0.45f, 0), 2.6f + (e.b % 3) * 0.3f);
+        a.state = b.state = PS_NORMAL;
+        if (ia && ib) {
+            e.t += dt;
+            a.face = V2(1, 0); b.face = V2(-1, 0);
+            if (e.t < 1.2f) { a.state = b.state = PS_HAND; }
+            else if (e.swap && e.t < 2.6f) {                         // échange de maillots
+                if (e.t > 1.6f && a.shirtOf < 0) { a.shirtOf = b.team; b.shirtOf = a.team; if (R.chance(0.6f)) say(playerName(e.a) + " et " + playerName(e.b) + " échangent leur maillot.", 2.2f); }
+                a.state = b.state = PS_CELEB;
+            } else e.done = true;
+        }
+    }
+    // les autres attendent leur tour en marchant tranquillement
+    for (int i = 0; i < 22; i++) if (pl[i].onPitch && busy[i] < 0 && !allDone) { pl[i].vel = pl[i].vel * 0.9f; pl[i].state = PS_NORMAL; }
+    if (allDone || walkT > 16.f || endPairs.empty()) walkToTunnel(dt, 3.2f);
+    if (refCarry) { ball.pos = refPos + V2(refFace.x >= 0 ? 0.35f : -0.35f, 0.05f); ball.z = 1.f; }   // le ballon sous le bras de l'arbitre
+    // caméra : suit les poignées de main, puis le retour au tunnel
+    V2 f(PITCH_W / 2, PITCH_L / 2);
+    if (allDone || walkT > 16.f) f = V2(14.f, PITCH_L / 2);
+    else { float sx = 0, sy = 0; int n = 0; for (auto& p : pl) if (p.onPitch) { sx += p.pos.x; sy += p.pos.y; n++; } if (n) f = V2(sx / n, sy / n); }
+    cam = cam + (f - cam) * std::min(1.f, dt * 1.2f);
+    camZoom = camZoom + ((allDone || walkT > 16.f ? 1.2f : 1.7f) - camZoom) * std::min(1.f, dt * 1.5f);   // caméra rapprochée sur les poignées de main
+}
+
 // ------------------------------------------------------------------ joueurs utilitaires
 int Match::nearestToBall(int t, int exclude) const {
     int best = -1; float bd = 1e9;
@@ -1265,12 +1334,13 @@ void Match::updateBall(float dt) {
         bool gkCatch = p.gk && inOwnBox(p.team, p.pos) && !(b.backpass && b.lastTeam == p.team);
         float reach = p.state == PS_DIVE ? 1.25f + p.keep / 220.f : (p.gk ? 0.85f + p.keep / 400.f : 0.7f);   // allonge du gardien selon son niveau
         // gardien de l'ordinateur face à une frappe humaine rapprochée : réflexe et placement légèrement meilleurs
-        if (p.gk && p.human < 0 && b.lastTeam != p.team && b.lastTouch >= 0 && pl[b.lastTouch].human >= 0 && i != penGk && (pl[b.lastTouch].pos - ownGoal(p.team)).len() < 18.f)
-            reach += S.difficulty == 0 ? 0.02f : S.difficulty == 2 ? 0.14f : 0.07f;
+        // (seulement à mi-distance : les frappes de loin et à bout portant gardent leurs chances)
+        if (p.gk && p.human < 0 && b.lastTeam != p.team && b.lastTouch >= 0 && pl[b.lastTouch].human >= 0 && i != penGk && (pl[b.lastTouch].pos - ownGoal(p.team)).len() < 18.f && lastShotDist >= 9.f && lastShotDist <= 20.f)
+            reach += S.difficulty == 0 ? 0.0f : S.difficulty == 2 ? 0.1f : 0.04f;
         // frappe de loin (le ballon file, le gardien doit s'étirer) ou à bout portant (réflexe) : allonge réduite, le but reste possible
         if (p.gk && i != penGk && b.lastTeam != p.team && lastShooter >= 0 && lastShotAge < 2.f && b.owner < 0) {
-            if (lastShotDist > 20.f) reach *= 0.86f + std::max(0.f, 30.f - lastShotDist) * 0.004f;
-            else if (lastShotDist < 9.f) reach *= 0.80f + lastShotDist * 0.012f;
+            if (lastShotDist > 20.f) reach *= 0.76f + std::max(0.f, 30.f - lastShotDist) * 0.006f;
+            else if (lastShotDist < 9.f) reach *= 0.68f + lastShotDist * 0.02f;
         }
         if (i == penGk && p.gk) reach = p.state == PS_DIVE ? 0.7f + p.keep / 330.f : 0.55f + p.keep / 500.f;    // penalty : réflexe à 11 m
         float zmax = gkCatch ? (p.state == PS_DIVE ? 2.2f : 2.6f) : 0.95f;
@@ -1304,6 +1374,19 @@ void Match::updateBall(float dt) {
             else { p.state = PS_HEAD; p.st = 0; p.z = 0.3f; p.vz = 2.0f + p.heading / 80.f; }
             ball.aftertouch = 0;
             return;
+        }
+    }
+    // frappe puissante de loin ou à bout portant : le gardien la touche mais ne la retient pas toujours (elle file au fond)
+    if (best >= 0 && pl[best].gk && best != penGk && b.lastTeam != pl[best].team && lastShooter >= 0 && lastShotAge < 1.5f && (lastShotDist > 20.f || lastShotDist < 9.f)) {
+        MPlayer& g = pl[best];
+        float rel = (b.vel - g.vel).len();
+        float pf = (lastShotDist > 20.f ? 0.17f : 0.24f) * clampf((rel - 13.f) / 10.f, 0.f, 1.f) * clampf(1.25f - g.keep / 100.f, 0.3f, 1.f);
+        if (R.chance(pf)) {
+            g.cool = 0.6f;                                                      // il ne peut pas la reprendre tout de suite
+            b.vel = rot(b.vel, R.frange(-0.08f, 0.08f)) * 0.88f;                 // légère déviation, le ballon continue
+            playSfx(SFX_PARRY);
+            say(lastShotDist > 20.f ? "La frappe de loin est trop puissante pour " + playerName(best) + " !" : "À bout portant, " + playerName(best) + " ne peut que l'effleurer !", 2.4f);
+            best = -1;
         }
     }
     if (best >= 0) {
@@ -2170,6 +2253,16 @@ void Match::updateSetPiece(float dt) {
         state = MS_PLAY; stateT = 0;
     };
 
+    // lob de coup franc : ballon brossé qui passe au-dessus du mur et retombe derrière (effet L2 / R2 conservé)
+    auto doLob = [&](float power) {
+        p.charging = false; p.charge = 0; p.chargeKind = 0;
+        float speed = 11.f + power * 10.f, vz = 6.2f + power * 3.8f;
+        kickBall(k, spAim, speed, vz, human >= 0);
+        if (std::fabs(spCurl) > 0.02f) ball.spin = spCurl * 5.f;
+        p.cool = 0.35f;
+        ball.backpass = !p.gk;
+        state = MS_PLAY; stateT = 0;
+    };
     if (human >= 0) {
         Controls& c = ctl[human];
         for (int j = 0; j < 22; j++) if (pl[j].human == human && j != k) { pl[j].human = -1; pl[j].charging = false; }
@@ -2178,8 +2271,9 @@ void Match::updateSetPiece(float dt) {
         // coup franc : effet (flèche courbe) - stick latéral pendant la prise d'élan, ou boutons L / R
         if (sp == SP_FREEKICK) {
             if (p.charging && c.dir.len2() > 0.01f) { float side = c.dir.norm().dot(spAim.perp()); spCurl = clampf(spCurl + (side - spCurl) * std::min(1.f, dt * 5.f), -1.f, 1.f); }
-            if (c.f3p) spCurl = clampf(spCurl - 0.25f, -1.f, 1.f);
-            if (c.f4p) spCurl = clampf(spCurl + 0.25f, -1.f, 1.f);
+            // L2 / R2 maintenus : la flèche se courbe progressivement d'un côté ou de l'autre
+            if (c.curlL) spCurl = clampf(spCurl - dt * 1.6f, -1.f, 1.f);
+            if (c.curlR) spCurl = clampf(spCurl + dt * 1.6f, -1.f, 1.f);
         }
         if (c.dir.len2() > 0.01f && !(sp == SP_FREEKICK && p.charging)) {
             if (penalty) {
@@ -2198,14 +2292,23 @@ void Match::updateSetPiece(float dt) {
         //             classique -> bouton 1 frappe/passe, bouton 2 ballon long
         bool snes = S.snes;
         bool shootHeld = snes ? c.f2 : c.f1, shootRel = snes ? c.f2r : c.f1r;
-        bool passP = snes && c.f1p, longP = snes ? (c.f3p || c.f4p) : c.f2p;
+        bool lobHeld = snes ? c.f3 : c.f2, lobRel = snes ? c.f3r : c.f2r;          // lob : appui long = plus fort et plus haut
+        bool passP = snes && c.f1p, longP = snes && c.f4p;
         if (penalty || sp == SP_FREEKICK) {
             float cmax = penalty ? 0.6f : 0.9f;       // coup franc : élan plus long pour doser l'effet
-            if (shootHeld) { p.charging = true; p.charge += dt; if (p.charge > cmax) { doShot(spAim, 1); return; } }
-            if (shootRel && p.charging) {
+            if (!(p.charging && p.chargeKind == 1) && shootHeld) { p.charging = true; p.chargeKind = 0; p.charge += dt; if (p.charge > cmax) { doShot(spAim, 1); return; } }
+            if (shootRel && p.charging && p.chargeKind == 0) {
                 if (!penalty && !snes && p.charge < 0.15f) doKick(0);
                 else doShot(spAim, std::max(0.15f, std::min(1.f, p.charge / cmax)));
                 return;
+            }
+            if (!penalty) {
+                // lob par-dessus le mur (ou ballon long) : la puissance règle la distance et la hauteur
+                if (!(p.charging && p.chargeKind == 0) && lobHeld) { p.charging = true; p.chargeKind = 1; p.charge += dt; if (p.charge > cmax) { doLob(1.f); return; } }
+                if (lobRel && p.charging && p.chargeKind == 1) {
+                    if (p.charge < 0.12f) doKick(1); else doLob(std::max(0.15f, std::min(1.f, p.charge / cmax)));
+                    return;
+                }
             }
             if (!penalty && passP) { doKick(0); return; }
             if (!penalty && longP) { doKick(1); return; }
@@ -2439,6 +2542,25 @@ void Match::assignHumans() {
     }
 }
 
+// lob en jeu : appui court = centre / lob vers le partenaire le mieux placé ; appui long = lob dosé dans la direction
+// (près du but : lob par-dessus le gardien, plus haut quand la jauge est pleine)
+void Match::doLobPlay(int i, V2 aim, float charge) {
+    MPlayer& p = pl[i];
+    if (charge < 0.16f) {
+        int tgt = bestPassTarget(i, aim, true, 50);
+        if (tgt >= 0) passTo(i, tgt, true); else kickBall(i, aim, 15, 6.5f, true);
+        return;
+    }
+    float pw = clampf(charge / 0.6f, 0.f, 1.f);
+    V2 g = goalCenter(p.team);
+    float dg = (g - p.pos).len();
+    bool chip = dg < 30.f && aim.dot((g - p.pos).norm()) > 0.6f;
+    float speed = chip ? 10.f + pw * 8.f + dg * 0.12f : 12.f + pw * 12.f;
+    float vz = chip ? 5.f + pw * 3.5f : 4.5f + pw * 5.f;
+    float acc = (100 - p.shoot) / 100.f;
+    kickBall(i, rot(aim, R.frange(-1, 1) * acc * 0.05f), speed, vz, true);
+    if (chip) say("Lob tenté par " + playerName(i) + " !", 1.8f);
+}
 // commandes façon Super Nintendo : passe / tir / lob / profondeur / sprint
 void Match::humanControlSnes(int i, const Controls& c, float dt) {
     MPlayer& p = pl[i];
@@ -2466,9 +2588,14 @@ void Match::humanControlSnes(int i, const Controls& c, float dt) {
             if (tgt >= 0) passTo(i, tgt, false); else kickBall(i, aim, 15, 0, true);
             return;
         }
-        if (c.f3p) {                                    // lob / centre
-            int tgt = bestPassTarget(i, aim, true, 50);
-            if (tgt >= 0) passTo(i, tgt, true); else kickBall(i, aim, 17, 7, true);
+        if (c.f3p && !p.charging) { p.charging = true; p.chargeKind = 1; p.charge = 0; }   // lob / centre : appui long = lob plus fort
+        if (p.charging && p.chargeKind == 1) {
+            p.charge += dt;
+            if (!c.f3 || p.charge > 0.6f) {
+                float ch = p.charge; p.charging = false; p.charge = 0; p.chargeKind = 0;
+                doLobPlay(i, aim, ch);
+                return;
+            }
             return;
         }
         if (c.f4p) {                                    // passe en profondeur (dans la course du partenaire)
@@ -2483,8 +2610,8 @@ void Match::humanControlSnes(int i, const Controls& c, float dt) {
             } else kickBall(i, aim, 18, 0.2f, true);
             return;
         }
-        if (c.f2p) { p.charging = true; p.charge = 0; }   // tir : appui long = puissance
-        if (p.charging) {
+        if (c.f2p) { p.charging = true; p.charge = 0; p.chargeKind = 0; }   // tir : appui long = puissance
+        if (p.charging && p.chargeKind == 0) {
             p.charge += dt;
             if (!c.f2 || p.charge > 0.55f) {
                 float pw = std::min(1.f, std::max(0.25f, p.charge / 0.55f));
@@ -2562,8 +2689,8 @@ void Match::humanControl(int i, const Controls& c, float dt) {
         else p.face = nd;
     }
     if (hasBall) {
-        if (c.f1p) { p.charging = true; p.charge = 0; }
-        if (p.charging) {
+        if (c.f1p && !(p.charging && p.chargeKind == 1)) { p.charging = true; p.charge = 0; p.chargeKind = 0; }
+        if (p.charging && p.chargeKind == 0) {
             p.charge += dt;
             if (!c.f1 || p.charge > 0.55f) {
                 float ch = p.charge;
@@ -2579,9 +2706,10 @@ void Match::humanControl(int i, const Controls& c, float dt) {
                 }
                 p.charge = 0;
             }
-        } else if (c.f2p) {
-            int tgt = bestPassTarget(i, c.dir, true, 50);
-            if (tgt >= 0) passTo(i, tgt, true); else kickBall(i, c.dir.len2() > 0.01f ? c.dir : p.face, 17, 7, true);
+        } else if (c.f2p) { p.charging = true; p.chargeKind = 1; p.charge = 0; }
+        if (p.charging && p.chargeKind == 1) {        // bouton 2 : lob, appui long = plus fort
+            p.charge += dt;
+            if (!c.f2 || p.charge > 0.6f) { float ch = p.charge; p.charging = false; p.charge = 0; p.chargeKind = 0; doLobPlay(i, c.dir.len2() > 0.01f ? c.dir.norm() : p.face, ch); return; }
         }
     } else {
         p.charging = false;
@@ -3376,7 +3504,7 @@ void Match::finishMatch() {
     msg = "FIN DU MATCH";
     msg2 = fmt("%s %d - %d %s", team(0).shortName.c_str(), score[0], score[1], team(1).shortName.c_str());
     if (shootout) msg2 += fmt(" (tab %d-%d)", pens[0], pens[1]);
-    msgT = 99;
+    msgT = 4.5f;
 }
 
 void Match::record() {
@@ -3407,10 +3535,7 @@ void Match::update(float dt) {
     if (offFlagT > 0 && offPend < 0) offFlagT = std::max(0.f, offFlagT - dt);     // drapeau de l'assistant baissé après le signalement
     if (finished) {
         if (invasion) { updateInvasion(dt); return; }
-        if (!S.training) {
-            walkT += dt; if (walkT > 1.2f) walkToTunnel(dt, 3.2f);
-            cam = cam + (V2(14.f, PITCH_L / 2) - cam) * std::min(1.f, dt * 1.2f);
-        }
+        if (!S.training) updateEndScene(dt);
         return;
     }
     stateT += dt;

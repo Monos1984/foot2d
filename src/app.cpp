@@ -1634,10 +1634,11 @@ static void screenMatch(float dt) {
     }
     if (m.finished) {
         bool motm = m.S.tv && !m.abandoned && !m.S.training && !g_trophyShown;
-        if (motm) drawManOfMatch(m);
+        if (motm && m.stateT < 8.f) drawManOfMatch(m);
         if (m.invasion && !(IN.start || IN.back)) { m.stateT = 0; if (m.invT < 1.f) audioSupporters(CH_CELEBRATE, 1.f); return; }
         if (m.invasion) m.invasion = false;
-        if (m.stateT > (g_trophyShown ? 2.5f : motm ? 9.0f : 5.0f) || IN.ok || IN.click) { audioCrowd(false, 0); finishMatchToResult(); }
+        // les joueurs se serrent la main et rentrent au vestiaire (OK pour passer)
+        if (m.stateT > (g_trophyShown ? 2.5f : m.S.training ? 5.0f : 18.0f) || IN.ok || IN.click) { audioCrowd(false, 0); finishMatchToResult(); }
         m.stateT += dt;
         return;
     }
@@ -4228,14 +4229,14 @@ static void screenHelp() {
     struct Card { const char* title; Color c; std::vector<std::string> l; };
     std::vector<Card> cards = {
         { "AVEC LE BALLON (style Super Nintendo)", { 60, 190, 90, 255 }, {
-            "Passe : X (clavier 1) / F (clavier 2) / A (manette)", "Tir : C / G / B   appui long = puissance", "Lob / centre : V / H / X", "Passe en profondeur : B / J / Y", "Sprint : N / T / RB",
+            "Passe : X (clavier 1) / F (clavier 2) / A (manette)", "Tir : C / G / B   appui long = puissance", "Lob : V / H / X  appui long = plus fort", "Passe en profondeur : B / J / Y", "Sprint : N / T / RB",
             "Après une passe, vous contrôlez le receveur" } },
         { "SANS LE BALLON", { 230, 120, 60, 255 }, {
             "Passe : changer de joueur", "  stick orienté = partenaire dans cette direction", "  au contact du porteur = tacle debout", "Tir : tacle glissé (par derrière = faute)", "Lob maintenu : presser le porteur" } },
         { "STYLE CLASSIQUE (2 boutons)", { 80, 150, 240, 255 }, {
-            "Bouton 1 : passe (court) ou tir (long)", "Bouton 2 : lob / tacle glissé", "Sans ballon, loin du porteur :", "  bouton 1 = changer de joueur" } },
+            "Bouton 1 : passe (court) ou tir (long)", "Bouton 2 : lob (appui long = fort) / tacle", "Sans ballon, loin du porteur :", "  bouton 1 = changer de joueur" } },
         { "EFFETS ET COUPS DE PIED ARRÊTÉS", { 200, 120, 230, 255 }, {
-            "Après une frappe, orientez : côté = brossé,", "  arrière = levé, avant = tendu", "Coup franc : effet L / R, flèche courbée", "Penalty : direction + appui long", "  gardien : gauche / droite / centre" } },
+            "Après une frappe, orientez : côté = brossé,", "  arrière = levé, avant = tendu", "Coup franc : L2 / R2 (K / L, A / E) = effet,", "  lob maintenu = par-dessus le mur", "Penalty : direction + appui long", "  gardien : gauche / droite / centre" } },
         { "GARDIEN ET BAGARRE", { 240, 200, 60, 255 }, {
             "Gardien : plonge seul ; avec le ballon,", "  bouton 1 = relance, bouton 2 = dégagement", "Bagarre : tir ou lob près du fautif", "  ... gare au carton rouge !" } },
         { "PENDANT LE MATCH", { 200, 60, 70, 255 }, {
@@ -4816,6 +4817,7 @@ void appTestStart(const char* mode) {
             M.clock = 90; M.finishMatch(); g_trophyChecked = true;
         }
         if (m == "board") { g_match->ceremony = false; g_match->startPeriod(0); g_match->clock = getenv("FOOT_CLOCK") ? (float)atof(getenv("FOOT_CLOCK")) : 43.7f; if (getenv("FOOT_PAUSE")) { g_paused = true; g_pauseMenu = 0; g_setup.side[IN_KB1] = 0; g_match->S.side[IN_KB1] = 0; } }
+        if (m == "match" && getenv("FOOT_ENDTEST")) { Match& M = *g_match; M.ceremony = false; M.startPeriod(1); M.state = MS_PLAY; M.clock = 89.95f; M.added = 0; M.score[0] = 2; M.score[1] = 1; }
         if (m == "subtest" || m == "goaltest" || m == "cardtest") {
             Match& M = *g_match; M.ceremony = false; M.startPeriod(0);
             M.state = MS_PLAY; M.clock = 20;

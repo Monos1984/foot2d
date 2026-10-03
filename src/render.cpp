@@ -1701,13 +1701,14 @@ void renderMatch(const Match& m, bool radar) {
     if (!replay && m.vipOn) { items.push_back({ m.vipPos.y, 6, 0 }); DrawEllipse(SX(m.vipPos.x) + 1, SY(m.vipPos.y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
     // soigneurs
     if (!replay && m.medicFor >= 0) for (int k = 0; k < 2; k++) { items.push_back({ m.medicPos[k].y, 5, k }); DrawEllipse(SX(m.medicPos[k].x) + 1, SY(m.medicPos[k].y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
-    {   // ombre du ballon : plus petite et plus pâle quand il monte
+    if (replay || (!m.refCarry && m.ballStage != 2)) {   // ombre du ballon : plus petite et plus pâle quand il monte
         float hz = std::min(1.f, bz * 0.12f);
         DrawEllipse(SX(bpos.x) + (int)(bz * 1.5f), SY(bpos.y) + 1, 2.6f - hz, 1.4f - hz * 0.5f, Color{ 0, 0, 0, (unsigned char)(100 - hz * 50) });
     }
     std::sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.y < b.y; });
     for (auto& it : items) {
         if (it.kind == 1) {
+            if (!replay && (m.refCarry || m.ballStage == 2)) continue;          // ballon dans les mains de l'arbitre : dessiné avec lui
             int x = SX(bpos.x), y = SY(bpos.y) - (int)(bz * PPM * HZ);
             if (!replay && m.ball.owner >= 0 && m.pl[m.ball.owner].state == PS_GKHOLD) y -= 6;
             int bf = ((int)std::floor((bpos.x + bpos.y) * 2.5f)) & 3;
@@ -1828,6 +1829,13 @@ void renderMatch(const Match& m, bool radar) {
             g_sprLongHair = fem;
             drawPlayerSprite(rx, ry, rk, rs, rh, showCard ? 0 : dirOf(m.refFace), rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
             g_sprLongHair = false;
+            if (!replay && (m.refCarry || m.ballStage == 2)) {   // le ballon dans la main (sous le bras) de l'arbitre
+                int d = dirOf(m.refFace);
+                int hx = rx + (d == 2 ? -4 : d == 3 ? 3 : 3), hy = ry - 7;
+                DrawRectangle(hx, hy, 3, 3, WHITE);
+                DrawRectangle(hx, hy + 2, 3, 1, Color{ 170, 175, 190, 255 }); DrawRectangle(hx + 1, hy + 1, 1, 1, Color{ 40, 40, 50, 255 });
+                DrawRectangleLines(hx - 1, hy - 1, 5, 5, Color{ 20, 20, 30, 90 });
+            }
             if (showCard) {
                 Color cc = cardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
                 DrawRectangle(rx + 3, ry - 18, 3, 4, cc);
@@ -1911,7 +1919,9 @@ void renderMatch(const Match& m, bool radar) {
         }
         g_sprLongHair = p.squad >= 0 && p.squad < (int)T.squad.size() && T.squad[p.squad].gender;
         g_sprPose = pose;
-        drawPlayerSprite(sx, sy, m.kit[p.team], skin, hair, dir, frame, state == PS_HAND ? PS_NORMAL : state, p.gk, m.gkShirt[p.team], 1);
+        Kit wk = m.kit[p.team];
+        if (!replay && p.shirtOf >= 0 && p.shirtOf != p.team) { const Kit& o = m.kit[p.shirtOf]; wk.shirt = o.shirt; wk.shirt2 = o.shirt2; wk.pattern = o.pattern; }   // maillot échangé
+        drawPlayerSprite(sx, sy, wk, skin, hair, dir, frame, state == PS_HAND ? PS_NORMAL : state, p.gk, m.gkShirt[p.team], 1);
         g_sprPose = POSE_NONE;
         g_sprLongHair = false;
         if (heart) {   // cœur formé avec les mains au-dessus de la tête
@@ -1965,6 +1975,7 @@ void renderMatch(const Match& m, bool radar) {
                 float pw = std::min(1.f, p.charge / 0.55f);
                 DrawRectangle(sx - 8, hy - 6, 16, 4, Color{ 0, 0, 0, 190 });
                 Color pc = pw < 0.5f ? Color{ (unsigned char)(80 + 340 * pw), 230, 60, 255 } : Color{ 250, (unsigned char)(230 - 300 * (pw - 0.5f)), 40, 255 };
+                if (p.chargeKind == 1) { pw = std::min(1.f, p.charge / 0.6f); pc = Color{ 80, (unsigned char)(170 + 60 * pw), 255, 255 }; }   // lob : jauge bleue
                 DrawRectangle(sx - 7, hy - 5, (int)(14 * pw), 2, pc);
                 if (pw >= 1.f && ((int)(GetTime() * 12)) % 2) DrawRectangleLines(sx - 8, hy - 6, 16, 4, WHITE);
             }

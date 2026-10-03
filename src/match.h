@@ -34,6 +34,8 @@ struct Controls {
     bool f1p = false, f2p = false;        // pressé cette frame
     bool f1r = false, f2r = false;        // relâché cette frame
     bool f3 = false, f4 = false, sprint = false;
+    bool curlL = false, curlR = false;    // coup franc : effet à gauche / à droite (L2 / R2)
+    bool f3r = false;                     // lob relâché
     bool f3p = false, f4p = false;
     bool pause = false;
 };
@@ -44,6 +46,8 @@ struct MPlayer {
     int team = 0;
     int slot = 0;           // 0 = gardien, 1..10
     int squad = 0;          // index dans l'effectif
+    int chargeKind = 0;     // jauge en cours : 0 frappe, 1 lob
+    int shirtOf = -1;       // fin de match : maillot échangé (équipe dont il porte le maillot)
     bool gk = false;
     V2 pos, vel;
     float z = 0, vz = 0;
@@ -260,6 +264,11 @@ struct Match {
     // message
     std::string msg, msg2;
     int ballStage = 0;            // cérémonie : 1 ballon sur son présentoir au bout du tunnel, 2 porté par l'arbitre
+    // fin du match : poignées de main en tous sens, échanges de maillots, l'arbitre récupère le ballon et rentre avec
+    struct EndPair { int a, b, round; V2 meet; float t = 0; bool active = false, done = false, swap = false; };
+    std::vector<EndPair> endPairs;
+    bool refCarry = false;
+    void updateEndScene(float dt);
     V2 pedestal;
     float msgT = 0;
     int cardShow = 0;               // 1 jaune 2 rouge
@@ -382,6 +391,7 @@ struct Match {
     void updateBall(float dt);
     void updatePlayers(float dt);
     void humanControl(int i, const Controls& c, float dt);
+    void doLobPlay(int i, V2 aim, float charge);
     void aiControl(int i, float dt);
     void aiCarrier(int i, float dt);
     void gkControl(int i, float dt);
