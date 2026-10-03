@@ -316,13 +316,69 @@ static const int MELA[64] = { 0, -98, 4, -98, 7, -98, -98, -98, 5, -98, 4, -98, 
                               9, -98, 11, -98, 12, -98, 14, -98, 12, -98, -98, -98, 11, -98, 9, -98,
                               7, -98, 4, -98, 5, -98, 7, -98, 12, -98, -98, -98, -98, -98, -99, -99 };
 static const int BASSA[8] = { 2, 7, 9, 2, 7, 9, 2, 2 };
+// « Derby » : rock énergique en mi mineur
+static const int MEL5[128] = {
+    0, -99, 0, 3, 5, -99, 7, -99,     5, 3, 0, -99, -2, 0, -99, -99,
+    0, -99, 0, 3, 5, -99, 7, 10,      12, -98, 10, 7, 5, -98, -99, -99,
+    7, 7, 8, 7, 5, -99, 3, 5,         7, -98, -98, 5, 3, -99, 0, -99,
+    3, 3, 5, 3, 2, -99, -2, 2,        0, -98, -98, -98, -99, -99, -99, -99,
+    12, -99, 12, 15, 17, -99, 15, 12, 10, -99, 12, 10, 7, -98, -99, -99,
+    8, -99, 8, 10, 12, -99, 10, 8,    7, -98, 5, -98, 3, -98, 2, -98,
+    0, 3, 7, 12, 10, 7, 3, 7,         8, 7, 5, 3, 5, -98, -99, -99,
+    3, 5, 7, 8, 10, 12, 14, 15,       12, -98, -98, -98, -99, -99, -99, -99 };
+static const int BASS5[16] = { 4, 4, 4, 7, 0, 0, 2, 4, 4, 7, 0, 11, 4, 0, 2, 4 };
+// « Copacabana » : samba ensoleillée
+static const int MEL6[128] = {
+    7, -99, 9, 7, -99, 4, -99, 7,     9, -99, 12, 9, -99, 7, 4, -99,
+    5, -99, 7, 5, -99, 2, -99, 5,     7, -98, 4, -98, -99, -99, -99, -99,
+    7, -99, 9, 7, -99, 4, -99, 7,     9, -99, 12, 14, -99, 12, 9, -99,
+    11, -99, 9, 7, -99, 5, 4, 2,      0, -98, -98, -98, -99, -99, -99, -99,
+    12, 12, -99, 11, 12, -99, 14, -99, 12, 11, 9, -99, 7, -99, 9, -99,
+    11, 11, -99, 9, 11, -99, 12, -99, 11, 9, 7, -99, 4, -99, -99, -99,
+    7, 9, 11, 12, 14, -99, 12, -99,   9, -99, 7, -99, 9, 11, 12, -99,
+    14, -99, 12, -99, 11, -99, 9, 7,  12, -98, -98, -98, -99, -99, -99, -99 };
+static const int BASS6[16] = { 9, 9, 2, 4, 9, 9, 4, 9, 2, 2, 4, 4, 9, 2, 4, 9 };
+// « Tifo » : hymne de tribune, grand et fédérateur
+static const int MEL7[128] = {
+    0, -98, 4, -98, 7, -98, 12, -98,  11, -98, 7, -98, 9, -98, -98, -98,
+    5, -98, 9, -98, 12, -98, 14, -98, 12, -98, 11, -98, 7, -98, -98, -98,
+    4, -98, 7, -98, 12, -98, 16, -98, 14, -98, 12, -98, 11, -98, 12, -98,
+    9, -98, 11, -98, 12, -98, 14, -98, 12, -98, -98, -98, -99, -99, -99, -99,
+    16, -98, 16, 14, 12, -98, 14, -98, 16, -98, 19, -98, 17, -98, 16, -98,
+    14, -98, 14, 12, 11, -98, 12, -98, 14, -98, 17, -98, 16, -98, 14, -98,
+    12, -98, 16, -98, 19, -98, 24, -98, 23, -98, 21, -98, 19, -98, 17, -98,
+    16, -98, 14, -98, 12, -98, 11, -98, 12, -98, -98, -98, -98, -98, -99, -99 };
+static const int BASS7[16] = { 7, 2, 0, 7, 4, 2, 2, 7, 7, 4, 2, 2, 7, 0, 2, 7 };
+// « Nuit au stade » : thème calme, notes tenues
+static const int MEL8[128] = {
+    0, -98, -98, 3, 7, -98, -98, -98, 5, -98, 3, -98, 2, -98, -98, -98,
+    0, -98, -98, 3, 7, -98, 10, -98,  8, -98, 7, -98, -98, -98, -99, -99,
+    3, -98, -98, 7, 10, -98, -98, -98, 8, -98, 7, -98, 5, -98, -98, -98,
+    3, -98, 5, -98, 7, -98, 8, -98,   7, -98, -98, -98, -99, -99, -99, -99,
+    12, -98, -98, 10, 8, -98, 7, -98, 8, -98, -98, 7, 5, -98, 3, -98,
+    5, -98, -98, 3, 2, -98, 0, -98,   2, -98, 3, -98, 5, -98, -98, -98,
+    12, -98, -98, 15, 14, -98, 12, -98, 10, -98, -98, 12, 10, -98, 8, -98,
+    7, -98, 5, -98, 3, -98, 2, -98,   0, -98, -98, -98, -98, -98, -99, -99 };
+static const int BASS8[16] = { 2, 10, 2, 0, 5, 10, 0, 9, 2, 10, 7, 9, 2, 0, 9, 2 };
+// jingles des pages de publicité (compositions originales)
+static const int MELP1[16] = { 0, 4, 7, 12, -98, 11, 12, -98, 16, -98, -98, -98, -99, -99, -99, -99 };
+static const int MELP2[16] = { 7, 7, 9, 7, 12, -98, 11, -98, 7, 9, 12, 14, 16, -98, -98, -98 };
+static const int MELP3[16] = { 12, -98, 9, -98, 5, -98, 9, -98, 12, 14, 16, -98, -98, -98, -99, -99 };
+static const int BASSP1[2] = { 0, 7 }, BASSP2[2] = { 0, 5 }, BASSP3[2] = { 5, 0 };
+static const Track JINGLE_AD1 = { "Pub 1", 140.f, MELP1, 16, BASSP1, 2, 523.25f, 0.25f, 0, 1, 0.9f };
+static const Track JINGLE_AD2 = { "Pub 2", 150.f, MELP2, 16, BASSP2, 2, 523.25f, 0.125f, 2, 0, 0.9f };
+static const Track JINGLE_AD3 = { "Pub 3", 120.f, MELP3, 16, BASSP3, 2, 440.00f, 0.5f, 1, 1, 0.9f };
 static const Track TRACKS[] = {
     { "Super Soccer World", 138.f, MEL1, 128, BASS1, 16, 523.25f, 0.25f, 0, 0, 1.0f },
     { "Vestiaire", 112.f, MEL2, 128, BASS2, 16, 440.00f, 0.5f, 1, 1, 0.95f },
     { "Nuit européenne", 96.f, MEL3, 128, BASS3, 16, 392.00f, 0.125f, 3, 2, 0.9f },
     { "Mercato", 124.f, MEL4, 128, BASS4, 16, 392.00f, 0.25f, 2, 0, 0.95f },
+    { "Derby", 152.f, MEL5, 128, BASS5, 16, 329.63f, 0.25f, 0, 0, 0.9f },
+    { "Copacabana", 118.f, MEL6, 128, BASS6, 16, 440.00f, 0.5f, 2, 1, 0.9f },
+    { "Tifo", 128.f, MEL7, 128, BASS7, 16, 392.00f, 0.125f, 1, 0, 0.9f },
+    { "Nuit au stade", 92.f, MEL8, 128, BASS8, 16, 293.66f, 0.5f, 3, 1, 0.9f },
 };
-static const int NUM_TRACKS = 4;
+static const int NUM_TRACKS = 8;
 static const Track JINGLE_WIN = { "Victoire", 150.f, MELW, 24, BASSW, 3, 523.25f, 0.25f, 3, 2, 1.0f };
 static const Track JINGLE_TV = { "Générique", 132.f, MELT, 32, BASST, 4, 392.00f, 0.125f, 3, 2, 1.0f };
 static const Track JINGLE_ANTHEM = { "Hymne des étoiles", 76.f, MELA, 64, BASSA, 8, 293.66f, 0.5f, 3, 2, 1.0f };
@@ -335,7 +391,7 @@ static const int BASSP[8] = { 0, 4, 5, 7, 0, 9, 7, 0 };
 static const Track JINGLE_PODIUM = { "Podium", 126.f, MELP, 64, BASSP, 8, 523.25f, 0.25f, 3, 2, 1.0f };
 static const Track JINGLE_TROPHY = { "Trophée", 100.f, MELC, 32, BASSC, 4, 523.25f, 0.25f, 3, 2, 1.0f };
 static Sound g_tracks[NUM_TRACKS];
-static Sound g_jingles[5];
+static Sound g_jingles[8];
 static int g_curTrack = 0, g_trackMode = 0;   // 0 = enchaînement automatique, 1..N = thème fixe
 
 static std::vector<float> renderTrack(const Track& T) {
@@ -511,6 +567,9 @@ void audioInit() {
     g_jingles[2] = makeSound(renderTrack(JINGLE_TROPHY));
     g_jingles[3] = makeSound(renderTrack(JINGLE_ANTHEM));
     g_jingles[4] = makeSound(renderTrack(JINGLE_PODIUM));
+    g_jingles[5] = makeSound(renderTrack(JINGLE_AD1));
+    g_jingles[6] = makeSound(renderTrack(JINGLE_AD2));
+    g_jingles[7] = makeSound(renderTrack(JINGLE_AD3));
     g_ok = true;
 }
 
@@ -771,12 +830,29 @@ void audioAnthemCode(const std::string& code) {
     PlaySound(g_anthemCur);
 }
 bool audioAnthemPlaying() { return (g_anthemOn && IsSoundPlaying(g_anthemCur)) || (g_anthemMusOn && IsMusicStreamPlaying(g_anthemMus)); }
+// musique d'entrée des joueurs (fichier choisi dans l'éditeur, par compétition)
+static Music g_walkMus; static bool g_walkOn = false; static float g_walkFade = -1;
+void audioWalkoutPlay(const std::string& path) {
+    audioWalkoutStop();
+    if (!g_ok || path.empty() || !FileExists(path.c_str())) return;
+    g_walkMus = LoadMusicStream(path.c_str());
+    if (!IsMusicValid(g_walkMus)) return;
+    g_walkMus.looping = false; SetMusicVolume(g_walkMus, 0.75f); PlayMusicStream(g_walkMus); g_walkOn = true; g_walkFade = -1;
+}
+void audioWalkoutStop() { if (g_walkOn) { StopMusicStream(g_walkMus); UnloadMusicStream(g_walkMus); g_walkOn = false; } }
+void audioWalkoutFade() { if (g_walkOn && g_walkFade < 0) g_walkFade = 1.f; }
+bool audioWalkoutPlaying() { return g_walkOn; }
 void audioUpdate() {
     if (g_ok && g_anthemMusOn) { UpdateMusicStream(g_anthemMus); if (!IsMusicStreamPlaying(g_anthemMus)) { UnloadMusicStream(g_anthemMus); g_anthemMusOn = false; } }
+    if (g_ok && g_walkOn) {
+        UpdateMusicStream(g_walkMus);
+        if (g_walkFade >= 0) { g_walkFade -= GetFrameTime() * 0.5f; SetMusicVolume(g_walkMus, 0.75f * std::max(0.f, g_walkFade)); if (g_walkFade <= 0) audioWalkoutStop(); }
+        else if (!IsMusicStreamPlaying(g_walkMus)) audioWalkoutStop();
+    }
 }
 
 void audioJingle(int j) {
-    if (!g_ok || !g_musicOn || j < 0 || j > 4) return;
+    if (!g_ok || !g_musicOn || j < 0 || j > 7) return;
     if (g_musicOk && IsSoundPlaying(g_music)) StopSound(g_music);
     SetSoundVolume(g_jingles[j], 0.6f);
     PlaySound(g_jingles[j]);

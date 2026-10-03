@@ -375,11 +375,11 @@ static void screenEditMenu() {
     for (int i = 0; i < (int)g_world.teams.size(); i++) { if (g_world.teams[i].custom) nCustom++; else if (g_world.teams[i].edited) nEdited++; }
     drawTextCentered(fmt("%d club%s créé%s   -   %d club%s modifié%s", nCustom, nCustom > 1 ? "s" : "", nCustom > 1 ? "s" : "", nEdited, nEdited > 1 ? "s" : "", nEdited > 1 ? "s" : ""), VW / 2, 32, 10, C_DIM);
     // tuiles regroupées par thème : CLUBS / JOUEURS ET PERSONNES / PARTENAIRES
-    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Compétitions de carrière", "Sponsors", "Hymnes nationaux", "Retour" };
-    static const int GRP[9] = { 0, 0, 0, 1, 1, 2, 2, 2, 3 };
+    std::vector<std::string> items = { "Créer un nouveau club", fmt("Mes clubs créés (%d)", nCustom), "Modifier un club existant", "Joueurs, présidents, staff", "Managers", "Compétitions de carrière", "Sponsors", "Hymnes nationaux", "Musiques d'entrée", "Retour" };
+    static const int GRP[10] = { 0, 0, 0, 1, 1, 2, 2, 2, 2, 3 };
     static const char* GN[3] = { "CLUBS", "PERSONNES", "COMPÉTITIONS" };
     static const Color GC[3] = { { 80, 150, 240, 255 }, { 60, 190, 90, 255 }, { 240, 190, 50, 255 } };
-    static const char* DESC[9] = {
+    static const char* DESC[10] = {
         "Nom, pays, région, district, division de départ, couleurs, stade et président. Un club peut être créé dans toute pyramide masculine éditable.",
         "Reprendre une carrière avec un club créé, le modifier ou le supprimer.",
         "Renommer un club, changer ses maillots (dont un 3e maillot), son stade et son président.",
@@ -388,6 +388,7 @@ static void screenEditMenu() {
         "Divisions nationales/régionales/district, régions et districts par pays, points victoire/nul/défaite/forfait, coupes et qualifications nationales/européennes.",
         "Ajouter des sponsors (nom et logo PNG/JPG) proposés aux clubs.",
         "Écouter les hymnes et associer à une sélection un fichier musical (OGG, MP3, WAV, FLAC) joué avant ses matchs.",
+        "Associer à une compétition existante une musique (OGG, MP3, WAV, FLAC) jouée quand les équipes entrent sur le terrain.",
         "Revenir au menu principal." };
     int mx = 40, mw = 290, my = 50, rh = 20;
     int s = listRun(g_edMenuLW, (int)items.size(), mx, my, mw, (int)items.size(), rh, [&](int i, int x, int y, bool sel) {
@@ -396,8 +397,8 @@ static void screenEditMenu() {
         if (GRP[i] < 3 && (i == 0 || GRP[i] != GRP[i - 1])) { std::string g = GN[GRP[i]]; drawTextPx(g, x + mw - 8 - textWidth(g, 10), y + 5, 10, sel ? Color{ 90, 60, 10, 255 } : Color{ GC[GRP[i]].r, GC[GRP[i]].g, GC[GRP[i]].b, 170 }); }
     });
     {   // panneau de description
-        int cur = std::max(0, std::min(8, g_edMenuLW.cur));
-        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 9;
+        int cur = std::max(0, std::min(9, g_edMenuLW.cur));
+        int px = mx + mw + 16, pw = VW - px - 16, py = my, ph = rh * 10;
         Color gc = GRP[cur] < 3 ? GC[GRP[cur]] : Color{ 150, 160, 180, 255 };
         DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 200 });
         DrawRectangle(px, py, pw, 16, gc);
@@ -407,7 +408,7 @@ static void screenEditMenu() {
         int yy = py + 42;
         for (auto& l : wrapText(DESC[cur], pw - 18)) { drawTextPx(l, px + 8, yy, 10, C_TXT); yy += 12; }
     }
-    int y = my + rh * 9 + 14;
+    int y = my + rh * 10 + 14;
     const char* txt[] = {
         "Clubs, pays/régions/districts et compétitions personnalisés sont conservés dans les fichiers perso à côté du jeu.",
         "Joueurs et présidents : joueurs_perso.txt ; staff : staff_perso.txt ; managers : managers.txt.",
@@ -415,7 +416,8 @@ static void screenEditMenu() {
     };
     for (auto l : txt) { drawTextCentered(l, VW / 2, y, 10, C_DIM, false); y += 13; }
     drawFooter("OK : valider   Retour");
-    if (IN.back || s == 8) { g_screen = SC_MAIN; return; }
+    if (IN.back || s == 9) { g_screen = SC_MAIN; return; }
+    if (s == 8) { g_wmLW = ListW(); g_wmName.clear(); g_screen = SC_WALKMUSIC; return; }
     if (s == 5) { openCompEditor(); return; }
     if (s == 7) { g_anLW = ListW(); g_anSel = -1; g_screen = SC_ANTHEMS; return; }
     if (s == 6) { g_screen = SC_SPONSORS; return; }
@@ -893,6 +895,98 @@ static const char* ACTION_NAMES[] = { "Haut", "Bas", "Gauche", "Droite", "Passe"
 static const char* PADACT_NAMES[] = { "Passe (défense : changer de joueur)", "Tir (défense : tacle glissé)", "Pause", "Lob / centre (défense : presser)", "Passe en profondeur", "Sprint" };
 
 // lignes : 0 style, 1..20 claviers (2 x 10), 21 manette choisie, 22..27 boutons, 28 zone morte, 29 réinit, 30 retour
+// panneau illustré de la configuration : manette dessinée (boutons associés, boutons appuyés en direct, sticks) ou touches du clavier
+static void drawControlsPanel(int row, int R_PAD, int R_BTN, int R_DZ) {
+    int px = 392, py = 34, pw = VW - px - 14, ph = 270;
+    float t = (float)GetTime();
+    DrawRectangle(px, py, pw, ph, Color{ 6, 12, 28, 220 }); DrawRectangleLines(px, py, pw, ph, Color{ 90, 130, 200, 255 });
+    bool padView = row >= R_PAD && row <= R_DZ;
+    if (padView) {
+        int pad = g_ctlPad;
+        int sel = row >= R_BTN && row < R_DZ ? g_settings.pad[pad][row - R_BTN] : -1;
+        bool on = IsGamepadAvailable(pad);
+        drawTextCentered(fmt("MANETTE %d", pad + 1), px + pw / 2, py + 6, 10, C_HI, false);
+        drawTextCentered(on ? fitText(GetGamepadName(pad), pw - 16, 10) : std::string("non détectée"), px + pw / 2, py + 20, 10, on ? C_GOOD : C_BAD, false);
+        int cx = px + pw / 2, cy = py + 110;
+        Color body = on ? Color{ 70, 74, 90, 255 } : Color{ 50, 52, 60, 255 };
+        // gâchettes et boutons de tranche
+        struct Btn { int id, x, y, w, h; Color c; const char* l; };
+        Btn sh[4] = { { GAMEPAD_BUTTON_LEFT_TRIGGER_2, cx - 92, cy - 52, 40, 8, Color{ 90, 94, 110, 255 }, "L2" }, { GAMEPAD_BUTTON_LEFT_TRIGGER_1, cx - 92, cy - 42, 40, 8, Color{ 110, 114, 130, 255 }, "L1" },
+                      { GAMEPAD_BUTTON_RIGHT_TRIGGER_2, cx + 52, cy - 52, 40, 8, Color{ 90, 94, 110, 255 }, "R2" }, { GAMEPAD_BUTTON_RIGHT_TRIGGER_1, cx + 52, cy - 42, 40, 8, Color{ 110, 114, 130, 255 }, "R1" } };
+        for (auto& b : sh) {
+            bool down = on && IsGamepadButtonDown(pad, b.id);
+            DrawRectangleRounded(Rectangle{ (float)b.x, (float)b.y, (float)b.w, (float)b.h }, 0.5f, 4, down ? C_GOOD : b.c);
+            if (b.id == sel) DrawRectangleRoundedLinesEx(Rectangle{ (float)b.x - 2, (float)b.y - 2, (float)b.w + 4, (float)b.h + 4 }, 0.5f, 4, 1, (int)(t * 4) % 2 ? C_HI : WHITE);
+            drawTextCentered(b.l, b.x + b.w / 2, b.y - 1, 10, Color{ 230, 230, 240, 255 }, false);
+        }
+        DrawRectangleRounded(Rectangle{ (float)cx - 100, (float)cy - 36, 200, 84 }, 0.55f, 10, body);
+        DrawCircle(cx - 66, cy + 34, 30, body); DrawCircle(cx + 66, cy + 34, 30, body);
+        DrawRectangleRounded(Rectangle{ (float)cx - 100, (float)cy - 36, 200, 10 }, 0.5f, 6, Color{ 255, 255, 255, 25 });
+        // croix directionnelle
+        int dx = cx - 62, dy = cy - 4;
+        Btn dp[4] = { { GAMEPAD_BUTTON_LEFT_FACE_UP, dx - 5, dy - 16, 10, 12, {}, "" }, { GAMEPAD_BUTTON_LEFT_FACE_DOWN, dx - 5, dy + 4, 10, 12, {}, "" },
+                      { GAMEPAD_BUTTON_LEFT_FACE_LEFT, dx - 16, dy - 5, 12, 10, {}, "" }, { GAMEPAD_BUTTON_LEFT_FACE_RIGHT, dx + 4, dy - 5, 12, 10, {}, "" } };
+        DrawRectangle(dx - 5, dy - 5, 10, 10, Color{ 30, 30, 36, 255 });
+        for (auto& b : dp) { bool down = on && IsGamepadButtonDown(pad, b.id); DrawRectangle(b.x, b.y, b.w, b.h, down ? C_GOOD : Color{ 30, 30, 36, 255 }); if (b.id == sel) DrawRectangleLines(b.x - 1, b.y - 1, b.w + 2, b.h + 2, C_HI); }
+        // boutons de face (Y haut, B droite, A bas, X gauche)
+        int fx = cx + 62, fy = cy - 4;
+        Btn fb[4] = { { GAMEPAD_BUTTON_RIGHT_FACE_UP, fx, fy - 14, 0, 0, Color{ 240, 200, 50, 255 }, "Y" }, { GAMEPAD_BUTTON_RIGHT_FACE_RIGHT, fx + 14, fy, 0, 0, Color{ 220, 60, 60, 255 }, "B" },
+                      { GAMEPAD_BUTTON_RIGHT_FACE_DOWN, fx, fy + 14, 0, 0, Color{ 80, 200, 90, 255 }, "A" }, { GAMEPAD_BUTTON_RIGHT_FACE_LEFT, fx - 14, fy, 0, 0, Color{ 70, 120, 230, 255 }, "X" } };
+        for (auto& b : fb) {
+            bool down = on && IsGamepadButtonDown(pad, b.id);
+            if (b.id == sel) DrawCircle(b.x, b.y, 10, (int)(t * 4) % 2 ? C_HI : WHITE);
+            DrawCircle(b.x, b.y, 7, down ? WHITE : b.c);
+            drawTextCentered(b.l, b.x, b.y - 5, 10, Color{ 20, 20, 30, 255 }, false);
+        }
+        // boutons centraux et sticks (position en direct)
+        Btn mid[3] = { { GAMEPAD_BUTTON_MIDDLE_LEFT, cx - 22, cy - 12, 12, 6, {}, "" }, { GAMEPAD_BUTTON_MIDDLE, cx - 6, cy - 20, 12, 12, {}, "" }, { GAMEPAD_BUTTON_MIDDLE_RIGHT, cx + 10, cy - 12, 12, 6, {}, "" } };
+        for (auto& b : mid) { bool down = on && IsGamepadButtonDown(pad, b.id); DrawRectangleRounded(Rectangle{ (float)b.x, (float)b.y, (float)b.w, (float)b.h }, 0.6f, 4, down ? C_GOOD : Color{ 40, 40, 48, 255 }); if (b.id == sel) DrawRectangleRoundedLinesEx(Rectangle{ (float)b.x - 2, (float)b.y - 2, (float)b.w + 4, (float)b.h + 4 }, 0.6f, 4, 1, C_HI); }
+        for (int k = 0; k < 2; k++) {
+            int sx = cx + (k ? 30 : -30), sy = cy + 26;
+            float ax = on ? GetGamepadAxisMovement(pad, k ? GAMEPAD_AXIS_RIGHT_X : GAMEPAD_AXIS_LEFT_X) : 0.f, ay = on ? GetGamepadAxisMovement(pad, k ? GAMEPAD_AXIS_RIGHT_Y : GAMEPAD_AXIS_LEFT_Y) : 0.f;
+            int id = k ? GAMEPAD_BUTTON_RIGHT_THUMB : GAMEPAD_BUTTON_LEFT_THUMB;
+            DrawCircle(sx, sy, 13, Color{ 30, 30, 36, 255 });
+            DrawCircleLines(sx, sy, 13.f * g_settings.deadzone, Color{ 255, 120, 80, 120 });   // zone morte
+            bool down = on && IsGamepadButtonDown(pad, id);
+            DrawCircle(sx + (int)(ax * 6), sy + (int)(ay * 6), 9, down ? C_GOOD : Color{ 90, 94, 108, 255 });
+            if (id == sel) DrawCircleLines(sx, sy, 15, C_HI);
+        }
+        // légende : action -> bouton
+        int ly = py + 186;
+        for (int a = 0; a < NUM_PA; a++) {
+            bool cur = row - R_BTN == a;
+            int lx = px + 10 + (a % 2) * (pw / 2), yy = ly + (a / 2) * 14;
+            drawTextPx(fitText(std::string(PADACT_NAMES[a]) + " : " + padButtonName(g_settings.pad[pad][a]), pw / 2 - 14, 10), lx, yy, 10, cur ? C_HI : C_TXT);
+        }
+        drawTextCentered("Boutons allumés en direct.", px + pw / 2, py + ph - 16, 10, C_DIM, false);
+    } else {
+        int kb = row >= 1 && row < R_PAD ? (row - 1) / NUM_ACTIONS : 0;
+        int act = row >= 1 && row < R_PAD ? (row - 1) % NUM_ACTIONS : -1;
+        drawTextCentered(fmt("CLAVIER %d", kb + 1), px + pw / 2, py + 6, 10, C_HI, false);
+        drawTextCentered(g_settings.controlStyle ? "Style Super Nintendo : 4 boutons + sprint" : "Style classique : 2 boutons", px + pw / 2, py + 20, 10, C_DIM, false);
+        // flèches de direction en touches
+        auto keycap = [&](int x, int y, int w, const std::string& k, bool hi, bool down) {
+            DrawRectangle(x + 2, y + 3, w, 18, Color{ 0, 0, 0, 120 });
+            DrawRectangle(x, y, w, 18, down ? C_GOOD : hi ? C_HI : Color{ 220, 224, 232, 255 });
+            DrawRectangle(x, y + 14, w, 4, down ? Color{ 60, 150, 70, 255 } : hi ? Color{ 200, 160, 40, 255 } : Color{ 160, 164, 176, 255 });
+            drawTextCentered(fitText(k, w - 4, 10), x + w / 2, y + 3, 10, Color{ 20, 20, 30, 255 }, false);
+        };
+        int cx = px + pw / 2, cy = py + 46;
+        static const int DIR[4] = { ACT_UP, ACT_LEFT, ACT_DOWN, ACT_RIGHT };
+        static const int DX[4] = { 0, -1, 0, 1 }, DY[4] = { 0, 1, 1, 1 };
+        for (int k = 0; k < 4; k++) { int a = DIR[k]; int key = g_settings.keys[kb][a]; keycap(cx - 18 + DX[k] * 40, cy + DY[k] * 22, 36, keyName(key), act == a, IsKeyDown(key)); }
+        int ly = cy + 56;
+        for (int a = ACT_FIRE1; a < NUM_ACTIONS; a++) {
+            int k = a - ACT_FIRE1;
+            int x = px + 10 + (k % 2) * (pw / 2), y = ly + (k / 2) * 26;
+            int key = g_settings.keys[kb][a];
+            keycap(x, y, 46, keyName(key), act == a, IsKeyDown(key));
+            drawTextPx(fitText(ACTION_NAMES[a], pw / 2 - 64, 10), x + 52, y + 4, 10, act == a ? C_HI : C_TXT);
+        }
+        drawTextCentered("Touches allumées en direct.", px + pw / 2, py + ph - 16, 10, C_DIM, false);
+    }
+}
+
 static void screenControls(float dt) {
     drawBackground("Configuration des commandes");
     const int NKB = NUM_ACTIONS, N = 1 + 2 * NKB + 1 + NUM_PA + 3;
@@ -912,13 +1006,14 @@ static void screenControls(float dt) {
         return "";
     };
     bool capturing = g_ctlCapture >= 0;
-    int s = listRun(g_ctlLW, N, 60, 34, VW - 120, 21, 14, [&](int i, int x, int y, bool sel) {
+    int s = listRun(g_ctlLW, N, 14, 34, 370, 21, 14, [&](int i, int x, int y, bool sel) {
         Color c = sel ? BLACK : (i == 0 ? C_HI : C_TXT);
-        drawTextPx(label(i), x + 8, y + 2, 10, c);
         std::string v = value(i);
+        drawTextPx(fitText(label(i), v.empty() ? 356 : 238, 10), x + 8, y + 2, 10, c);
         if (capturing && g_ctlCapture == i) v = fmod(GetTime(), 0.6) < 0.3 ? "???" : "";
-        if (!v.empty()) drawTextPx(v, x + VW - 120 - 150, y + 2, 10, sel ? BLACK : C_HI);
+        if (!v.empty()) drawTextPx(fitText(v, 100, 10), x + 262, y + 2, 10, sel ? BLACK : C_HI);
     }, !capturing);
+    drawControlsPanel(g_ctlLW.cur, R_PAD, R_BTN, R_DZ);
     if (capturing) {
         g_ctlCaptureT += dt;
         bool isKey = g_ctlCapture < R_PAD;

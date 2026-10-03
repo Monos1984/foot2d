@@ -10,7 +10,7 @@ void audioSetTrackMode(int mode);   // 0 enchaînement, 1..N thème fixe
 int audioTrackCount();
 const char* audioTrackName(int i);
 int audioCurrentTrack();
-void audioJingle(int j);            // 0 victoire, 1 générique TV, 2 trophée, 3 hymne (plateau européen), 4 podium
+void audioJingle(int j);            // 0 victoire, 1 générique TV, 2 trophée, 3 hymne (plateau européen), 4 podium, 5-7 publicités
 #include <string>
 #include <map>
 void audioAnthemCode(const std::string& code);   // hymne national d'une sélection (code FIFA) : fichier choisi, mélodie réelle ou hymne générique
@@ -24,3 +24,7 @@ const std::map<std::string, std::string>& audioAnthemFiles();
 void audioUpdate();                               // flux musicaux (hymnes en fichier externe)
 
 void audioSupporters(int state,float strength);
+void audioWalkoutPlay(const std::string& path);   // musique d'entrée des joueurs (fichier)
+void audioWalkoutStop();
+void audioWalkoutFade();
+bool audioWalkoutPlaying();

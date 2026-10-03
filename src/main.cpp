@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
     if (test) appTestStart(test);
     SetTextureFilter(target.texture, TEXTURE_FILTER_POINT);
     while (!WindowShouldClose() && !g_quit) {
-        float dt = GetFrameTime();
+        float dt = std::min(GetFrameTime(), 0.1f);   // la première image ne compte pas le temps de chargement (logo du lancement)
         int sw = GetScreenWidth(), sh = GetScreenHeight();
         float sc = std::min((float)sw / VW, (float)sh / VH);
         if (sc >= 1.0f) { float isc = std::floor(sc); if (isc >= 1 && sc - isc < 0.25f) sc = isc; }

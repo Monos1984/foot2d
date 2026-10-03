@@ -430,8 +430,19 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
             // ombrage : côté droit (lumière venant de la gauche) et bas du maillot
             bool shade = (ch == 'S' || ch == 'P' || ch == 'k') && (!filled(r, c + 1) || (ch == 'S' && !filled(r + 1, c)));
             if (mirror) shade = (ch == 'S' || ch == 'P' || ch == 'k') && (!filled(r, c - 1) || (ch == 'S' && !filled(r + 1, c)));
+            auto lift = [&](int v) { col.r = (unsigned char)std::min(255, col.r + v); col.g = (unsigned char)std::min(255, col.g + v); col.b = (unsigned char)std::min(255, col.b + v); };
+            // revers des manches dans la 2e couleur du maillot (maillots unis)
+            if (ch == 'S' && !gk && r == 4 && (c == 0 || c == 6) && kit.shirt2 != kit.shirt && kit.shirt2 != 0 && kit.pattern == KP_PLAIN && state != PS_CELEB) col = hexc(kit.shirt2);
             if (shade) { col.r = (unsigned char)(col.r * 0.72f); col.g = (unsigned char)(col.g * 0.72f); col.b = (unsigned char)(col.b * 0.72f); }
-            else if (ch == 'S' && r == 3 && scale >= 2) { col.r = (unsigned char)std::min(255, col.r + 25); col.g = (unsigned char)std::min(255, col.g + 25); col.b = (unsigned char)std::min(255, col.b + 25); }
+            else if (ch == 'S' && r == 3 && scale >= 2) lift(25);
+            else {
+                // lumière venant de la gauche : reflet sur le bord éclairé du maillot, du short et dans les cheveux
+                bool litEdge = mirror ? !filled(r, c + 1) : !filled(r, c - 1);
+                if ((ch == 'S' || ch == 'P') && litEdge) lift(22);
+                else if (ch == 'h' && (r == 0 || litEdge)) lift(30);
+                else if (ch == 's' && r <= 2 && litEdge) lift(14);
+                else if (ch == 'b' && litEdge) lift(60);                                  // reflet sur les chaussures
+            }
             DrawRectangle(x + (cc - 3) * scale, y - (NR - r) * scale, scale, scale, col);
         }
     }
@@ -991,6 +1002,93 @@ static void drawBenchesLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     g_sprLongHair = false;
 }
 
+// panneaux LED animés le long des lignes de but (stades professionnels) : affiche, score, « BUT ! » qui clignote
+static void drawLedBoards(const Match& m, int ox, int oy, int MWZ, int MHZ) {
+    if (m.S.training || g_look.small || !m.S.proMedia) return;
+    const float t = (float)GetTime();
+    auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
+    auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
+    bool goal = m.state == MS_GOAL && m.lastScorerTeam >= 0;
+    std::string msg;
+    Color fg = Color{ 255, 220, 80, 255 }, bg = Color{ 8, 10, 18, 255 };
+    if (goal) { msg = "  BUT !  BUT !  BUT !  " + m.team(m.lastScorerTeam).shortName + "  "; fg = ((int)(t * 6) % 2) ? Color{ 255, 220, 80, 255 } : WHITE; bg = ((int)(t * 6) % 2) ? Color{ 40, 10, 10, 255 } : Color{ 10, 10, 40, 255 }; }
+    else if (m.ceremony) msg = "  BIENVENUE  -  " + m.team(0).name + "  -  " + m.team(1).name + "  -  " + (m.S.title.empty() ? std::string("") : m.S.title + "  ");
+    else msg = fmt("  %s %d - %d %s   PIXEL COLA   CRAMPONS+   GOAL FM 98.5   SUPER BUT   ", m.team(0).shortName.c_str(), m.score[0], m.score[1], m.team(1).shortName.c_str());
+    int tw = std::max(40, textWidth(msg, 10));
+    for (int g = 0; g < 2; g++) {
+        float wy = g ? PITCH_L + 4.0f : -6.0f;
+        int y0 = SY(wy), y1 = SY(wy + 2.0f);
+        if (y1 < -4 || y0 > MHZ + 4) continue;
+        int x0 = SX(-8.f), x1 = SX(PITCH_W + 8.f);
+        x0 = std::max(x0, -4); x1 = std::min(x1, MWZ + 4);
+        if (x1 <= x0) continue;
+        DrawRectangle(x0, y0, x1 - x0, y1 - y0, bg);
+        int scroll = (int)std::fmod(t * 28.f, (float)tw);
+        int base = SX(-8.f) - scroll + (g ? tw / 2 : 0);
+        for (int x = base; x < x1; x += tw) if (x + tw > x0) drawTextPx(msg, x, y0, 10, fg);
+        DrawRectangle(x0, y0, x1 - x0, 1, Color{ 255, 255, 255, 40 });
+        // trame des diodes
+        for (int x = x0; x < x1; x += 2) DrawRectangle(x, y0, 1, y1 - y0, Color{ 0, 0, 0, 60 });
+    }
+}
+
+// pylônes d'éclairage dans les coins du stade
+static void drawFloodlights(const Match& m, int ox, int oy, int MWZ, int MHZ) {
+    if (m.S.training) return;
+    auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
+    auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
+    for (int k = 0; k < 4; k++) {
+        float fx = (k & 1) ? PITCH_W + 9.5f : -9.5f, fy = (k & 2) ? PITCH_L + 9.5f : -9.5f;
+        int x = SX(fx), y = SY(fy);
+        if (x < -30 || x > MWZ + 30 || y < -40 || y > MHZ + 40) continue;
+        DrawRectangle(x - 1, y - 18, 3, 20, Color{ 70, 74, 86, 255 });
+        DrawRectangle(x - 8, y - 26, 17, 9, Color{ 50, 54, 66, 255 });
+        for (int r = 0; r < 2; r++) for (int c = 0; c < 4; c++) DrawRectangle(x - 7 + c * 4, y - 25 + r * 4, 3, 3, m.S.night ? Color{ 255, 252, 220, 255 } : Color{ 190, 196, 210, 255 });
+        if (m.S.night) DrawCircleGradient(x, y - 22, 16, Color{ 255, 250, 210, 80 }, Color{ 255, 250, 210, 0 });
+    }
+}
+
+// entrée des joueurs : flammes à la sortie du tunnel, serpentins et confettis lancés des tribunes ; fumée après un but
+static void drawShowEffects(const Match& m, int ox, int oy, int MWZ, int MHZ) {
+    if (m.S.training) return;
+    const float t = (float)GetTime();
+    auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
+    auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
+    if (m.ceremony && m.cerPhase < 0) {
+        if (m.S.proMedia) for (int k = 0; k < 2; k++) {   // jets de flammes de part et d'autre du tunnel
+            int x = SX(-0.4f), y = SY(PITCH_L / 2 + (k ? 3.6f : -3.6f));
+            float cyc = std::fmod(t * 0.8f + k * 0.5f, 2.f);
+            if (cyc < 0.7f) {
+                int h = (int)(8 + std::sin(cyc * 4.5f) * 14);
+                DrawRectangle(x - 2, y - h, 5, h, Color{ 255, 110, 30, 220 }); DrawRectangle(x - 1, y - h + 3, 3, h - 3, Color{ 255, 230, 120, 240 });
+                DrawCircle(x, y - h / 2, 9, Color{ 255, 150, 40, 60 });
+            }
+            DrawRectangle(x - 2, y - 1, 5, 3, Color{ 40, 40, 46, 255 });
+        }
+        // serpentins de papier lancés depuis le kop (haut) et le parcage
+        Color c1 = hexc(m.kit[0].shirt), c2 = WHITE;
+        for (int k = 0; k < 60; k++) {
+            float u = std::fmod(t * 0.35f + k * 0.0173f, 1.f);
+            float wx = -4.f + (k * 7.3f) - std::floor((k * 7.3f) / (PITCH_W + 8)) * (PITCH_W + 8);
+            float wy = -9.f + u * 7.f;
+            int x = SX(wx), y = SY(wy);
+            if (x < -4 || x > MWZ + 4 || y < -4 || y > MHZ + 4) continue;
+            int wob = (int)(std::sin(t * 4 + k) * 2);
+            DrawLine(x + wob, y, x - wob, y + 4, k % 2 ? c1 : c2);
+        }
+    }
+    // fumée des fumigènes qui dérive sur le terrain après un but du club local
+    if ((m.state == MS_GOAL || m.state == MS_REPLAY) && m.lastScorerTeam == 0 && !m.S.neutral && m.stateT > 0.8f) {
+        float a = std::min(1.f, (m.stateT - 0.8f) * 0.5f);
+        for (int k = 0; k < 10; k++) {
+            float wx = 4.f + k * 6.5f + std::sin(t * 0.3f + k) * 3.f, wy = -4.f + std::fmod(t * 0.9f + k * 0.7f, 9.f);
+            int x = SX(wx), y = SY(wy);
+            if (x < -30 || x > MWZ + 30 || y < -30 || y > MHZ + 30) continue;
+            DrawCircle(x, y, 10.f + (k % 3) * 4.f, Color{ 215, 210, 220, (unsigned char)(28 * a) }); DrawCircle(x + 4, y - 3, 7.f + (k % 2) * 3.f, Color{ 230, 226, 236, (unsigned char)(24 * a) });
+        }
+    }
+}
+
 // ramasseurs de balles et stadiers
 static void drawPitchsideLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     if (m.S.training) return;
@@ -1074,6 +1172,8 @@ void renderMatch(const Match& m, bool radar) {
     auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
 
     drawCrowdLive(m, ox, oy, MWZ, MHZ);
+    drawFloodlights(m, ox, oy, MWZ, MHZ);
+    drawLedBoards(m, ox, oy, MWZ, MHZ);
     drawPitchsideLive(m, ox, oy, MWZ, MHZ);
     if (!replay) drawBenchesLive(m, ox, oy, MWZ, MHZ);
     if(!m.S.training){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if(m.S.supporterTifo>=0&&(m.clock<8||m.ceremony)){Color c1=hexc(m.kit[0].shirt),c2=hexc(m.kit[0].shorts);int tx=SX(-6.f),ty=SY(PITCH_L/2-8.f);for(int y=0;y<16;y++)for(int x=0;x<4;x++)DrawRectangle(tx+x*2,ty+y*2,2,2,(x+y)%2?c1:c2);DrawRectangleLines(tx-1,ty-1,10,34,Color{240,220,130,255});}if(chant==CH_PROTEST){int bx=SX(-5.5f),by=SY(PITCH_L/2+9.f);DrawRectangle(bx-2,by,9,31,Color{235,235,220,255});for(int y=1;y<29;y+=4)DrawRectangle(bx,by+y,5,2,Color{190,30,40,255});}}
@@ -1524,6 +1624,7 @@ void renderMatch(const Match& m, bool radar) {
             }
         }
     }
+    if (!replay) drawShowEffects(m, ox, oy, MWZ, MHZ);
     // météo : pluie, orage (pluie battante, éclairs), neige ; chaleur (air qui ondule)
     {
         int mt = m.S.meteo;
