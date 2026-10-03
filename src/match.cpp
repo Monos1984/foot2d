@@ -603,7 +603,18 @@ void Match::say(const std::string& s, float dur, bool force) {
 
 // ------------------------------------------------------------------ arbitre
 void Match::updateReferee(float dt) {
-    if (refCardT > 0) refCardT -= dt;
+    if (refCardT > 0) {
+        float before = refCardT;
+        refCardT -= dt;
+        // 2e avertissement : après le jaune, l'arbitre sort le rouge
+        if (refCardSecond && before > 1.7f && refCardT <= 1.7f && refCardFor >= 0) {
+            cardShow = 2; playSfx(SFX_CARD);
+            int nOff = 0; for (int j = pl[refCardFor].team * 11; j < pl[refCardFor].team * 11 + 11; j++) if (pl[j].sentOff) nOff++;
+            msg = nOff >= 2 ? fmt("%dE ROUGE POUR %s !", nOff, team(pl[refCardFor].team).shortName.c_str()) : std::string("CARTON ROUGE !");
+            msg2 = playerName(refCardFor); msgT = 2.2f;
+        }
+        if (refCardT <= 0) refCardSecond = false;
+    }
     if (comT > 0) comT -= dt;
     if (comCool > 0) comCool -= dt;
     for (int i = 0; i < NUM_INPUTS; i++) { if (lockSwitch[i] > 0) lockSwitch[i] -= dt; if (passRecvT[i] > 0) { passRecvT[i] -= dt; if (passRecvT[i] <= 0) passRecv[i] = -1; } }
@@ -671,15 +682,18 @@ void Match::giveCard(int off, int type) {
     if (!S.neutral && !S.training) playSfx(o.team == 0 ? SFX_FANS_WHISTLE : SFX_CLAPS);   // carton : sifflets du public local, ou applaudissements ironiques
     MatchEvent e; e.team = o.team; e.minute = clock; e.player = playerName(off);
     if (o.squad >= 0 && o.squad < (int)T0.squad.size()) e.pid = T0.squad[o.squad].id;
-    refCardFor = off; refCardT = 2.2f;
+    refCardFor = off; refCardT = 2.2f; refCardSecond = false;
+    rumbleFx(-1 - o.team, 8);                                       // RB_CARD
+    if (second) { refCardT = 3.8f; refCardSecond = true; }
     if (type == 2 || second) {
         cardShow = 2; refCardType = 2;
         int nOff = 1; for (int j = o.team * 11; j < o.team * 11 + 11; j++) if (pl[j].sentOff) nOff++;
         static const char* LEFTW[] = { "onze", "dix", "neuf", "huit", "sept", "six", "cinq" };
         const char* left = LEFTW[std::min(6, nOff)];
         const std::string tn = T0.name, pn = playerName(off);
-        msg = second ? "2E JAUNE - ROUGE !" : "CARTON ROUGE !"; msg2 = pn; msgT = 2.4f;
-        if (nOff >= 2) { msg = fmt("%dE ROUGE POUR %s !", nOff, T0.shortName.c_str()); msg2 = pn + fmt(" - %s à %s", T0.shortName.c_str(), left); }
+        msg = second ? "2E CARTON JAUNE" : "CARTON ROUGE !"; msg2 = pn; msgT = second ? 1.9f : 2.4f;
+        if (nOff >= 2 && !second) { msg = fmt("%dE ROUGE POUR %s !", nOff, T0.shortName.c_str()); msg2 = pn + fmt(" - %s à %s", T0.shortName.c_str(), left); }
+        if (second) cardShow = 1;          // le rouge suivra (voir l'arbitre dans update)
         if (second) { MatchEvent y = e; y.type = 1; events.push_back(y); }
         e.type = 2; events.push_back(e);
         if (o.squad < (int)T.squad.size()) { T.squad[o.squad].suspended = (int8_t)(second ? 2 : 2 + R.range(0, 2)); T.squad[o.squad].sRed++; }
@@ -972,6 +986,7 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     p.charging = false; p.charge = 0;
     armOffside(i);
     playSfx(speed > 21 ? SFX_SHOT : SFX_KICK);
+    if (p.human >= 0) rumbleFx(p.human, speed > 21 ? 1 : 0);       // RB_SHOT / RB_KICK
     // tir cadré ?
     V2 g = goalCenter(p.team);
     if (!shootout&&!kickingPass&&(g - ball.pos).len() < 40 && dir.dot((g - ball.pos).norm()) > 0.70f && speed > 16) { shots[p.team]++;pendingShot=i; ps(i).shot++; lastShooter = i; lastShotAge = 0; lastShotDist = (g - ball.pos).len(); }
@@ -1096,6 +1111,8 @@ void Match::updateBall(float dt) {
                     o.cool = 0.45f;
                     checkOffsideTouch(j, false);      // tacle : ballon détourné, pas de jeu maîtrisé
                     playSfx(SFX_TACKLE);
+                    if (q.human >= 0) rumbleFx(q.human, 2);                      // RB_TACKLE (le tacleur)
+                    if (o.human >= 0) rumbleFx(o.human, 3);                      // RB_FOULED (le joueur dépossédé)
                     break;
                 }
             }
@@ -1198,13 +1215,13 @@ void Match::updateBall(float dt) {
             if (b.z < GOAL_H && d.len() < BALL_R + 0.07f) {
                 V2 n = d.norm();
                 float vn = b.vel.dot(n);
-                if (vn < 0) { b.vel = (b.vel - n * (2 * vn)) * 0.6f; b.pos = post + n * (BALL_R + 0.08f); statsWoodwork();playSfx(SFX_POST); playSfx(SFX_CROWD_OOH); }
+                if (vn < 0) { b.vel = (b.vel - n * (2 * vn)) * 0.6f; b.pos = post + n * (BALL_R + 0.08f); statsWoodwork();playSfx(SFX_POST); playSfx(SFX_CROWD_OOH); rumbleFx(-1, 4); rumbleFx(-2, 4); }
             }
         }
         bool crossing = (prev.y - gy) * (b.pos.y - gy) <= 0 && prev.y != b.pos.y;
         if (crossing && std::fabs(b.pos.x - PITCH_W / 2) < GOAL_W / 2 && b.z > GOAL_H - 0.12f && b.z < GOAL_H + 0.2f) {
             b.vel.y = -b.vel.y * 0.5f; b.vz = -std::fabs(b.vz) * 0.5f; b.pos.y = prev.y;
-            statsWoodwork();playSfx(SFX_POST); playSfx(SFX_CROWD_OOH);
+            statsWoodwork();playSfx(SFX_POST); playSfx(SFX_CROWD_OOH); rumbleFx(-1, 4); rumbleFx(-2, 4);
         }
     }
     // filets vus de l'extérieur (petit filet latéral, fond, toit) : le ballon ne traverse pas le but
@@ -1306,6 +1323,7 @@ void Match::updateBall(float dt) {
             p.touchedBallInSlide = true; if (!shootout) ps(best).tackle++;
             if (attackingSlide) armOffside(best);
             playSfx(SFX_TACKLE);
+            if (p.human >= 0) rumbleFx(p.human, 2);
             return;
         }
         if (gkCatch) {
@@ -1319,7 +1337,7 @@ void Match::updateBall(float dt) {
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 possTeam = p.team;
                 p.state = PS_GKHOLD; p.st = 0; p.vel = V2();
-                if (rel > 4) playSfx(SFX_CATCH);
+                if (rel > 4) { playSfx(SFX_CATCH); rumbleFx(-1 - p.team, 7); }
                 if (rel > 18 && b.lastTeam != p.team) say("Belle prise de balle de " + playerName(best) + " !", 2.5f);
                 p.pos.y = clampf(p.pos.y, 0.6f, PITCH_L - 0.6f);
                 p.face = (goalCenter(p.team) - p.pos).norm();
@@ -1336,7 +1354,7 @@ void Match::updateBall(float dt) {
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 p.cool = 0.5f;
                 offsideOpponentTouch(best, OT_SAVE);
-                playSfx(SFX_PARRY);
+                playSfx(SFX_PARRY); rumbleFx(-1 - p.team, 7);
                 playSfx(SFX_CROWD_OOH);        // une parade du gardien ne remet pas en jeu un attaquant hors-jeu
                 if (p.team == 0 && !S.neutral) playSfx(SFX_CLAPS);   // le public applaudit son gardien
             }
@@ -1545,6 +1563,7 @@ void Match::goalScored(int t) {
     offsideReset(OR_VALID_GOAL);
     playSfx(SFX_NET);
     playSfx(SFX_GOAL);
+    rumbleFx(-1 - t, 5); rumbleFx(-1 - (1 - t), 6);              // RB_GOAL_FOR / RB_GOAL_AGAINST
     // célébration : le buteur court vers le poteau de corner ou vers le public, ses coéquipiers le rejoignent
     celebScorer = (sc >= 0 && pl[sc].team == t) ? sc : -1;
     // 0 poteau de corner, 1 glissade à genoux, 2 vers le public, 3 l'avion, 4 salto, 5 la pile humaine, 6 la danse,
@@ -1616,6 +1635,7 @@ void Match::sendOff(int i) {
 void Match::foul(int off, int vic, bool fromBehind) {
     MPlayer& o = pl[off]; MPlayer& v = pl[vic];
     fouls[o.team]++;
+    if (v.human >= 0) rumbleFx(v.human, 3);                        // RB_FOULED
     v.state = PS_DOWN; v.st = 0; v.vel = o.slideDir * 3;
     if (ball.owner == vic) ball.owner = -1;
     float sev = refSeverity() / 60.f * (S.personalityActive?o.personalityFoul:1.f);
@@ -3233,6 +3253,7 @@ void Match::endPeriod() {
         else { msg = "FIN DU MATCH"; msgT = 4; nextSp = -1; aet = true; }
     }
     playSfx(nextSp == -1 ? SFX_WHISTLE_FINAL : SFX_WHISTLE_LONG);
+    if (nextSp == -1) { rumbleFx(-1, 9); rumbleFx(-2, 9); }
     msg2 = fmt("%s %d - %d %s", team(0).shortName.c_str(), score[0], score[1], team(1).shortName.c_str());
     // remplacements automatiques à la pause
     autoSubs(0); autoSubs(1);
@@ -3660,7 +3681,7 @@ void Match::update(float dt) {
     if (state == MS_BREAK && period == 0 && stateT > 1.f) focus = V2(12.f, PITCH_L / 2);
     if (state == MS_GOAL && celebScorer >= 0 && stateT > 0.6f) focus = pl[celebScorer].pos;          // la caméra suit la célébration
     if (state == MS_STOP && subBoardT > 0) focus = V2(4.f, PITCH_L / 2);                                // et le remplacement
-    bool cardZoom = refCardT > 0.f && refCardT < 2.1f && refCardFor >= 0 && state != MS_PLAY && !S.highlights;   // gros plan sur l'arbitre qui sort le carton
+    bool cardZoom = refCardT > 0.f && refCardT < (refCardSecond ? 3.5f : 2.1f) && refCardFor >= 0 && state != MS_PLAY && !S.highlights;   // gros plan sur l'arbitre qui sort le carton
     if (!cardZoom && pendCardOff >= 0 && pendCardT > 0.6f && state != MS_PLAY && !S.highlights) { cardZoom = true; focus = (refPos + pl[pendCardOff].pos) * 0.5f; }
     else if (cardZoom) focus = (refPos + pl[refCardFor].pos) * 0.5f;
     if (!ceremony) camZoom = camZoom + ((cardZoom ? 2.0f : 1.f) - camZoom) * std::min(1.f, dt * 3.f);

@@ -32,3 +32,7 @@ Autres composants optionnels mentionnés dans les en-têtes raylib : msf_gif (Mi
 
 
 Remerciement à **Thorn Atari**.
+
+## Hymnes nationaux (build 24)
+
+Les débuts des hymnes nationaux sont joués à partir des notes du paquet npm **anthem-scores** (licence MIT pour le code ; les données gardent la licence de leur partition source). Les mélodies sont dans le domaine public ; les partitions dont elles sont extraites viennent de Wikipédia, Wikimedia Commons et Wikisource (CC BY-SA, CC0 ou domaine public). Les données dérivées sont dans `tools/anthems/` et `src/anthems_data.inc` (générées par `tools/gen_anthems.py`) ; elles sont partagées sous les mêmes conditions que leur source. La liste complète des sources, auteurs et licences, partition par partition, est dans `tools/anthems/CREDITS.md`.

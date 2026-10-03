@@ -168,7 +168,7 @@ void Competition::addGroupStage(const std::vector<std::vector<int>>& groups, int
             if (rd >= (int)sched[g].size()) continue;
             for (auto& p : sched[g][rd]) {
                 MatchRes m; m.home = p.first; m.away = p.second; m.group = (int16_t)g;
-                if (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && kind != KIND_CONTINENTS && !isContinentalKind(kind)) {
+                if (format == FMT_TOURNAMENT && kind != 21 && kind != 42 && kind != KIND_CONTINENTS && tag != TAG_CUSTOM_RULES && !isContinentalKind(kind)) {
                     m.neutral = true;
                     if (host >= 0 && (m.away == host)) std::swap(m.home, m.away);
                     if (host >= 0 && m.home == host) m.neutral = false;
@@ -759,6 +759,10 @@ void Competition::onStageFinished() {
             if (groupsAdvance >= 3) for (auto& s : thirds) seeds.push_back(s.team);           // Final Four : les 4 premiers du groupe
             else for (int i = 0; i < bestThirds && i < (int)thirds.size(); i++) seeds.push_back(thirds[i].team);
             if (groupsAdvance >= 4) for (auto& s : fourths) seeds.push_back(s.team);
+            if (st.groups.size() == 1 && groupsAdvance >= 2) {   // groupe unique (play-offs, Final Four) : les N premiers du classement
+                seeds.clear(); auto tb1 = table(cur, 0);
+                for (int i = 0; i < groupsAdvance && i < (int)tb1.size(); i++) seeds.push_back(tb1[i].team);
+            }
             int n = (int)seeds.size();
             std::map<int, int> grp;
             for (int g = 0; g < (int)st.groups.size(); g++) for (int t : st.groups[g]) grp[t] = g;
@@ -782,7 +786,10 @@ void Competition::onStageFinished() {
             for (int p : pos) ord.push_back(pairs[p]);
             cur = (int)stages.size();
             bool ff = groupsAdvance >= 4;     // Final Four : matchs secs
-            addKOStage(ord, legs == 2 && n > 2 && !ff ? 2 : 1, koTimes.empty() ? st.rounds.back().time + 1 : koTimes[0], kind == KIND_CONTINENTS && !koNames.empty() ? koNames[0] : koName(n), n == 2);
+            int kl = legs == 2 && n > 2 && !ff ? 2 : 1;
+            bool customRules = tag == TAG_CUSTOM_RULES && koLegs.size() >= 2;
+            if (customRules) kl = n == 2 ? koLegs[1] : koLegs[0];
+            addKOStage(ord, kl, koTimes.empty() ? st.rounds.back().time + 1 : koTimes[0], (kind == KIND_CONTINENTS || customRules) && !koNames.empty() ? koNames[0] : koName(n), n == 2 && kl == 1);
             return;
         }
         int nk = (int)stages.size();
@@ -797,8 +804,11 @@ void Competition::onStageFinished() {
         }
         cur = (int)stages.size();
         int kn = nk - (int)std::count_if(stages.begin(), stages.end(), [](const Stage& x) { return x.type == ST_LEAGUE; });
-        std::string knm = kind == KIND_CONTINENTS && kn < (int)koNames.size() ? koNames[kn] : koName((int)winners.size());
-        addKOStage(pairs, (legs == 2 && winners.size() > 2 && groupsAdvance < 4) ? 2 : 1, t, knm, winners.size() == 2);
+        bool customRules = tag == TAG_CUSTOM_RULES && koLegs.size() >= 2;
+        std::string knm = (kind == KIND_CONTINENTS || customRules) && kn < (int)koNames.size() ? koNames[kn] : koName((int)winners.size());
+        int kl = (legs == 2 && winners.size() > 2 && groupsAdvance < 4) ? 2 : 1;
+        if (customRules) kl = winners.size() == 2 ? koLegs[1] : koLegs[0];
+        addKOStage(pairs, kl, t, knm, winners.size() == 2 && kl == 1);
         return;
     }
     case FMT_QUAL_GROUPS: done = true; return;

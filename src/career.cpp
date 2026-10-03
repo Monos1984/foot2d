@@ -3077,39 +3077,73 @@ void Career::newCustom(const CustomCompDef& def, const std::vector<int>& ctrl) {
     Competition c;
     c.name = def.name.empty() ? "Tournoi personnalisé" : def.name;
     c.shortName = c.name;
+    c.tag = TAG_CUSTOM_RULES;
+    c.ptsWin = def.ptsWin == 2 ? 2 : 3;
+    c.tb = def.tb == 1 ? TB_H2H : def.tb == 2 ? TB_ENG : TB_GD;
+    c.awayGoals = def.awayGoals;
+    c.yellowLimit = def.yellowLimit <= 0 ? 99 : def.yellowLimit;
+    c.thirdPlace = def.thirdPlace;
+    int kl = std::max(1, std::min(2, def.koLegs)), fl = std::max(1, std::min(2, def.finalLegs));
+    c.neutralFinal = fl == 1;
     std::vector<int> teams = def.teams;
     g_rng.shuffle(teams);
     if (def.format == 0) {
-        c.format = FMT_LEAGUE; c.tb = TB_GD;
-        c.setupLeague(teams, def.legs, 1, 40, 1);
+        c.format = FMT_LEAGUE;
+        int lg = std::max(1, std::min(4, def.legs));
+        double span = std::max(10.0, std::min(40.0, (double)(teams.size() - 1) * lg * 0.9));
+        c.setupLeague(teams, lg, 1, 1 + span, 1);
         addComp(season, std::move(c));
     } else if (def.format == 1) {
-        c.format = FMT_KO_ONLY; c.qualSpots = 1; c.neutralFinal = true;
+        c.format = FMT_KO_ONLY; c.qualSpots = 1;
         int n = (int)teams.size();
-        for (int i = 0; i < 10; i++) { c.koLegs.push_back(def.legs); c.koTimes.push_back(2 + 5.0 * i); }
-        c.koTimes[0] = 2;
-        std::vector<std::pair<int, int>> pairs;
-        sortByRating(teams);
-        // exemptions pour atteindre une puissance de 2
         int pw = 1; while (pw < n) pw *= 2;
-        int byes = pw - n;
+        int rounds = 0; for (int q = pw; q > 1; q /= 2) rounds++;
+        for (int i = 0; i < 10; i++) { c.koLegs.push_back(i == rounds - 1 ? fl : kl); c.koTimes.push_back(2 + 5.0 * i); }
+        std::vector<std::pair<int, int>> pairs;
+        if (def.seeded) sortByRating(teams);
+        int byes = pw - n;          // exemptions (les mieux classés si tirage avec têtes de série)
         std::vector<int> play(teams.begin() + byes, teams.end());
         g_rng.shuffle(play);
         for (int i = 0; i < byes; i++) pairs.push_back({ teams[i], -1 });
         for (size_t i = 0; i + 1 < play.size(); i += 2) pairs.push_back({ play[i], play[i + 1] });
         g_rng.shuffle(pairs);
-        c.addKOStage(pairs, def.legs, 2, koName(pw));
+        c.addKOStage(pairs, rounds == 1 ? fl : kl, 2, koName(pw), rounds == 1 && fl == 1);
+        addComp(season, std::move(c));
+    } else if (def.format == 2) {
+        c.format = FMT_TOURNAMENT; c.legs = std::max(1, std::min(2, def.legs));
+        int ng = std::max(1, def.groups);
+        auto groups = def.seeded ? potGroups(teams, ng) : std::vector<std::vector<int>>(ng);
+        if (!def.seeded) for (size_t i = 0; i < teams.size(); i++) groups[i % ng].push_back(teams[i]);
+        int gs = 0; for (auto& g : groups) gs = std::max(gs, (int)g.size());
+        int rds = (gs - (gs % 2 == 0 ? 1 : 0)) * c.legs;
+        std::vector<double> times; for (int i = 0; i < std::max(1, rds); i++) times.push_back(1 + 3.0 * i);
+        c.addGroupStage(groups, c.legs, times, "Phase de groupes");
+        // qualifiés : 1 ou 2 par groupe, complétés par les meilleurs 3es jusqu'à une puissance de 2
+        int adv = std::max(1, std::min(2, def.advance));
+        c.groupsAdvance = adv;
+        int q = ng * adv; int pw = 1; while (pw < q) pw *= 2;
+        c.bestThirds = def.bestThirds && adv == 2 ? std::min(ng, pw - q) : 0;
+        if (adv == 1 && pw > q) c.bestThirds = 0;
+        double t0 = 1 + 3.0 * std::max(1, rds) + 2;
+        for (int i = 0; i < 6; i++) c.koTimes.push_back(t0 + 4.0 * i);
+        c.koLegs = { kl, fl };
+        c.host = -1;
         addComp(season, std::move(c));
     } else {
-        c.format = FMT_TOURNAMENT; c.tb = TB_H2H; c.legs = def.legs;
-        int ng = std::max(1, def.groups);
-        auto groups = potGroups(teams, ng);
-        c.addGroupStage(groups, def.legs, { 1, 4, 7, 10, 13, 16, 19, 22, 25, 28 }, "Phase de groupes");
-        // qualifiés : 2 par groupe (+ meilleurs 3es pour une puissance de 2)
-        int q = ng * 2; int pw = 1; while (pw < q) pw *= 2;
-        c.bestThirds = std::min(ng, pw - q);
-        if (pw - q > ng) c.bestThirds = 0;
-        for (int i = 0; i < 6; i++) c.koTimes.push_back(30 + 2.0 * i);
+        // championnat puis play-offs (2, 4 ou 8 premiers) : finale, Final Four ou quarts
+        c.format = FMT_TOURNAMENT; c.legs = std::max(1, std::min(2, def.legs));
+        int adv = def.advance >= 8 ? 8 : def.advance >= 4 ? 4 : 2;
+        adv = std::min(adv, std::max(2, (int)teams.size() / 2 * 2));
+        c.groupsAdvance = adv; c.bestThirds = 0;
+        int n = (int)teams.size();
+        int rds = (n - (n % 2 == 0 ? 1 : 0)) * c.legs;
+        std::vector<double> times; for (int i = 0; i < std::max(1, rds); i++) times.push_back(1 + 1.0 * i);
+        c.addGroupStage({ teams }, c.legs, times, "Saison régulière");
+        double t0 = 1 + rds + 2;
+        for (int i = 0; i < 6; i++) c.koTimes.push_back(t0 + 3.0 * i);
+        c.koLegs = { kl, fl };
+        c.koNames = adv == 8 ? std::vector<std::string>{ "Play-offs - quarts de finale", "Play-offs - demi-finales", "Play-offs - finale" }
+                  : adv == 4 ? std::vector<std::string>{ "Play-offs - demi-finales", "Play-offs - finale" } : std::vector<std::string>{ "Play-offs - finale" };
         c.host = -1;
         addComp(season, std::move(c));
     }

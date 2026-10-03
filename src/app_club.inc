@@ -632,6 +632,10 @@ static void screenCustomList() {
         askConfirm("Supprimer définitivement " + g_world.teams[id].name + " ?" + (g_careerActive ? " La carrière en cours sera fermée (la sauvegarde automatique reste disponible)." : ""),
                    [id]() { deleteCustomClub(id); toast("Club supprimé"); }, "Supprimer", "Annuler");
     }
+    if (button(514, by, 110, 16, "Tournoi perso", false, !v.empty()) && !v.empty()) {   // compétition personnalisée avec tous les clubs créés
+        g_customSel = v; for (auto& c : g_customCtrl) c = -1; g_customCtrl[0] = cur >= 0 && cur < (int)v.size() ? cur : 0;
+        g_cdefPreset = NUM_CUSTOM_PRESETS - 1; customApplyPreset(g_cdefPreset); g_customLW = ListW(); g_screen = SC_CUSTOM; return;
+    }
     drawFooter("OK : démarrer une carrière   Retour");
     if (s >= 0) { startCareerWith(v[s], SC_CUSTOMLIST); return; }
     if (IN.back) g_screen = SC_EDITMENU;

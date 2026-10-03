@@ -43,6 +43,7 @@ void Settings::load() {
         else if (!strcmp(k, "musictrack")) musicTrack = v;
         else if (!strcmp(k, "commentary")) commentary = v;
         else if (!strcmp(k, "vibration")) vibration = v;
+        else if (!strcmp(k, "vibration_force")) vibForce = std::max(1, std::min(3, v));
         else if (!strcmp(k, "vestiaire")) lockerRoom = v;
         else if (!strcmp(k, "arbitre_tenue")) refKit = v < 0 || v > 4 ? 0 : v;
         else {
@@ -59,7 +60,7 @@ void Settings::load() {
 void Settings::save() const {
     FILE* f = fopen("foot2d.ini", "w");
     if (!f) return;
-    fprintf(f, "half=%d\ndifficulty=%d\npitch=%d\nradar=%d\nfullscreen=%d\nsound=%d\ndeadzone=%d\nstyle=%d\nmusic=%d\ncommentary=%d\nmusictrack=%d\nvibration=%d\nvestiaire=%d\narbitre_tenue=%d\n", halfIdx, difficulty, pitch, radar, fullscreen, sound, (int)(deadzone * 100), controlStyle, music, commentary, musicTrack, (int)vibration, (int)lockerRoom, refKit);
+    fprintf(f, "half=%d\ndifficulty=%d\npitch=%d\nradar=%d\nfullscreen=%d\nsound=%d\ndeadzone=%d\nstyle=%d\nmusic=%d\ncommentary=%d\nmusictrack=%d\nvibration=%d\nvestiaire=%d\narbitre_tenue=%d\nvibration_force=%d\n", halfIdx, difficulty, pitch, radar, fullscreen, sound, (int)(deadzone * 100), controlStyle, music, commentary, musicTrack, (int)vibration, (int)lockerRoom, refKit, vibForce);
     for (int a = 0; a < 2; a++) for (int b = 0; b < NUM_ACTIONS; b++) fprintf(f, "kb%d_%d=%d\n", a, b, keys[a][b]);
     for (int a = 0; a < 4; a++) for (int b = 0; b < NUM_PA; b++) fprintf(f, "pad%d_%d=%d\n", a, b, pad[a][b]);
     fclose(f);

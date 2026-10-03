@@ -605,11 +605,23 @@ struct CoachCampaign { int type = 0, year = 2028, format = 0; };
 
 struct CustomCompDef {
     std::string name;
-    int format = 0;           // 0 championnat, 1 coupe, 2 groupes + phase finale
-    int legs = 2;
+    int format = 0;           // 0 championnat, 1 coupe, 2 groupes + phase finale, 3 championnat + play-offs
+    int legs = 2;             // championnat / groupes : 1 aller simple, 2 aller-retour (championnat : jusqu'à 4)
     std::vector<int> teams;
     int groups = 4;
+    // règles avancées (build 24) : utilisées à la création ; la compétition créée les garde (sauvegardées avec elle)
+    int koLegs = 1;           // phase finale : 1 match sec, 2 aller-retour
+    int finalLegs = 1;        // finale : 1 match unique (terrain neutre), 2 aller-retour
+    int advance = 2;          // groupes : qualifiés par groupe (1 ou 2) ; play-offs : nombre de qualifiés (2, 4 ou 8)
+    bool bestThirds = false;  // groupes : repêchage des meilleurs 3es pour compléter le tableau
+    bool thirdPlace = false;  // match pour la 3e place
+    int ptsWin = 3;
+    int tb = 0;               // 0 différence de buts, 1 confrontations directes, 2 buts marqués
+    bool awayGoals = false;
+    bool seeded = true;       // tirage des groupes avec chapeaux (têtes de série)
+    int yellowLimit = 3;      // suspension après N jaunes (0 : jamais)
 };
+const int TAG_CUSTOM_RULES = -77;   // Competition::tag d'une compétition personnalisée (koLegs = { tours, finale })
 
 // vie privée du manager ou du joueur incarné (carrière de joueur / joueuse) ; « valise à l'arbitre »
 struct PlayerLife {

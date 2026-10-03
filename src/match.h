@@ -312,6 +312,7 @@ struct Match {
     // arbitre
     V2 refPos, refVel, refFace{ 0, 1 };
     float refCardT = 0; int refCardType = 0, refCardFor = -1;
+    bool refCardSecond = false;     // 2e avertissement : l'arbitre montre d'abord le jaune, puis le rouge
     float refAnim = 0;           // foulées de l'arbitre (distance parcourue)
     void refMove(V2 tg, float spd, V2 faceIdle, float dt);   // l'arbitre court / marche vers un point (vitesse constante, freinage à l'arrivée)
     // bagarre
@@ -369,6 +370,9 @@ struct Match {
     void substitute(int team, int fieldSlot, int benchIdx);
     void setFormation(int team, int f);
     void playSfx(int id) { if (sfxN < 16) sfxQueue[sfxN++] = id; }
+    // vibrations : who >= 0 manette/clavier qui contrôle le joueur, who < 0 : toute l'équipe -1-who ; kind = RumbleKind
+    int rumbleQ[16][2]; int rumbleN = 0;
+    void rumbleFx(int who, int kind) { if (rumbleN < 16) { rumbleQ[rumbleN][0] = who; rumbleQ[rumbleN][1] = kind; rumbleN++; } }
 
     // interne
     void startPeriod(int p);

@@ -1,6 +1,6 @@
 // ------------------------------------------------------------------ messagerie, éditeurs de sponsors et de managers, à propos, mode championnat
 static const char* GAME_VERSION = "00.03.00";
-static const int GAME_BUILD = 23;          // incrémenté à chaque livraison
+static const int GAME_BUILD = 24;          // incrémenté à chaque livraison
 
 // ---------------- messagerie : lire, effacer, non lus
 static int g_newsOpen = -1;           // index (dans season.news) du message ouvert
@@ -385,7 +385,7 @@ static void screenAbout() {
     drawTextCentered(std::string("Version ") + GAME_VERSION + fmt("  -  build %d", GAME_BUILD), VW / 2, y, 10, C_DIM); y += 20;
     const char* L[] = { "Jeu gratuit réalisé par l'IA Claude,", "piloté par Jean Monos pour Offgame.", "",
                         "Jeu non licencié : fan jeu, sans lien avec les ligues, fédérations et clubs cités.",
-                        "Musiques et sons originaux synthétisés par le jeu.",
+                        "Musiques et sons synthétisés par le jeu ; hymnes nationaux d'après des partitions libres.",
                         "Remerciement à Thorn Atari.",
                         "Données : EA SPORTS FC 26 DataHub (joueurs), INSEE (communes), Wikipédia (palmarès).", "",
                         "Soutenir le jeu : fr.tipeee.com/le-bazar-de-monos  (touche T)" };
@@ -400,6 +400,7 @@ static void screenAbout() {
         "PowerShell (Microsoft) : construction et vérification des livraisons.",
         "Python (Python Software Foundation), pypdf et Pillow : imports, icône, archives.",
         "Musique synthétisée, sprites et interface : code et créations du projet.",
+        "Hymnes : partitions libres (Wikipédia, Commons, Wikisource) via anthem-scores, CC BY-SA / domaine public.",
         "FFF, Ligues et Districts : compositions officielles importées (sources tracées).",
         "EA SPORTS FC 26 DataHub, INSEE, Wikipédia : données historiques du projet.",
         "Détails, liens et licences : CREDITS.md et LICENSE_raylib.txt fournis."};

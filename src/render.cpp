@@ -1387,7 +1387,7 @@ static void drawMatchScenes(const Match& m) {
     if (sm != &m) { sm = &m; st = -1; wait = 0; lastClock = -100; goalCamSum = -1; }
     if (m.score[0] + m.score[1] < goalCamSum) goalCamSum = -1;
     bool goalCam = m.S.tv && m.state == MS_GOAL && m.stateT > 2.6f && m.lastScorerTeam >= 0 && !m.S.neutral && m.score[0] + m.score[1] != goalCamSum;   // après un but : la caméra cherche la joie en tribune
-    bool stop = !m.S.training && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.boardT <= 0 && m.pendCardOff < 0 &&
+    bool stop = !m.S.training && m.refCardT <= 0 && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.boardT <= 0 && m.pendCardOff < 0 &&
                 (m.state == MS_STOP || goalCam || (m.state == MS_SETPIECE && !m.spReady && m.sp != SP_KICKOFF));
     float dt = GetFrameTime();
     if (getenv("FOOT_SCENE")) { kind = atoi(getenv("FOOT_SCENE")) % 11; st = 1.f; stop = true; dt = 0; g_fanSeed = (unsigned)atoi(getenv("FOOT_FANSEED") ? getenv("FOOT_FANSEED") : "3"); }
@@ -1818,7 +1818,9 @@ void renderMatch(const Match& m, bool radar) {
             Kit rk = refereeKit(m);
             int rx = SX(m.refPos.x), ry = SY(m.refPos.y);
             int rframe = m.refVel.len() > 0.4f ? (int)(m.refAnim * 1.8f) : 0;     // foulées au rythme de la course
-            bool showCard = m.refCardT > 0 && m.refCardT < 1.8f;
+            // 2e avertissement : jaune (3,4 s -> 1,9 s), courte pause, puis rouge (1,6 s -> 0)
+            bool showCard = m.refCardSecond ? (m.refCardT > 0 && m.refCardT < 3.4f && (m.refCardT > 1.9f || m.refCardT < 1.6f)) : (m.refCardT > 0 && m.refCardT < 1.8f);
+            int cardType = m.refCardSecond && m.refCardT > 1.75f ? 1 : m.refCardType;
             // coiffure : cheveux courts pour les arbitres hommes, longs (queue de cheval) pour les arbitres femmes
             bool fem = m.S.referee >= 0 && m.S.referee < NUM_REFEREES && REFEREES[m.S.referee].female;
             static const int MS[6][2] = { { 0, 0 }, { 0, 4 }, { 1, 3 }, { 2, 2 }, { 2, 6 }, { 3, 1 } };      // (peau, cheveux) donnant une coupe courte
@@ -1827,7 +1829,7 @@ void renderMatch(const Match& m, bool radar) {
             drawPlayerSprite(rx, ry, rk, rs, rh, showCard ? 0 : dirOf(m.refFace), rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
             g_sprLongHair = false;
             if (showCard) {
-                Color cc = m.refCardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
+                Color cc = cardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
                 DrawRectangle(rx + 3, ry - 18, 3, 4, cc);
                 DrawRectangleLines(rx + 2, ry - 19, 5, 6, Color{ 0, 0, 0, 120 });
             } else if (!replay && m.state == MS_STOP && m.stateT < 2.2f && (m.nextSp == SP_FREEKICK || m.nextSp == SP_INDIRECT || m.nextSp == SP_PENALTY || m.nextSp == SP_CORNER)) {
@@ -2498,7 +2500,8 @@ void renderMatch(const Match& m, bool radar) {
         if (m.subBoardT <= 0 && m.refCardT > 0 && m.refCardFor >= 0 && m.refCardFor < 22) {
             float a = std::min(1.f, m.refCardT * 4.f);
             const MPlayer& cp = m.pl[m.refCardFor];
-            band(m.refCardType == 2 ? "CARTON ROUGE" : "CARTON JAUNE", m.playerName(m.refCardFor) + " (" + m.team(cp.team).shortName + ")", m.refCardType == 2 ? Color{ 230, 40, 40, 255 } : Color{ 255, 220, 0, 255 }, a);
+            int ct = m.refCardSecond && m.refCardT > 1.75f ? 1 : m.refCardType;
+            band(m.refCardSecond ? (ct == 1 ? "2E CARTON JAUNE" : "2E JAUNE = CARTON ROUGE") : ct == 2 ? "CARTON ROUGE" : "CARTON JAUNE", m.playerName(m.refCardFor) + " (" + m.team(cp.team).shortName + ")", ct == 2 ? Color{ 230, 40, 40, 255 } : Color{ 255, 220, 0, 255 }, a);
         }
     }
     // messages

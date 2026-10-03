@@ -713,37 +713,149 @@ static void screenClubEdit() {
 
 // ------------------------------------------------------------------ compétition personnalisée
 static CustomCompDef g_cdef;
-static int g_customCtrl[2] = { -1, -1 };     // index dans g_customSel (-1 : aucune)
+static int g_customCtrl[4] = { -1, -1, -1, -1 };     // index dans g_customSel (-1 : aucune)
 static ListW g_customLW;
 static bool g_cdefTyping = false;
-static const char* CUSTOM_FMT[] = { "Championnat (tous contre tous)", "Coupe (élimination directe)", "Groupes + phase finale" };
+static int g_cdefPreset = 0;
+static const char* CUSTOM_FMT[] = { "Championnat (tous contre tous)", "Coupe (élimination directe)", "Groupes + phase finale", "Championnat + play-offs" };
+// modèles prêts à l'emploi : format et règles (les équipes restent à choisir, ou se complètent au hasard)
+struct CustomPreset { const char* name; int format, legs, groups, advance, koLegs, finalLegs; bool bestThirds, thirdPlace, awayGoals; int teams; };
+static const CustomPreset CUSTOM_PRESETS[] = {
+    { "Personnalisé", -1, 0, 0, 0, 0, 0, false, false, false, 0 },
+    { "Mondial à 32 (8 groupes de 4)", 2, 1, 8, 2, 1, 1, false, true, false, 32 },
+    { "Mondial à 48 (12 groupes de 4)", 2, 1, 12, 2, 1, 1, true, true, false, 48 },
+    { "Euro à 24 (6 groupes + meilleurs 3es)", 2, 1, 6, 2, 1, 1, true, false, false, 24 },
+    { "Ligue des champions (8 groupes, aller-retour)", 2, 2, 8, 2, 2, 1, false, false, true, 32 },
+    { "Coupe nationale à 64", 1, 1, 0, 0, 1, 1, false, false, false, 64 },
+    { "Coupe aller-retour à 16", 1, 2, 0, 0, 2, 2, false, false, true, 16 },
+    { "Championnat à 20 clubs", 0, 2, 0, 0, 1, 1, false, false, false, 20 },
+    { "Championnat + Final Four (12 clubs)", 3, 2, 0, 4, 1, 1, false, true, false, 12 },
+    { "Mini-tournoi à 8 (2 groupes)", 2, 1, 2, 2, 1, 1, false, true, false, 8 },
+    { "Tournoi de clubs créés", 2, 1, 2, 2, 1, 1, false, true, false, 0 },
+};
+static const int NUM_CUSTOM_PRESETS = (int)(sizeof CUSTOM_PRESETS / sizeof CUSTOM_PRESETS[0]);
+static std::vector<int> customCreatedClubs() { std::vector<int> v; for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].custom && g_world.teams[i].kind == TK_CLUB) v.push_back(i); return v; }
+// complète la liste jusqu'à n équipes : clubs de niveau proche des équipes déjà choisies (ou des meilleurs clubs si la liste est vide)
+static void customFillTo(int n) {
+    if ((int)g_customSel.size() >= n) return;
+    bool nations = !g_customSel.empty() && g_world.teams[g_customSel[0]].kind == TK_NATION;
+    float ref = 0; for (int t : g_customSel) ref += g_world.teams[t].rating; ref = g_customSel.empty() ? 80.f : ref / g_customSel.size();
+    std::vector<std::pair<float, int>> cand;
+    if (nations) { for (int i = 0; i < NUM_NATIONS; i++) if (nationEligible(i)) cand.push_back({ std::fabs(g_world.teams[i].rating - ref) + g_rng.frange(0, 6), i }); }
+    else for (int i = NUM_NATIONS; i < (int)g_world.teams.size(); i++) {
+        const Team& T = g_world.teams[i];
+        if (T.kind != TK_CLUB || T.parent >= 0 || T.youth || T.freeAgents || T.resLevel) continue;
+        cand.push_back({ std::fabs(T.rating - ref) + g_rng.frange(0, 6), i });
+    }
+    std::sort(cand.begin(), cand.end());
+    for (auto& c : cand) { if ((int)g_customSel.size() >= n) break; if (std::find(g_customSel.begin(), g_customSel.end(), c.second) == g_customSel.end()) g_customSel.push_back(c.second); }
+}
+static void customApplyPreset(int p) {
+    const CustomPreset& P = CUSTOM_PRESETS[p];
+    if (P.format < 0) return;
+    g_cdef.format = P.format; g_cdef.legs = P.legs; if (P.groups) g_cdef.groups = P.groups; if (P.advance) g_cdef.advance = P.advance;
+    g_cdef.koLegs = P.koLegs; g_cdef.finalLegs = P.finalLegs; g_cdef.bestThirds = P.bestThirds; g_cdef.thirdPlace = P.thirdPlace; g_cdef.awayGoals = P.awayGoals;
+    g_cdef.name = P.name; size_t k = g_cdef.name.find(" ("); if (k != std::string::npos) g_cdef.name = g_cdef.name.substr(0, k);
+    if (p == NUM_CUSTOM_PRESETS - 1) { for (int t : customCreatedClubs()) if (std::find(g_customSel.begin(), g_customSel.end(), t) == g_customSel.end()) g_customSel.push_back(t); }
+    if (p >= 1 && p <= 3 && g_customSel.empty()) { int best = 0; for (int i = 0; i < NUM_NATIONS; i++) if (nationEligible(i) && g_world.teams[i].rating > g_world.teams[best].rating) best = i; g_customSel.push_back(best); }   // Mondial, Euro : sélections
+    if (P.teams > 0 && (int)g_customSel.size() < P.teams) customFillTo(P.teams);
+    if (P.teams > 0 && (int)g_customSel.size() > P.teams) g_customSel.resize(P.teams);
+}
+// schéma du déroulement, affiché à droite (« 8 groupes de 4 -> 8es -> quarts -> demies -> finale »)
+static std::string customPlan(int nt) {
+    auto koChain = [](int q) { std::string r; for (int k = q; k >= 2; k /= 2) r += std::string(r.empty() ? "" : " > ") + (k == 2 ? "finale" : k == 4 ? "demies" : k == 8 ? "quarts" : k == 16 ? "8es" : k == 32 ? "16es" : k == 64 ? "32es" : "tour"); return r; };
+    if (nt < 2) return "Choisissez au moins 2 équipes.";
+    if (g_cdef.format == 0) { int m = nt * (nt - 1) / 2 * g_cdef.legs; return fmt("%d équipes, %d journées, %d matchs au total.", nt, (nt - 1 + nt % 2) * g_cdef.legs, m); }
+    if (g_cdef.format == 1) { int pw = 1; while (pw < nt) pw *= 2; return fmt("%d équipes", nt) + (pw > nt ? fmt(" (%d exemptée%s au 1er tour)", pw - nt, pw - nt > 1 ? "s" : "") : std::string()) + " : " + koChain(pw) + "."; }
+    if (g_cdef.format == 2) {
+        int ng = std::max(1, g_cdef.groups), q = ng * std::max(1, std::min(2, g_cdef.advance)); int pw = 1; while (pw < q) pw *= 2;
+        int extra = g_cdef.bestThirds && g_cdef.advance == 2 ? std::min(ng, pw - q) : 0;
+        int tot = q + extra; int p2 = 1; while (p2 * 2 <= tot) p2 *= 2;
+        return fmt("%d groupes de %d à %d, %d qualifié%s par groupe", ng, nt / ng, (nt + ng - 1) / ng, std::min(2, g_cdef.advance), g_cdef.advance > 1 ? "s" : "") + (extra ? fmt(" + %d meilleurs 3es", extra) : std::string()) + " : " + koChain(std::max(2, p2)) + ".";
+    }
+    int adv = g_cdef.advance >= 8 ? 8 : g_cdef.advance >= 4 ? 4 : 2;
+    return fmt("Saison régulière à %d, puis les %d premiers : ", nt, adv) + koChain(adv) + ".";
+}
 
 static void screenCustom() {
     drawBackground("Compétition personnalisée");
     if (g_cdef.name.empty() && !g_cdefTyping) g_cdef.name = "Ma Coupe";
-    for (int k = 0; k < 2; k++) if (g_customCtrl[k] >= (int)g_customSel.size()) g_customCtrl[k] = -1;
-    if (g_customCtrl[0] < 0 && !g_customSel.empty() && g_customCtrl[1] != 0) g_customCtrl[0] = 0;
+    for (int k = 0; k < 4; k++) if (g_customCtrl[k] >= (int)g_customSel.size()) g_customCtrl[k] = -1;
+    if (g_customCtrl[0] < 0 && !g_customSel.empty() && g_customCtrl[1] != 0 && g_customCtrl[2] != 0 && g_customCtrl[3] != 0) g_customCtrl[0] = 0;
     int nt = (int)g_customSel.size();
     int maxGroups = std::max(1, nt / 3);
     if (g_cdef.groups > maxGroups) g_cdef.groups = maxGroups;
     if (g_cdef.groups < 1) g_cdef.groups = 1;
     auto ctrlName = [&](int k) { return g_customCtrl[k] >= 0 ? g_world.teams[g_customSel[g_customCtrl[k]]].name : std::string("aucune"); };
-    std::vector<std::string> items = {
-        "Nom : " + g_cdef.name + (g_cdefTyping && fmod(GetTime(), 1.0) < 0.5 ? "_" : ""),
-        std::string("Format : ") + CUSTOM_FMT[g_cdef.format],
-        g_cdef.legs == 2 ? "Matchs : aller-retour" : "Matchs : aller simple",
-        g_cdef.format == 2 ? fmt("Nombre de groupes : %d", g_cdef.groups) : std::string("Nombre de groupes : -"),
-        fmt("Choisir les équipes (%d sélectionnée%s)", nt, nt > 1 ? "s" : ""),
-        "Équipe contrôlée (joueur 1) : " + ctrlName(0),
-        "Équipe contrôlée (joueur 2) : " + ctrlName(1),
-        ">>> LANCER LA COMPÉTITION <<<", "Retour" };
-    int s = menuRun(g_customLW, items, 40, 440);
-    // équipes choisies
-    int y = 40 + 20 * (int)items.size() + 6;
-    std::string list;
-    for (int t : g_customSel) list += (list.empty() ? "" : ", ") + g_world.teams[t].shortName;
-    int ly = y;
-    for (auto& l : wrapText(list.empty() ? "Aucune équipe choisie" : list, VW - 40)) { if (ly > VH - 30) break; drawTextPx(l, 20, ly, 10, C_DIM); ly += 12; }
+    auto yn = [](bool b) { return std::string(b ? "oui" : "non"); };
+    bool f0 = g_cdef.format == 0, f1 = g_cdef.format == 1, f2 = g_cdef.format == 2, f3 = g_cdef.format == 3;
+    static const char* LG[5] = { "", "aller simple", "aller-retour", "3 matchs", "4 matchs" };
+    static const char* TBN[3] = { "différence de buts", "confrontations directes", "buts marqués" };
+    // lignes : identifiant d'action + texte ; les lignes inutiles pour le format choisi ne sont pas affichées
+    struct Row { int id; std::string txt; int sec; };
+    std::vector<Row> R;
+    R.push_back({ 0, "Nom : " + g_cdef.name + (g_cdefTyping && fmod(GetTime(), 1.0) < 0.5 ? "_" : ""), 0 });
+    R.push_back({ 1, std::string("Modèle : ") + CUSTOM_PRESETS[g_cdefPreset].name, 0 });
+    R.push_back({ 2, std::string("Format : ") + CUSTOM_FMT[g_cdef.format], 0 });
+    if (!f1) R.push_back({ 3, std::string(f0 ? "Matchs du championnat : " : f3 ? "Saison régulière : " : "Matchs de groupe : ") + LG[std::max(1, std::min(f0 ? 4 : 2, g_cdef.legs))], 1 });
+    if (f2) R.push_back({ 4, fmt("Nombre de groupes : %d", g_cdef.groups), 1 });
+    if (f2) R.push_back({ 5, fmt("Qualifiés par groupe : %d", std::max(1, std::min(2, g_cdef.advance))), 1 });
+    if (f2) R.push_back({ 6, "Repêchage des meilleurs 3es : " + yn(g_cdef.bestThirds), 1 });
+    if (f3) R.push_back({ 5, fmt("Qualifiés pour les play-offs : %d", g_cdef.advance >= 8 ? 8 : g_cdef.advance >= 4 ? 4 : 2), 1 });
+    if (!f0) R.push_back({ 7, std::string("Phase à élimination : ") + (g_cdef.koLegs == 2 ? "aller-retour" : "matchs secs"), 1 });
+    if (!f0) R.push_back({ 8, std::string("Finale : ") + (g_cdef.finalLegs == 2 ? "aller-retour" : "match unique, terrain neutre"), 1 });
+    if (!f0) R.push_back({ 9, "Match pour la 3e place : " + yn(g_cdef.thirdPlace), 1 });
+    if (!f1) R.push_back({ 10, fmt("Points pour une victoire : %d", g_cdef.ptsWin), 2 });
+    if (!f1) R.push_back({ 11, std::string("Départage à égalité : ") + TBN[std::max(0, std::min(2, g_cdef.tb))], 2 });
+    if (!f0) R.push_back({ 12, "Buts à l'extérieur (aller-retour) : " + yn(g_cdef.awayGoals), 2 });
+    if (!f0) R.push_back({ 13, std::string("Tirage : ") + (g_cdef.seeded ? "chapeaux / têtes de série" : "entièrement au hasard"), 2 });
+    R.push_back({ 14, g_cdef.yellowLimit <= 0 ? std::string("Suspension (cumul de jaunes) : jamais") : fmt("Suspension (cumul de jaunes) : après %d jaunes", g_cdef.yellowLimit), 2 });
+    R.push_back({ 15, fmt("Choisir les équipes... (%d sélectionnée%s)", nt, nt > 1 ? "s" : ""), 3 });
+    { int nc = (int)customCreatedClubs().size(); R.push_back({ 16, fmt("Ajouter mes clubs créés (%d)", nc), 3 }); }
+    { static const int FILL[7] = { 4, 8, 12, 16, 20, 24, 32 }; static int fi = 3; (void)FILL; R.push_back({ 17, "Compléter au hasard (niveau proche)", 3 }); (void)fi; }
+    R.push_back({ 18, "Vider la liste des équipes", 3 });
+    for (int k = 0; k < 4; k++) R.push_back({ 19 + k, fmt("Équipe du joueur %d : ", k + 1) + ctrlName(k), 4 });
+    R.push_back({ 23, ">>> LANCER LA COMPÉTITION <<<", 5 });
+    R.push_back({ 24, "Retour", 5 });
+    static const char* SECN[6] = { "GÉNÉRAL", "FORMULE", "RÈGLEMENT", "ÉQUIPES", "JOUEURS", "" };
+    static const Color SECC[6] = { { 240, 200, 60, 255 }, { 60, 190, 90, 255 }, { 80, 150, 240, 255 }, { 230, 120, 60, 255 }, { 200, 120, 230, 255 }, { 200, 60, 70, 255 } };
+    int lx = 14, lw = 370, ly = 32, rows = 18, rh = 15;
+    int s = listRun(g_customLW, (int)R.size(), lx, ly, lw, rows, rh, [&](int i, int x, int y, bool sel) {
+        const Row& r = R[i];
+        DrawRectangle(x + 4, y + 3, 4, rh - 7, sel ? Color{ 40, 30, 10, 255 } : SECC[r.sec]);
+        bool hdr = i == 0 || R[i - 1].sec != r.sec;
+        (void)hdr;
+        std::string t = r.txt; size_t colon = t.find(" : ");
+        if (colon != std::string::npos && r.id != 0) {
+            drawTextPx(fitText(t.substr(0, colon), lw / 2 - 10, 10), x + 14, y + 2, 10, sel ? BLACK : C_TXT);
+            std::string v = fitText(t.substr(colon + 3), lw / 2 - 26, 10);
+            drawTextPx(v, x + lw - 14 - textWidth(v, 10), y + 2, 10, sel ? BLACK : r.id == 23 ? C_HI : Color{ 255, 225, 120, 255 });
+        } else drawTextPx(fitText(t, lw - 24, 10), x + 14, y + 2, 10, sel ? BLACK : r.id == 23 ? C_HI : C_TXT);
+    });
+    // ---- panneau de droite : déroulement et équipes
+    int px = lx + lw + 12, pw = VW - px - 12, py = 32, ph = rows * rh;
+    DrawRectangleGradientV(px, py, pw, ph, Color{ 18, 26, 60, 230 }, Color{ 6, 10, 28, 235 });
+    DrawRectangle(px, py, 3, ph, C_HI);
+    drawTextPx("DÉROULEMENT", px + 10, py + 5, 10, C_HI);
+    int yy = py + 19;
+    for (auto& l : wrapText(customPlan(nt), pw - 20)) { if (yy > py + 70) break; drawTextPx(l, px + 10, yy, 10, WHITE); yy += 11; }
+    yy = std::max(yy + 4, py + 64);
+    DrawRectangle(px + 8, yy, pw - 16, 1, Color{ 255, 255, 255, 40 }); yy += 4;
+    drawTextPx(fmt("ÉQUIPES (%d)", nt), px + 10, yy, 10, C_HI); yy += 13;
+    {
+        int col = 0, maxRows = (py + ph - 6 - yy) / 11;
+        for (int i = 0; i < nt; i++) {
+            int r = i % std::max(1, maxRows); col = i / std::max(1, maxRows);
+            if (col > 1) { drawTextPx(fmt("... et %d autres", nt - i), px + 10 + (pw / 2) * 1, py + ph - 14, 10, C_DIM); break; }
+            int tx = px + 10 + col * (pw / 2 - 4), ty = yy + r * 11;
+            const Team& T = g_world.teams[g_customSel[i]];
+            drawKitIcon(T.home, tx, ty, 1);
+            bool ctl = false; for (int k = 0; k < 4; k++) if (g_customCtrl[k] == i) ctl = true;
+            drawTextPx(fitText(T.name, pw / 2 - 26, 10), tx + 12, ty, 10, ctl ? C_HI : T.custom ? C_GOOD : C_TXT);
+        }
+        if (nt == 0) drawTextPx("Aucune équipe : utilisez « Choisir les équipes », un modèle ou « Compléter ».", px + 10, yy, 10, C_DIM);
+    }
+    drawTextPx("Vert : club créé   Jaune : équipe contrôlée", px + 10, py + ph + 4, 10, C_DIM);
     if (g_cdefTyping) {
         textEdit(g_cdef.name, 40);
         drawFooter("Saisissez le nom   Entrée : valider");
@@ -752,25 +864,57 @@ static void screenCustom() {
     }
     drawFooter("Gauche/Droite : modifier   OK : valider   Retour");
     int d = IN.left ? -1 : IN.right ? 1 : 0;
-    int c = g_customLW.cur;
-    if (s >= 0 && (s == 1 || s == 2 || s == 3 || s == 5 || s == 6)) d = 1;
+    int cur = g_customLW.cur >= 0 && g_customLW.cur < (int)R.size() ? R[g_customLW.cur].id : -1;
+    int act = s >= 0 ? R[s].id : -1;
+    if (act >= 1 && act <= 14) { d = 1; cur = act; }
+    if (act >= 19 && act <= 22) { d = 1; cur = act; }
     if (d) {
-        switch (c) {
-        case 1: g_cdef.format = (g_cdef.format + d + 3) % 3; break;
-        case 2: g_cdef.legs = g_cdef.legs == 2 ? 1 : 2; break;
-        case 3: if (g_cdef.format == 2) g_cdef.groups = (g_cdef.groups - 1 + d + maxGroups) % maxGroups + 1; break;
-        case 5: case 6: { int k = c - 5; int v = g_customCtrl[k] + 1; v = (v + d + nt + 1) % (nt + 1); g_customCtrl[k] = v - 1;
-                          if (g_customCtrl[k] >= 0 && g_customCtrl[k] == g_customCtrl[1 - k]) { v = (v + d + nt + 1) % (nt + 1); g_customCtrl[k] = v - 1; } break; }
+        switch (cur) {
+        case 1: g_cdefPreset = (g_cdefPreset + d + NUM_CUSTOM_PRESETS) % NUM_CUSTOM_PRESETS; customApplyPreset(g_cdefPreset); break;
+        case 2: g_cdef.format = (g_cdef.format + d + 4) % 4; if (g_cdef.format == 3 && g_cdef.advance < 2) g_cdef.advance = 4; if (g_cdef.format != 0 && g_cdef.legs > 2) g_cdef.legs = 2; break;
+        case 3: { int mx = f0 ? 4 : 2; g_cdef.legs = (g_cdef.legs - 1 + d + mx) % mx + 1; break; }
+        case 4: g_cdef.groups = (g_cdef.groups - 1 + d + maxGroups) % maxGroups + 1; break;
+        case 5: if (f3) { static const int A[3] = { 2, 4, 8 }; int k = g_cdef.advance >= 8 ? 2 : g_cdef.advance >= 4 ? 1 : 0; g_cdef.advance = A[(k + d + 3) % 3]; } else g_cdef.advance = g_cdef.advance == 1 ? 2 : 1; break;
+        case 6: g_cdef.bestThirds = !g_cdef.bestThirds; break;
+        case 7: g_cdef.koLegs = g_cdef.koLegs == 2 ? 1 : 2; break;
+        case 8: g_cdef.finalLegs = g_cdef.finalLegs == 2 ? 1 : 2; break;
+        case 9: g_cdef.thirdPlace = !g_cdef.thirdPlace; break;
+        case 10: g_cdef.ptsWin = g_cdef.ptsWin == 3 ? 2 : 3; break;
+        case 11: g_cdef.tb = (g_cdef.tb + d + 3) % 3; break;
+        case 12: g_cdef.awayGoals = !g_cdef.awayGoals; break;
+        case 13: g_cdef.seeded = !g_cdef.seeded; break;
+        case 14: { static const int Y[5] = { 0, 2, 3, 4, 5 }; int k = 0; for (int i = 0; i < 5; i++) if (Y[i] == g_cdef.yellowLimit) k = i; g_cdef.yellowLimit = Y[(k + d + 5) % 5]; break; }
+        case 19: case 20: case 21: case 22: {
+            int k = cur - 19; int v = g_customCtrl[k] + 1;
+            for (int tries = 0; tries <= nt + 1; tries++) {
+                v = (v + d + nt + 1) % (nt + 1);
+                bool taken = false; for (int j = 0; j < 4; j++) if (j != k && v - 1 >= 0 && g_customCtrl[j] == v - 1) taken = true;
+                if (!taken) break;
+            }
+            g_customCtrl[k] = v - 1; break; }
         }
+        if (cur >= 2 && cur <= 14) g_cdefPreset = 0;
     }
-    if (IN.back || s == 8) { g_screen = SC_MAIN; return; }
-    if (s == 0) { g_cdefTyping = true; g_textMode = true; while (GetCharPressed() > 0) {} return; }
-    if (s == 4) { openPick(PM_CUSTOM); return; }
-    if (s == 7) {
-        int minT = g_cdef.format == 2 ? g_cdef.groups * 3 : 2;
+    if (IN.back || act == 24) { g_screen = SC_MAIN; return; }
+    if (act == 0) { g_cdefTyping = true; g_textMode = true; while (GetCharPressed() > 0) {} return; }
+    if (act == 15) { openPick(PM_CUSTOM); return; }
+    if (act == 16) {
+        auto v = customCreatedClubs();
+        if (v.empty()) { toast("Aucun club créé : Éditeur > Créer un nouveau club"); return; }
+        int added = 0; for (int t : v) if (std::find(g_customSel.begin(), g_customSel.end(), t) == g_customSel.end() && g_customSel.size() < 64) { g_customSel.push_back(t); added++; }
+        toast(fmt("%d club%s créé%s ajouté%s", added, added > 1 ? "s" : "", added > 1 ? "s" : "", added > 1 ? "s" : "")); return;
+    }
+    if (act == 17) {
+        static const int FILL[] = { 4, 8, 12, 16, 20, 24, 32, 48, 64 };
+        int target = 64; for (int f : FILL) if (f > nt) { target = f; break; }
+        customFillTo(target); toast(fmt("Liste complétée : %d équipes", (int)g_customSel.size())); return;
+    }
+    if (act == 18) { g_customSel.clear(); for (auto& c : g_customCtrl) c = -1; return; }
+    if (act == 23) {
+        int minT = g_cdef.format == 2 ? g_cdef.groups * 3 : g_cdef.format == 3 ? std::max(4, g_cdef.advance) : 2;
         if (nt < minT) { toast(fmt("Il faut au moins %d équipes", minT)); return; }
         std::vector<int> ctrl;
-        for (int k = 0; k < 2; k++) if (g_customCtrl[k] >= 0) ctrl.push_back(g_customSel[g_customCtrl[k]]);
+        for (int k = 0; k < 4; k++) if (g_customCtrl[k] >= 0) ctrl.push_back(g_customSel[g_customCtrl[k]]);
         if (ctrl.empty()) { toast("Choisissez au moins une équipe contrôlée"); return; }
         g_cdef.teams = g_customSel;
         g_career.newCustom(g_cdef, ctrl);

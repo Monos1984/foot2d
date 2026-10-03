@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS, SC_SOUNDTEST };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -100,6 +100,7 @@ static bool button(int x, int y, int w, int h, const std::string& label, bool se
 static bool g_noBackBtn = false;
 // bouton rapide : musique marche / arrêt (aussi touche F9)
 static void toggleMusic();
+void applyVibration();
 static void drawMusicButton(int x, int y) {
     bool on = g_settings.music;
     bool hover = IN.mouse.x >= x && IN.mouse.x < x + 20 && IN.mouse.y >= y && IN.mouse.y < y + 18;
@@ -341,7 +342,7 @@ static std::string dateOf(double t, int year) {
 
 // ------------------------------------------------------------------ navigation / choix d'équipes
 enum NodeKind { K_ROOT, K_NATROOT, K_CONF, K_CLUBROOT, K_PYR, K_TIER, K_TIERREG, K_POOL, K_GROUP, K_EUROPOOL, K_DOMROOT, K_TEAM, K_DONE,
-                K_INTLLIST, K_COMP, K_WORLDPOOL, K_CREATE, K_EUROCOUNTRY, K_COACHCAT, K_CLUBCONF, K_WOMENROOT, K_WNATROOT, K_MENROOT };
+                K_INTLLIST, K_COMP, K_WORLDPOOL, K_CREATE, K_EUROCOUNTRY, K_COACHCAT, K_CLUBCONF, K_WOMENROOT, K_WNATROOT, K_MENROOT, K_MYCLUBS, K_INFO };
 enum PickMode { PM_FRIENDLY_HOME, PM_FRIENDLY_AWAY, PM_CAREER, PM_INTL, PM_BROWSE, PM_CUSTOM, PM_EDIT, PM_FICHE, PM_INVITE, PM_TRAIN };
 static int g_trainTeam = -1;
 static int g_intlFormat = 0;
@@ -387,11 +388,20 @@ static std::vector<Item> buildItems(const Node& n) {
     auto clubsOf = [&](std::vector<int> v) { sortTeamsByName(v); for (int t : v) { Item x; x.kind = K_TEAM; x.team = t; x.label = g_world.teams[t].name; it.push_back(x); } };
     switch (n.kind) {
     case K_ROOT:
-        if (g_pickMode == PM_CUSTOM) { Item d{ fmt(">>> VALIDER (%d équipe%s) <<<", (int)g_customSel.size(), g_customSel.size() > 1 ? "s" : ""), "", K_DONE }; it.push_back(d); }
+        if (g_pickMode == PM_CUSTOM) {
+            Item d{ fmt(">>> VALIDER (%d équipe%s) <<<", (int)g_customSel.size(), g_customSel.size() > 1 ? "s" : ""), "", K_DONE }; it.push_back(d);
+            int nc = 0; for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].custom) nc++;
+            Item cc{ "Mes clubs créés", fmt("%d", nc), K_MYCLUBS }; it.push_back(cc);
+        }
         it.push_back({ "Sélections nationales", "", K_NATROOT });
         it.push_back({ "Clubs", "", K_CLUBROOT });
         it.push_back({ "Sélections nationales féminines", "", K_WNATROOT });
         break;
+    case K_MYCLUBS: {
+        std::vector<int> v; for (int i = g_world.baseCount; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].custom) v.push_back(i);
+        clubsOf(v);
+        if (v.empty()) { Item x{ "Aucun club créé (Éditeur > Créer un nouveau club)", "", K_INFO }; it.push_back(x); }
+        break; }
     case K_WNATROOT:
         for (int c = 0; c < NUM_CONFEDS; c++) { Item x{ CONF_NAMES[c], "", K_CONF }; x.a = c; x.b = 1; it.push_back(x); }
         break;
@@ -563,6 +573,7 @@ static void startLeagueMode();
 static bool collectDraws();
 static void primeDraws();
 
+static std::vector<std::string> wrapText(const std::string& s, int maxw);
 static void screenPick() {
     Node& n = g_stack.back();
     std::string title = n.title;
@@ -573,21 +584,72 @@ static void screenPick() {
     drawTextPx(fitText(crumbs, VW - 20, 10), 10, 32, 10, C_DIM);
     auto items = buildItems(n);
     if (g_pickMode == PM_FRIENDLY_AWAY && g_friendlyHome >= 0) drawTextPx("Domicile : " + g_world.teams[g_friendlyHome].name, 10, 44, 10, C_HI);
-    int sel = listRun(n.lw, (int)items.size(), 20, 58, VW - 40, 22, 12, [&](int i, int x, int y, bool s) {
+    const int LW = VW - 40 - 196;      // liste à gauche, fiche rapide à droite
+    int sel = listRun(n.lw, (int)items.size(), 20, 58, LW, 19, 14, [&](int i, int x, int y, bool s) {
         const Item& it = items[i];
         if (it.kind == K_TEAM) {
             bool picked = (g_pickMode == PM_INTL && std::find(g_intlSel.begin(), g_intlSel.end(), it.team) != g_intlSel.end()) ||
                           (g_pickMode == PM_CUSTOM && std::find(g_customSel.begin(), g_customSel.end(), it.team) != g_customSel.end()) ||
                           (g_pickMode == PM_INVITE && std::find(g_inviteSel.begin(), g_inviteSel.end(), it.team) != g_inviteSel.end());
-            drawTeamRow(it.team, x, y, VW - 40, s);
-            if (picked) { DrawRectangle(x + VW - 40 - 44, y + 2, 16, 8, C_GOOD); drawTextPx("OK", x + VW - 40 - 42, y + 1, 10, BLACK); }
+            drawTeamRow(it.team, x, y + 1, LW, s);
+            if (picked) { DrawRectangle(x + LW - 44, y + 3, 16, 8, C_GOOD); drawTextPx("OK", x + LW - 42, y + 2, 10, BLACK); }
         } else {
             Color c = s ? Color{ 20, 20, 40, 255 } : (it.kind == K_CREATE || it.kind == K_DONE ? C_HI : C_TXT);
-            drawTextPx(fitText(it.label, VW - 200, 10), x + 6, y + 1, 10, c);
-            if (!it.right.empty()) drawTextPx(it.right, x + VW - 40 - textWidth(it.right, 10) - 16, y + 1, 10, c);
-            if (it.kind != K_DONE && it.kind != K_CREATE) drawTextPx(">", x + VW - 40 - 10, y + 1, 10, c);
+            drawTextPx(fitText(it.label, LW - 120, 10), x + 8, y + 2, 10, c);
+            if (!it.right.empty()) drawTextPx(fitText(it.right, 110, 10), x + LW - std::min(110, textWidth(it.right, 10)) - 18, y + 2, 10, s ? c : C_DIM);
+            if (it.kind != K_DONE && it.kind != K_CREATE && it.kind != K_INFO) drawTextPx(">", x + LW - 10, y + 2, 10, c);
         }
     });
+    {   // fiche rapide de l'élément choisi
+        int px = 20 + LW + 12, pw = VW - px - 14, py = 58, ph = 19 * 14;
+        DrawRectangleGradientV(px, py, pw, ph, Color{ 18, 26, 60, 230 }, Color{ 6, 10, 28, 235 });
+        DrawRectangle(px, py, 3, ph, C_HI);
+        int cur = n.lw.cur;
+        if (cur >= 0 && cur < (int)items.size() && items[cur].kind == K_TEAM) {
+            int t = items[cur].team; const Team& T = g_world.teams[t];
+            DrawRectangleGradientV(px + 3, py, pw - 3, 60, Color{ (unsigned char)(hexc(T.home.shirt).r / 2), (unsigned char)(hexc(T.home.shirt).g / 2), (unsigned char)(hexc(T.home.shirt).b / 2), 200 }, Color{ 6, 10, 28, 0 });
+            drawKitIcon(T.home, px + 12, py + 10, 4);
+            drawKitIcon(T.away, px + 52, py + 18, 2);
+            int ty = py + 10;
+            for (auto& l : wrapText(T.name, pw - 90)) { if (ty > py + 34) break; drawTextPx(l, px + 78, ty, 10, WHITE); ty += 11; }
+            drawTextPx(T.kind == TK_NATION ? "Sélection nationale" : T.custom ? "Club créé" : "Club", px + 78, py + 40, 10, T.custom ? C_GOOD : C_DIM);
+            int yy = py + 66;
+            drawTextPx(fmt("Niveau %d", (int)T.rating), px + 10, yy, 10, C_TXT);
+            DrawRectangle(px + 70, yy + 2, pw - 82, 7, Color{ 0, 0, 0, 140 });
+            DrawRectangle(px + 70, yy + 2, (int)((pw - 82) * std::min(1.f, T.rating / 100.f)), 7, T.rating >= 80 ? C_GOOD : T.rating >= 65 ? C_HI : C_BAD);
+            yy += 14;
+            if (!T.stadium.empty()) { drawTextPx(fitText("Stade : " + T.stadium, pw - 20, 10), px + 10, yy, 10, C_DIM); yy += 12; }
+            if (!T.town.empty()) { drawTextPx(fitText("Ville : " + T.town, pw - 20, 10), px + 10, yy, 10, C_DIM); yy += 12; }
+            if (T.founded > 0) { drawTextPx(fmt("Fondé en %d", T.founded), px + 10, yy, 10, C_DIM); yy += 12; }
+            yy += 4;
+            g_world.ensureSquad(t);
+            if (!T.squad.empty()) {
+                drawTextPx("JOUEURS VEDETTES", px + 10, yy, 10, C_HI); yy += 13;
+                std::vector<int> ord(T.squad.size()); for (size_t k = 0; k < ord.size(); k++) ord[k] = (int)k;
+                std::partial_sort(ord.begin(), ord.begin() + std::min<size_t>(5, ord.size()), ord.end(), [&](int a, int b) { return T.squad[a].overall() > T.squad[b].overall(); });
+                for (int k = 0; k < 5 && k < (int)ord.size(); k++) {
+                    const Player& P = T.squad[ord[k]];
+                    drawTextPx(posName(P.pos), px + 10, yy, 10, C_DIM);
+                    drawTextPx(fitText(P.name, pw - 70, 10), px + 30, yy, 10, C_TXT);
+                    std::string ov = fmt("%d", P.overall()); drawTextPx(ov, px + pw - 10 - textWidth(ov, 10), yy, 10, C_HI);
+                    yy += 11;
+                }
+            }
+        } else if (cur >= 0 && cur < (int)items.size()) {
+            const Item& it = items[cur];
+            int yy = py + 10;
+            for (auto& l : wrapText(it.label, pw - 20)) { if (yy > py + 50) break; drawTextPx(l, px + 10, yy, 10, WHITE); yy += 12; }
+            if (!it.right.empty()) { drawTextPx(fitText(it.right, pw - 20, 10), px + 10, yy + 2, 10, C_HI); yy += 14; }
+            const char* hint = it.kind == K_DONE ? "Valider la sélection et continuer." : it.kind == K_CREATE ? "Créer votre propre club (nom, couleurs, stade)." : it.kind == K_MYCLUBS ? "Les clubs que vous avez créés dans l'éditeur." : "OK : ouvrir";
+            for (auto& l : wrapText(hint, pw - 20)) { drawTextPx(l, px + 10, yy + 6, 10, C_DIM); yy += 11; }
+            // ballon qui rebondit pour égayer le panneau
+            float b = std::fabs(std::sin((float)GetTime() * 3.f));
+            int bx = px + pw / 2, by = py + ph - 20 - (int)(b * 26);
+            DrawEllipse(bx, py + ph - 12, 7 - b * 3, 2, Color{ 0, 0, 0, 90 });
+            DrawCircle(bx, by, 7, WHITE); DrawCircleLines(bx, by, 7, Color{ 40, 40, 40, 255 });
+            DrawPoly(Vector2{ (float)bx, (float)by }, 5, 2.6f, (float)GetTime() * 90, Color{ 30, 30, 30, 255 });
+        }
+    }
     bool onTeam = n.lw.cur >= 0 && n.lw.cur < (int)items.size() && items[n.lw.cur].kind == K_TEAM;
     if (onTeam) {
         int t = items[n.lw.cur].team;
@@ -611,6 +673,7 @@ static void screenPick() {
     if (sel < 0) return;
     const Item& it = items[sel];
     if (it.kind == K_CREATE) { openClubEditor(-1, true, SC_PICK); return; }
+    if (it.kind == K_INFO) return;
     if (it.kind == K_COACHCAT) { g_coachCatPick = (g_coachCatPick + 1) % 4; return; }
     if (it.kind == K_TEAM) {
         switch (g_pickMode) {
@@ -1434,7 +1497,7 @@ static void screenMatch(float dt) {
         if (skipOk && !m.hotPhase() && g_hlHold <= 0) {
             // mode Full Manager : on saute directement au prochain temps fort (pas de jeu accéléré)
             int k = 0;
-            for (; k < 6000 && !m.hotPhase() && !m.finished && !m.htWaiting && !m.ceremony; k++) { m.update(step); m.sfxN = 0; }
+            for (; k < 6000 && !m.hotPhase() && !m.finished && !m.htWaiting && !m.ceremony; k++) { m.update(step); m.sfxN = 0; m.rumbleN = 0; }
             if (k > 30) g_hlCut = 1.1f;
             g_acc = 0;
         } else {
@@ -1444,13 +1507,23 @@ static void screenMatch(float dt) {
             g_acc += std::min(dt, 0.1f) * (m.S.managed >= 0 && calm ? g_fmSpeed : 1);
             while (g_acc >= step) { m.update(step); g_acc -= step; }
         }
+        if (g_settings.vibration) {   // vibrations : manette du joueur concerné, ou toutes les manettes d'une équipe
+            for (int i = 0; i < m.rumbleN; i++) {
+                int who = m.rumbleQ[i][0], kind = m.rumbleQ[i][1];
+                for (int c = IN_PAD1; c < IN_PAD1 + 4; c++) {
+                    bool hit = who >= 0 ? who == c : m.S.side[c] == -1 - who;
+                    if (hit && m.S.side[c] >= 0) rumblePlay(c - IN_PAD1, kind);
+                }
+            }
+            // penalty d'un joueur humain : battements de cœur pendant l'attente
+            static float beat = 0;
+            if (m.state == MS_SETPIECE && m.sp == SP_PENALTY && m.spKicker >= 0 && m.pl[m.spKicker].human >= IN_PAD1) { beat -= dt; if (beat <= 0) { beat = 0.85f; rumblePlay(m.pl[m.spKicker].human - IN_PAD1, RB_HEARTBEAT); } }
+        }
+        m.rumbleN = 0;
         for (int i = 0; i < m.sfxN; i++) {
             audioPlay(m.sfxQueue[i]);
             if (m.sfxQueue[i] == SFX_GOAL && m.lastScorerTeam == 0 && !m.S.neutral && !m.S.training && !m.invasion && (m.S.proMedia || m.S.supporterAtmosphere >= 60)) audioJingle(8);   // la sono du stade
-            // vibrations des manettes des joueurs humains : but, poteau ou barre
-            int sfx = m.sfxQueue[i];
-            if (g_settings.vibration && (sfx == SFX_GOAL || sfx == SFX_POST))
-                for (int p = 0; p < 4; p++) if (m.S.side[IN_PAD1 + p] >= 0 && IsGamepadAvailable(p)) rumbleStart(p, sfx == SFX_GOAL ? 0.85f : 0.55f, sfx == SFX_GOAL ? 0.7f : 0.25f);
+
         }
         m.sfxN = 0;
         // musique d'entrée des joueurs (éditeur) : sortie du tunnel, effacée avant les hymnes et le coup d'envoi
@@ -3966,6 +4039,72 @@ static int g_roleSlot=0,g_roleInstr=0,g_rolePlayerTab=0;
 #include "app_ballondor.inc"
 #include "app_season_features.inc"
 
+// ------------------------------------------------------------------ test des sons : bruitages, chants, musiques, jingles, hymnes, vibrations
+static void screenSoundTest() {
+    drawBackground("Son et musique : tout écouter");
+    static int cat = 0; static ListW lw[6]; static int playing = -1, playCat = -1;
+    static const char* CATS[6] = { "BRUITAGES", "AMBIANCE", "MUSIQUES", "JINGLES", "HYMNES", "VIBRATIONS" };
+    // onglets
+    int tw = (VW - 24) / 6;
+    for (int c = 0; c < 6; c++) {
+        int x = 12 + c * tw;
+        bool sel = c == cat;
+        bool hov = IN.mouse.x >= x && IN.mouse.x < x + tw - 4 && IN.mouse.y >= 32 && IN.mouse.y < 50;
+        DrawRectangleGradientV(x, 32, tw - 4, 18, sel ? Color{ 255, 220, 90, 255 } : hov ? Color{ 70, 104, 170, 255 } : Color{ 40, 64, 116, 255 }, sel ? C_SEL : Color{ 24, 40, 76, 255 });
+        drawTextCentered(CATS[c], x + (tw - 4) / 2, 36, 10, sel ? BLACK : C_TXT, false);
+        if (hov && IN.click) { cat = c; IN.click = false; audioPlay(SFX_UI_TICK); }
+    }
+    if (IN.left) cat = (cat + 5) % 6;
+    if (IN.right) cat = (cat + 1) % 6;
+    int n = cat == 5 ? NUM_RUMBLE : audioPreviewCount(cat);
+    int rows = 13;
+    bool nowPlaying = playCat >= 0 && playCat < 5 && audioPreviewPlaying();
+    if (playCat >= 0 && playCat < 5 && !nowPlaying) { playing = -1; playCat = -1; }
+    int act = listRun(lw[cat], n, 20, 58, VW - 230, rows, 18, [&](int i, int x, int y, bool sel) {
+        std::string nm = cat == 5 ? std::string(rumbleName(i)) : audioPreviewName(cat, i);
+        bool pl = playCat == cat && playing == i;
+        drawTextPx(fmt("%2d", i + 1), x + 6, y + 4, 10, sel ? Color{ 60, 40, 10, 255 } : C_DIM);
+        drawTextPx(fitText(nm, VW - 300, 10), x + 28, y + 4, 10, sel ? BLACK : pl ? C_HI : C_TXT);
+        if (pl) {   // petit égaliseur animé
+            float t = (float)GetTime();
+            for (int k = 0; k < 4; k++) { int h = 3 + (int)(std::fabs(std::sin(t * (6 + k * 1.7f) + k)) * 9); DrawRectangle(x + VW - 262 + k * 4, y + 14 - h, 3, h, sel ? BLACK : C_GOOD); }
+        }
+    });
+    if (act >= 0) {
+        if (playCat == cat && playing == act && cat < 5) { audioPreviewStop(); playing = playCat = -1; }
+        else if (cat == 5) { for (int p = 0; p < 4; p++) if (IsGamepadAvailable(p)) rumblePlay(p, act); playing = act; playCat = 5; }
+        else { audioPreview(cat, act); playing = act; playCat = cat; }
+    }
+    // panneau de droite : ce qui est en lecture
+    int px = VW - 200, py = 58, pw = 186, ph = rows * 18;
+    DrawRectangleGradientV(px, py, pw, ph, Color{ 18, 26, 60, 230 }, Color{ 6, 10, 28, 235 });
+    DrawRectangle(px, py, 3, ph, C_HI);
+    drawTextPx("EN LECTURE", px + 10, py + 6, 10, C_HI);
+    if (playCat >= 0 && playing >= 0) {
+        std::string nm = playCat == 5 ? std::string(rumbleName(playing)) : audioPreviewName(playCat, playing);
+        int yy = py + 22;
+        for (auto& l : wrapText(nm, pw - 20)) { if (yy > py + 70) break; drawTextPx(l, px + 10, yy, 10, WHITE); yy += 12; }
+        if (playCat == 4) { std::string cr = audioAnthemListCredit(playing); int y2 = py + 80; for (auto& l : wrapText(cr, pw - 20)) { if (y2 > py + 140) break; drawTextPx(l, px + 10, y2, 10, C_DIM); y2 += 11; } }
+        float t = (float)GetTime();
+        if (playCat == 5) {   // niveaux des deux moteurs
+            for (int m = 0; m < 2; m++) {
+                float lv = 0; for (int p = 0; p < 4; p++) lv = std::max(lv, rumbleLevel(p, m));
+                drawTextPx(m ? "Moteur droit" : "Moteur gauche", px + 10, py + 90 + m * 26, 10, C_DIM);
+                DrawRectangle(px + 10, py + 102 + m * 26, pw - 20, 8, Color{ 0, 0, 0, 140 });
+                DrawRectangle(px + 10, py + 102 + m * 26, (int)((pw - 20) * lv), 8, m ? C_HI : C_GOOD);
+            }
+            if (!anyPad()) drawTextPx("Aucune manette branchée", px + 10, py + 160, 10, C_BAD);
+            if (!g_settings.vibration) drawTextPx("Vibrations coupées (Options)", px + 10, py + 174, 10, C_BAD);
+        } else {
+            for (int k = 0; k < 20; k++) { int h = nowPlaying ? 4 + (int)(std::fabs(std::sin(t * (3 + k * 0.6f) + k * 1.3f)) * 34) : 2; DrawRectangle(px + 12 + k * 8, py + ph - 14 - h, 6, h, k % 3 == 0 ? C_HI : C_GOOD); }
+        }
+    } else drawTextPx("OK : écouter", px + 10, py + 24, 10, C_DIM);
+    std::string info = fmt("%d éléments dans cette rubrique", n);
+    drawTextPx(info, 20, 58 + rows * 18 + 6, 10, C_DIM);
+    drawFooter("Gauche/Droite : rubrique   Haut/Bas : choisir   OK : écouter / arrêter   Retour : options");
+    if (IN.back) { audioPreviewStop(); playing = playCat = -1; g_screen = SC_OPTIONS; }
+}
+
 // ------------------------------------------------------------------ options / aide
 static void screenOptions() {
     drawBackground("Options");
@@ -3979,21 +4118,22 @@ static void screenOptions() {
         "Configurer le clavier et les manettes",
         std::string("Musique des menus : ") + (!g_settings.music ? "non" : g_settings.musicTrack == 0 ? "tous les thèmes" : audioTrackName(g_settings.musicTrack - 1)),
         fmt("Commentaires : %s", g_settings.commentary ? "oui" : "non"),
-        fmt("Vibrations des manettes : %s", g_settings.vibration ? "oui" : "non"),
+        std::string("Vibrations des manettes : ") + (!g_settings.vibration ? "non" : g_settings.vibForce <= 1 ? "faibles" : g_settings.vibForce == 2 ? "moyennes" : "fortes"),
         fmt("Scènes de vestiaire : %s", g_settings.lockerRoom ? "oui" : "non"),
         "Aide des commandes  (F12 = capture d'écran)",
         "Retour" };
     static const char* REFKN[5] = { "noire", "jaune", "verte", "rouge", "bleue" };
     items.push_back(std::string("Tenue des arbitres : ") + REFKN[std::max(0, std::min(4, g_settings.refKit))]);   // 13
+    items.push_back("Tester les sons, musiques, hymnes et vibrations");                                          // 14
     // ---- présentation en cartes par rubrique (MATCH, AFFICHAGE, SON, COMMANDES)
     struct Sec { const char* name; std::vector<int> ids; int icon; };
-    static const Sec SECS[4] = { { "MATCH", { 0, 1, 2, 3, 8, 10, 13 }, 13 }, { "AFFICHAGE", { 4 }, 6 }, { "SON & MUSIQUE", { 5, 7, 9 }, 9 }, { "COMMANDES", { 6, 11 }, 3 } };
-    static const int ICO[14] = { 0, 2, 1, 6, 6, 9, 3, 9, 10, 3, 11, 12, 13, 5 };
+    static const Sec SECS[4] = { { "MATCH", { 0, 1, 2, 3, 8, 10, 13 }, 13 }, { "AFFICHAGE", { 4 }, 6 }, { "SON & MUSIQUE", { 5, 7, 9, 14 }, 9 }, { "COMMANDES", { 6, 11 }, 3 } };
+    static const int ICO[15] = { 0, 2, 1, 6, 6, 9, 3, 9, 10, 3, 11, 12, 13, 5, 9 };
     std::vector<int> order; for (auto& sc : SECS) for (int id : sc.ids) order.push_back(id); order.push_back(12);
     static int vpos = 0;
     vpos = std::max(0, std::min((int)order.size() - 1, vpos));
-    if (IN.up) vpos = (vpos + (int)order.size() - 1) % (int)order.size();
-    if (IN.down) vpos = (vpos + 1) % (int)order.size();
+    if (IN.up) { vpos = (vpos + (int)order.size() - 1) % (int)order.size(); audioPlay(SFX_UI_MOVE); }
+    if (IN.down) { vpos = (vpos + 1) % (int)order.size(); audioPlay(SFX_UI_MOVE); }
     int s = -1;
     float tt = (float)GetTime();
     int colX[2] = { 14, VW / 2 + 4 }, colW = VW / 2 - 18, colY[2] = { 32, 32 };
@@ -4041,6 +4181,7 @@ static void screenOptions() {
     g_optLW.cur = order[vpos];
     if (s == 13 || (g_optLW.cur == 13 && (IN.left || IN.right))) { g_settings.refKit = (g_settings.refKit + (IN.left ? 4 : 1)) % 5; g_settings.save(); }
     if (s == 6) { g_ctlLW = ListW(); g_ctlCapture = -1; g_ctlBack = SC_OPTIONS; g_screen = SC_CONTROLS; return; }
+    if (s == 14) { g_screen = SC_SOUNDTEST; return; }
     if (s == 7 || (g_optLW.cur == 7 && (IN.left || IN.right))) {
         // non -> tous les thèmes -> thème 1 ... thème N -> non
         int nt = audioTrackCount();
@@ -4054,8 +4195,12 @@ static void screenOptions() {
     }
     if (s == 8 || (g_optLW.cur == 8 && (IN.left || IN.right))) { g_settings.commentary = !g_settings.commentary; g_settings.save(); }
     if (s == 9 || (g_optLW.cur == 9 && (IN.left || IN.right))) {
-        g_settings.vibration = !g_settings.vibration; g_settings.save();
-        if (g_settings.vibration) for (int p = 0; p < 4; p++) if (IsGamepadAvailable(p)) rumbleStart(p, 0.6f, 0.3f);   // essai
+        // non -> faibles -> moyennes -> fortes -> non
+        if (!g_settings.vibration) { g_settings.vibration = true; g_settings.vibForce = 1; }
+        else if (g_settings.vibForce < 3) g_settings.vibForce++;
+        else g_settings.vibration = false;
+        g_settings.save(); applyVibration();
+        if (g_settings.vibration) for (int p = 0; p < 4; p++) if (IsGamepadAvailable(p)) rumblePlay(p, RB_GOAL_FOR);   // essai
     }
     if (s == 10 || (g_optLW.cur == 10 && (IN.left || IN.right))) { g_settings.lockerRoom = !g_settings.lockerRoom; g_settings.save(); }
     int d = IN.left ? -1 : IN.right ? 1 : 0;
@@ -4079,31 +4224,43 @@ static void screenOptions() {
 
 static void screenHelp() {
     drawBackground("Commandes");
-    const char* lines[] = {
-        "STYLE SUPER NINTENDO (par défaut, Options > Configurer) :",
-        "   Clavier 1 : Flèches + X passe, C tir (appui long = puissance), V lob/centre, B passe en profondeur, N sprint",
-        "   Clavier 2 : Z Q S D + F passe, G tir, H lob, J profondeur, T sprint",
-        "   Manette : A passe, B tir, X lob, Y profondeur, RB sprint",
-        "   En défense : passe = changer de joueur (ou tacle debout au contact), tir = tacle glissé, lob = presser le porteur",
-        "STYLE CLASSIQUE (2 boutons) : bouton 1 passe (appui court) ou tir (appui long), bouton 2 lob / tacle glissé",
-        "BAGARRE : juste après une faute subie, bouton tir ou lob près du fautif... attention au carton rouge !",
-        "",
-        "EFFET (aftertouch) : juste après une frappe, orientez la direction :",
-        "   sur le côté = ballon brossé,  vers l'arrière = ballon levé,  vers l'avant = tir tendu",
-        "SANS LE BALLON : bouton 1 près du porteur = tacle ;  bouton 2 = tacle glissé",
-        "   Attention : un tacle par derrière = faute, carton jaune ou rouge, penalty dans la surface !",
-        "GARDIEN : il plonge tout seul. Quand il a le ballon : bouton 1 = relance à la main, bouton 2 = dégagement",
-        "COUPS DE PIED ARRÊTÉS : orientez la visée puis bouton 1 (court / tir) ou bouton 2 (long)",
-        "COUP FRANC : effet avec L / R, ou direction sur le côté pendant l'élan (tir maintenu) : la flèche se courbe",
-        "PENALTY : direction + appui long pour la puissance. En défense : gauche / droite / haut-bas (centre) = plongeon secret.",
-        "",
-        "Échap / P / Start : pause (remplacements, statistiques, radar, son...)      F11 : plein écran",
-        "RÈGLES : hors-jeu, touches, corners, 6 mètres, fautes, cartons, penalties, prolongations,",
-        "tirs au but, matchs aller-retour, passe en retrait au gardien interdite, 5 remplacements.",
+    // cartes par thème : titre coloré, puis lignes « action : touche »
+    struct Card { const char* title; Color c; std::vector<std::string> l; };
+    std::vector<Card> cards = {
+        { "AVEC LE BALLON (style Super Nintendo)", { 60, 190, 90, 255 }, {
+            "Passe : X (clavier 1) / F (clavier 2) / A (manette)", "Tir : C / G / B   appui long = puissance", "Lob / centre : V / H / X", "Passe en profondeur : B / J / Y", "Sprint : N / T / RB",
+            "Après une passe, vous contrôlez le receveur" } },
+        { "SANS LE BALLON", { 230, 120, 60, 255 }, {
+            "Passe : changer de joueur", "  stick orienté = partenaire dans cette direction", "  au contact du porteur = tacle debout", "Tir : tacle glissé (par derrière = faute)", "Lob maintenu : presser le porteur" } },
+        { "STYLE CLASSIQUE (2 boutons)", { 80, 150, 240, 255 }, {
+            "Bouton 1 : passe (court) ou tir (long)", "Bouton 2 : lob / tacle glissé", "Sans ballon, loin du porteur :", "  bouton 1 = changer de joueur" } },
+        { "EFFETS ET COUPS DE PIED ARRÊTÉS", { 200, 120, 230, 255 }, {
+            "Après une frappe, orientez : côté = brossé,", "  arrière = levé, avant = tendu", "Coup franc : effet L / R, flèche courbée", "Penalty : direction + appui long", "  gardien : gauche / droite / centre" } },
+        { "GARDIEN ET BAGARRE", { 240, 200, 60, 255 }, {
+            "Gardien : plonge seul ; avec le ballon,", "  bouton 1 = relance, bouton 2 = dégagement", "Bagarre : tir ou lob près du fautif", "  ... gare au carton rouge !" } },
+        { "PENDANT LE MATCH", { 200, 60, 70, 255 }, {
+            "Échap / P / Start : pause", "F1 : rappel des commandes", "F9 : musique   F11 : plein écran", "F12 : capture d'écran", "Les manettes vibrent (Options : intensité)" } },
     };
-    int y = 36;
-    for (auto l : lines) { drawTextPx(l, 12, y, 10, C_TXT); y += 13; }
-    drawFooter("Retour");
+    int cw = (VW - 30) / 2, chh = 86;
+    float t = (float)GetTime();
+    for (int i = 0; i < (int)cards.size(); i++) {
+        int col = i % 2, row = i / 2;
+        int x = 12 + col * (cw + 6), y = 32 + row * (chh + 4);
+        float in = std::min(1.f, std::max(0.f, (t * 4.f) - i * 0.15f));   // simple fondu : pas de dépendance à l'entrée sur l'écran
+        (void)in;
+        const Card& C = cards[i];
+        DrawRectangle(x + 2, y + 2, cw, chh, Color{ 0, 0, 0, 80 });
+        DrawRectangleGradientV(x, y, cw, chh, Color{ 22, 34, 72, 240 }, Color{ 8, 14, 34, 240 });
+        DrawRectangle(x, y, cw, 14, Color{ C.c.r, C.c.g, C.c.b, 230 });
+        drawTextPx(fitText(C.title, cw - 8, 10), x + 4, y + 2, 10, BLACK);
+        int yy = y + 18;
+        for (auto& l : C.l) { drawTextPx(fitText(l, cw - 10, 10), x + 5, yy, 10, l.size() > 1 && l[0] == ' ' ? C_DIM : C_TXT); yy += 11; }
+    }
+    int ry = 32 + 3 * (chh + 4) + 2;
+    DrawRectangle(12, ry, VW - 24, 26, Color{ 6, 12, 28, 200 }); DrawRectangle(12, ry, 3, 26, C_HI);
+    drawTextPx("RÈGLES : hors-jeu, touches, corners, 6 mètres, fautes, cartons (2e jaune = rouge), penalties, prolongations,", 20, ry + 2, 10, C_TXT);
+    drawTextPx("tirs au but, matchs aller-retour, passe en retrait au gardien interdite, 5 remplacements.", 20, ry + 14, 10, C_TXT);
+    drawFooter("Les touches se changent dans Options > Configurer le clavier et les manettes   Retour");
     if (IN.back || IN.ok || IN.click) g_screen = SC_OPTIONS;
 }
 
@@ -4388,9 +4545,11 @@ static void toggleMusic() {
 
 // ------------------------------------------------------------------ boucle
 extern std::string (*g_sponsorImagePath)(const std::string&);
+void applyVibration() { rumbleSetStrength(!g_settings.vibration ? 0.f : g_settings.vibForce <= 1 ? 0.45f : g_settings.vibForce == 2 ? 0.75f : 1.f); }
 void appInit() {
     g_sponsorImagePath = sponsorImagePath;
     g_settings.load();
+    applyVibration();
     g_world.build();
     audioSetEnabled(g_settings.sound);
     audioMusicEnabled(g_settings.music);
@@ -4469,6 +4628,7 @@ void appFrame(float dt) {
     case SC_PRESS: screenPress(); break;
     case SC_MEDIA: screenMedia(); break;
     case SC_CUPNEWS: screenCupNews(); break;
+    case SC_SOUNDTEST: screenSoundTest(); break;
     case SC_HELP: screenHelp(); break;
     case SC_FICHE: screenFiche(dt); break;
     case SC_EDITMENU: screenEditMenu(); break;
@@ -4661,7 +4821,7 @@ void appTestStart(const char* mode) {
             M.state = MS_PLAY; M.clock = 20;
             if (m == "subtest") { M.substitute(0, 6, 0); M.state = MS_STOP; M.stateT = 0; M.nextSp = SP_THROWIN; M.nextSpTeam = 0; M.nextSpPos = V2(0.2f, 45.f); M.cam = V2(10, 50); }
             if (m == "goaltest") { int f = 10; M.ball.pos = V2(PITCH_W / 2, 3); M.pl[f].pos = V2(PITCH_W / 2 + 3, 8); M.ball.lastTouch = f; M.ball.lastTeam = 0; M.attackDir[0] = -1; M.goalScored(0); if (getenv("FOOT_CELEB")) M.setCelebration(atoi(getenv("FOOT_CELEB"))); }
-            if (m == "cardtest") { M.pl[14].pos = M.pl[3].pos + V2(0.5f, 0); M.foul(14, 3, true); M.pendCardOff = 14; M.pendCardType = 1; }
+            if (m == "cardtest") { M.pl[14].pos = M.pl[3].pos + V2(0.5f, 0); M.foul(14, 3, true); M.pendCardOff = 14; M.pendCardType = 1; if (getenv("FOOT_SECOND")) M.pl[14].yellow = 1; }
         }
     } else if (m == "tvads") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("ARG"), false, -1, -1); setFriendlyTv(0);
@@ -4670,6 +4830,8 @@ void appTestStart(const char* mode) {
     } else if (m == "adsedit") { g_screen = SC_ADSEDIT; if (getenv("FOOT_AE_ROW")) g_aeLW.cur = atoi(getenv("FOOT_AE_ROW"));
     } else if (m == "setup") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("BRA"), false, -1, -1);
+    } else if (m == "soundtest") { g_screen = SC_SOUNDTEST;
+    } else if (m == "customcomp") { g_cdefPreset = getenv("FOOT_PRESET") ? atoi(getenv("FOOT_PRESET")) : 1; customApplyPreset(g_cdefPreset); g_screen = SC_CUSTOM;
     } else if (m == "continents" || m == "contmatch") {
         auto T = continentTeams(); continentsStart(g_career, { T[0] }); g_careerActive = true; g_needAdvance = true; openHub();
         if (m == "contmatch") { g_pending = g_career.season.advance(false); g_needAdvance = false; const MatchRes& mr = g_career.season.comps[g_pending.comp].matches[g_pending.match]; startSetup(mr.home, mr.away, true, g_pending.comp, g_pending.match); for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1; launchMatch(); }
