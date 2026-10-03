@@ -18,4 +18,4 @@ float personalityMatchMultiplier(Career&,const Player&,int club,int matchKey,boo
 float personalityFoulMultiplier(const PlayerPersonality&);float personalityStressMultiplier(const PlayerPersonality&);
 bool personalityBigMatch(const Career&,int ci,int mi);bool personalityBigMatch(const Career&,const MatchRes&,const Competition*);
 std::string personalityScoutReport(const Career&,const Player&,int club);int personalityRecruitScore(const Career&,const Player&,int style);
-void personalitySave(Writer&,const Career&);void personalityLoad(Reader&,Career&);
+void personalitySave(Writer&,const Career&);void personalityLoad(Reader&,Career&,int ver);

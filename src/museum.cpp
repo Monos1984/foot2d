@@ -1,10 +1,20 @@
 #include "game.h"
 #include "serial.h"
+#include "packio.h"
 #include <cstring>
 #include <set>
 #include <limits>
 template<size_t N> static void label(char (&dst)[N],const std::string& s){snprintf(dst,N,"%s",s.c_str());}
-static bool validClub(const Career& K,int t){return K.museumEnabled()&&t>=0&&t<(int)g_world.teams.size()&&g_world.teams[t].kind==TK_CLUB&&!g_world.teams[t].freeAgents&&g_world.teams[t].youth!=8;}
+// clubs suivis par le Musée : ceux du joueur (et ceux qu'il a dirigés), et le football national suivi par le joueur
+// (6 premiers niveaux de son pays, outre-mer compris). Les autres clubs ont leurs « archives antérieures » (archive.cpp) ;
+// leur Musée commence le jour où le joueur y arrive.
+static bool validClub(const Career& K,int t){
+ if(!(K.museumEnabled()&&t>=0&&t<(int)g_world.teams.size()&&g_world.teams[t].kind==TK_CLUB&&!g_world.teams[t].freeAgents&&g_world.teams[t].youth!=8))return false;
+ if(K.clubHistories.count(t)||t==K.userTeam)return true;
+ const Team& T=g_world.teams[t];int u=K.userTeam;if(u<0||u>=(int)g_world.teams.size())return false;
+ if(T.parent>=0)return T.parent==u;
+ return T.nation==g_world.teams[u].nation&&teamLevel(t)<=5;
+}
 bool Career::museumEnabled() const{return kind==CK_CLUB&&!opts.lite&&!euroOnly;}
 static uint64_t key(int c,int m){return (uint64_t)(uint32_t)c<<32|(uint32_t)m;}
 static bool remember(std::vector<uint64_t>& v,uint64_t id){auto it=std::lower_bound(v.begin(),v.end(),id);if(it!=v.end()&&*it==id)return false;v.insert(it,id);return true;}
@@ -21,9 +31,13 @@ static bool record(ClubHistory& H,int kind,int64_t value,int year,double time,co
  MuseumRecord* found=nullptr;for(auto& r:H.records)if(r.kind==kind)found=&r;
  if(found&&(minimum?value>=found->value:value<=found->value))return false;
  if(!found){H.records.push_back(MuseumRecord());found=&H.records.back();}found->kind=kind;found->value=value;found->year=year;found->time=time;found->pid=pid;label(found->holder,holder);label(found->competition,comp);
+ if(H.managers.empty())return true;   // clubs jamais dirigés : le record suffit (liste des records), pas d'événement en double dans la chronologie
  std::string prefix=std::string(museumRecordName(kind))+" : ";std::string text=prefix+holder+fmt(" (%lld)",(long long)value);bool consolidated=false;for(auto it=H.timeline.rbegin();it!=H.timeline.rend();++it){if(it->year!=year)break;if(it->category==MH_RECORD&&std::string(it->text).rfind(prefix,0)==0){it->time=time;label(it->text,text);consolidated=true;break;}}if(!consolidated)event(H,year,time,MH_RECORD,text);return true;
 }
-static void observe(Career& K,ClubHistory& H,const Player& p){auto& v=player(H,p);if(v.observedYear!=K.year){v.observedYear=K.year;v.seenApps=v.seenGoals=v.seenAssists=v.seasonGoals=0;}
+static void observe(Career& K,ClubHistory& H,const Player& p){
+ // pas de fiche pour un joueur qui n'a encore rien fait au club (elle serait créée à l'identique à son premier match)
+ {bool known=false;for(auto& e:H.players)if(e.pid==p.id){known=true;break;}if(!known&&p.apps==0&&p.goals==0&&p.assists==0)return;}
+ auto& v=player(H,p);if(v.observedYear!=K.year){v.observedYear=K.year;v.seenApps=v.seenGoals=v.seenAssists=v.seasonGoals=0;}
  int apps=std::max(0,(int)p.apps-v.seenApps),goals=std::max(0,(int)p.goals-v.seenGoals),assists=std::max(0,(int)p.assists-v.seenAssists);v.apps+=apps;v.goals+=goals;v.assists+=assists;v.seasonGoals+=goals;v.seenApps=p.apps;v.seenGoals=p.goals;v.seenAssists=p.assists;
  if(apps){record(H,MR_YOUNGEST,p.age,K.year,K.season.now,p.name,{},true,p.id);record(H,MR_OLDEST,p.age,K.year,K.season.now,p.name,{},false,p.id);}
  if(goals){record(H,MR_YOUNG_GOAL,p.age,K.year,K.season.now,p.name,{},true,p.id);record(H,MR_OLD_GOAL,p.age,K.year,K.season.now,p.name,{},false,p.id);record(H,MR_SEASON_GOALS,v.seasonGoals,K.year,K.season.now,p.name,{},false,p.id);}
@@ -53,10 +67,11 @@ void Career::museumMatch(int ci,int mi){if(!museumEnabled()||ci<0||ci>=(int)seas
   if(ci==S.league){S.played++;S.gf+=gf;S.ga+=ga;if(gf>ga)S.wins++;else if(gf<ga)S.losses++;else S.draws++;S.points+=gf>ga?C.ptsWin:gf==ga?C.ptsDraw:C.ptsLoss;}
   H.unbeaten=gf>=ga?H.unbeaten+1:0;H.winStreak=gf>ga?H.winStreak+1:0;H.cleanStreak=ga==0?H.cleanStreak+1:0;
   record(H,MR_UNBEATEN,H.unbeaten,year,m.time,C.name);record(H,MR_WIN_STREAK,H.winStreak,year,m.time,C.name);record(H,MR_CLEAN_STREAK,H.cleanStreak,year,m.time,C.name);
-  bool landmark=false;if(gf>ga)landmark|=record(H,MR_BIG_WIN,gf-ga,year,m.time,opponent+fmt(" (%d-%d)",gf,ga),C.name);if(ga>gf)landmark|=record(H,MR_BIG_LOSS,ga-gf,year,m.time,opponent+fmt(" (%d-%d)",gf,ga),C.name);landmark|=record(H,MR_TOTAL_GOALS,gf+ga,year,m.time,opponent+fmt(" (%d-%d)",gf,ga),C.name);
+  bool landmark=false;bool notable=gf-ga>=4||ga-gf>=4||gf+ga>=7;   // un record n'en fait un match de légende que s'il est marquant
+  if(gf>ga)landmark|=record(H,MR_BIG_WIN,gf-ga,year,m.time,opponent+fmt(" (%d-%d)",gf,ga),C.name);if(ga>gf)landmark|=record(H,MR_BIG_LOSS,ga-gf,year,m.time,opponent+fmt(" (%d-%d)",gf,ga),C.name);landmark|=record(H,MR_TOTAL_GOALS,gf+ga,year,m.time,opponent+fmt(" (%d-%d)",gf,ga),C.name);
   if(!H.managers.empty()&&!H.managers.back().toYear){auto& manager=H.managers.back();manager.apps++;if(gf>ga)manager.wins++;else if(gf<ga)manager.losses++;else manager.draws++;}
   if(m.final){H.finals.push_back(m);event(H,year,m.time,MH_TROPHY,"Finale : "+C.name+" contre "+opponent+fmt(" (%d-%d)",gf,ga));}
-  uint32_t reasons=(m.final?1u:0u)|(gf>=5||ga>=5?2u:0u)|(r.ph>=0?4u:0u)|(landmark?8u:0u);
+  uint32_t reasons=(m.final?1u:0u)|(gf>=5||ga>=5?2u:0u)|(r.ph>=0?4u:0u)|(landmark&&notable?8u:0u);
   if(european(*this,ci)){if(!(H.firstFlags&1)){H.firstFlags|=1;reasons|=16;event(H,year,m.time,MH_EUROPE,"Premier match européen : "+C.name);}if(gf>ga&&!(H.firstFlags&2)){H.firstFlags|=2;reasons|=32;event(H,year,m.time,MH_EUROPE,"Première victoire européenne : "+C.name);}}
   if(g_world.teams[t].status==CS_PRO&&!(H.firstFlags&4)){H.firstFlags|=4;event(H,year,m.time,MH_ALL,"Premier match avec le statut professionnel");}
   if(reasons){m.reasons=reasons;H.legendaryMatches.push_back(m);}for(auto& p:g_world.teams[t].squad)observe(*this,H,p);
@@ -84,6 +99,39 @@ void Career::museumCompetition(int ci){if(!museumEnabled()||ci<0||ci>=(int)seaso
  for(auto& p:g_world.teams[C.winner].squad)if(p.apps>0)player(H,p).trophies++;
  for(int t:{trophy.finalMatch.home,trophy.finalMatch.away}){auto it=clubHistories.find(t);if(it==clubHistories.end())continue;for(auto* matches:{&it->second.finals,&it->second.legendaryMatches})for(auto& m:*matches)if(m.year==year&&m.comp==ci&&m.final)m.winner=C.winner;}
 }
+// bornage des historiques : les faits marquants restent, les détails les plus anciens et les moins importants partent
+// (clubs dirigés par le joueur : limites larges ; autres clubs : archive plus légère)
+static void museumTrim(ClubHistory& H,int year){
+ bool managed=!H.managers.empty();
+ if(!managed)H.timeline.erase(std::remove_if(H.timeline.begin(),H.timeline.end(),[](const MuseumEvent& e){return e.category==MH_RECORD;}),H.timeline.end());
+ size_t capLeg=managed?150:8,capTime=managed?1200:60;
+ // clubs jamais dirigés : matchs de légende sans les compositions détaillées (score, adversaire, compétition conservés)
+ if(!managed)for(auto& m:H.legendaryMatches)if(!m.exactLineup){memset(m.lineupNames,0,sizeof m.lineupNames);memset(m.xi,0,sizeof m.xi);memset(m.captain,0,sizeof m.captain);}
+ if(H.legendaryMatches.size()>capLeg){
+  auto score=[](const MuseumMatch& m){return (m.reasons&1?100:0)+(m.reasons&48?60:0)+(m.reasons&2?20:0)+(m.reasons&4?15:0)+(m.reasons&8?10:0);};
+  std::vector<size_t> idx(H.legendaryMatches.size());for(size_t i=0;i<idx.size();i++)idx[i]=i;
+  std::stable_sort(idx.begin(),idx.end(),[&](size_t a,size_t b){int sa=score(H.legendaryMatches[a]),sb=score(H.legendaryMatches[b]);if(sa!=sb)return sa>sb;return a>b;});
+  idx.resize(capLeg);std::sort(idx.begin(),idx.end());std::vector<MuseumMatch> keep;keep.reserve(capLeg);for(size_t i:idx)keep.push_back(H.legendaryMatches[i]);H.legendaryMatches.swap(keep);}
+ if(H.timeline.size()>capTime){
+  auto minor=[](const MuseumEvent& e){return e.category==MH_RECORD||e.category==MH_STADIUM||e.category==MH_ALL;};
+  size_t extra=H.timeline.size()-capTime;std::vector<MuseumEvent> keep;keep.reserve(capTime);
+  for(auto& e:H.timeline){if(extra&&minor(e)){extra--;continue;}keep.push_back(e);}
+  if(keep.size()>capTime)keep.erase(keep.begin(),keep.begin()+(keep.size()-capTime));
+  H.timeline.swap(keep);}
+ // fiches joueurs vides (aucun match, aucun but, aucune saison) : recréées à l'identique au besoin
+ // clubs jamais dirigés : les 80 joueurs les plus marquants (panthéon, effectif actuel et saison en cours toujours conservés)
+ if(!managed&&H.players.size()>80&&H.clubId>=0&&H.clubId<(int)g_world.teams.size()){
+  std::set<int> cur;for(auto& p:g_world.teams[H.clubId].squad)cur.insert(p.id);
+  std::vector<MuseumPlayer> keep,rest;for(auto& p:H.players)(p.hall||cur.count(p.pid)||p.observedYear==year?keep:rest).push_back(p);
+  std::stable_sort(rest.begin(),rest.end(),[](const MuseumPlayer& a,const MuseumPlayer& b){return a.legendScore()>b.legendScore();});
+  for(auto& p:rest){if(keep.size()>=80)break;keep.push_back(p);}
+  H.players.swap(keep);}
+ H.players.erase(std::remove_if(H.players.begin(),H.players.end(),[](const MuseumPlayer& p){return !p.hall&&!p.apps&&!p.goals&&!p.assists&&!p.clean&&!p.seasons&&!p.captainMatches&&!p.trophies&&!p.awards&&!p.leagueGoals&&!p.cupGoals&&!p.euroGoals&&!p.seenApps&&!p.seenGoals&&!p.seenAssists&&!p.seasonGoals;}),H.players.end());
+}
+void museumTrimAll(Career& K){for(auto& e:K.clubHistories)museumTrim(e.second,K.year);}
+// anciennes sauvegardes : Musée des clubs lointains jamais dirigés retiré (une fois, au chargement)
+void museumPruneUntracked(Career& K){int u=K.userTeam;if(u<0||u>=(int)g_world.teams.size())return;int nat=g_world.teams[u].nation;
+ for(auto it=K.clubHistories.begin();it!=K.clubHistories.end();){int t=it->first;bool keep=t==u||!it->second.managers.empty();if(!keep&&t>=0&&t<(int)g_world.teams.size()){const Team& T=g_world.teams[t];keep=T.parent>=0?T.parent==u:(T.nation==nat&&teamLevel(t)<=5);}if(keep)++it;else it=K.clubHistories.erase(it);}}
 void Career::museumSeasonEnd(bool afterMoves){if(!museumEnabled())return;
  if(!afterMoves){museumState(userTeam);for(auto& entry:clubHistories){auto& H=entry.second;if(H.seasons.empty()||H.seasons.back().year!=year)continue;for(auto& p:g_world.teams[H.clubId].squad)observe(*this,H,p);auto& S=active(*this,H);if(S.league>=0&&S.league<(int)season.comps.size()){auto& C=season.comps[S.league];if(!C.stages.empty())for(int g=0;g<(int)C.stages[0].groups.size();g++){auto table=C.table(0,g);for(int i=0;i<(int)table.size();i++)if(table[i].team==H.clubId){auto& row=table[i];S.position=i+1;S.played=row.p;S.wins=row.w;S.draws=row.d;S.losses=row.l;S.gf=row.gf;S.ga=row.ga;S.points=row.pts;}}}
    if(H.clubId==userTeam)S.budgetEnd=mgr.budget;
@@ -96,6 +144,7 @@ void Career::museumSeasonEnd(bool afterMoves){if(!museumEnabled())return;
   MuseumPlayer* best=nullptr;for(auto& v:H.players)if(v.observedYear==year&&v.seenApps>0&&(!best||v.seenGoals*3+v.seenAssists*2+v.seenApps>best->seenGoals*3+best->seenAssists*2+best->seenApps))best=&v;if(best){S.playerPid=best->pid;label(S.bestPlayer,best->name);}
   for(auto& award:seasonAwards)if(award.year==year)for(int i=0;i<6;i++)if(award.valid[i]&&award.winners[i].team==H.clubId)for(auto& p:H.players)if(p.pid==award.winners[i].pid){p.awards++;S.awards++;}
   int inducted=0;for(auto& p:H.players)inducted+=p.hall!=0;for(auto& p:H.players)if(!p.hall&&inducted<12&&(p.legendScore()+personalityLegendBonus(*this,p.pid,H.clubId)>=1500||p.seasons>=12&&p.apps>=150)){p.hall=1;inducted++;event(H,year,season.now,MH_PLAYER,"Entrée au panthéon : "+std::string(p.name));}
+  museumTrim(H,year);
   if(S.played){bool historic=false;historic|=record(H,MR_POINTS,S.points,year,season.now,S.competition);historic|=record(H,MR_WINS,S.wins,year,season.now,S.competition);historic|=record(H,MR_SEASON_GF,S.gf,year,season.now,S.competition);historic|=record(H,MR_SEASON_GA,S.ga,year,season.now,S.competition,{},true);historic|=record(H,MR_GD,S.gf-S.ga,year,season.now,S.competition);S.historic=historic||S.promoted||S.trophies>0||S.losses==0;if(S.losses==0)event(H,year,season.now,MH_ALL,"Saison de championnat invaincue");}
  }
 }
@@ -104,9 +153,15 @@ void Career::museumLeave(int t){auto it=clubHistories.find(t);if(it==clubHistori
 const char* museumCategoryName(int k){static const char* n[]={"Tous","Trophées","Montées / descentes","Joueurs","Stades","Records","Europe","Direction"};return n[std::clamp(k,0,7)];}
 const char* museumRecordName(int k){static const char* n[]={"Apparitions","Buts","Passes décisives","Matchs sans encaisser (G)","Saisons au club","Plus jeune joueur","Plus vieux joueur","Plus jeune buteur","Plus vieux buteur","Plus large victoire (écart)","Plus large défaite (écart)","Buts dans un match","Série sans défaite","Série de victoires","Série sans encaisser","Points en championnat","Victoires en championnat","Buts en championnat","Moins de buts encaissés","Différence de buts","Affluence","Transfert entrant (kEUR)","Transfert sortant (kEUR)","Budget (kEUR)","Valeur d'effectif (kEUR)","Buts d'un joueur / saison"};return n[std::clamp(k,0,MR_COUNT-1)];}
 template<class T> static void museumVector(Writer& w,std::vector<T>& v){w.vpod(v);}
-template<class T> static void museumVector(Reader& r,std::vector<T>& v){unsigned n=0;r.pod(n);if(!r.ok)return;long pos=ftell(r.f);fseek(r.f,0,SEEK_END);long end=ftell(r.f);fseek(r.f,pos,SEEK_SET);if(n>1000000||pos<0||end<pos||(uint64_t)n*sizeof(T)>(uint64_t)(end-pos)){r.ok=false;return;}v.resize(n);if(n&&fread(v.data(),sizeof(T),n,r.f)!=n)r.ok=false;}
-template<class IO> static void historyIO(IO& io,ClubHistory& h){io.pod(h.clubId);io.pod(h.firstYear);io.pod(h.seenYear);io.pod(h.unbeaten);io.pod(h.winStreak);io.pod(h.cleanStreak);io.pod(h.firstFlags);museumVector(io,h.seasons);museumVector(io,h.trophies);museumVector(io,h.finals);museumVector(io,h.legendaryMatches);museumVector(io,h.records);museumVector(io,h.timeline);museumVector(io,h.players);museumVector(io,h.managers);museumVector(io,h.stadiums);museumVector(io,h.shirts);museumVector(io,h.seenMatches);museumVector(io,h.seenEvents);museumVector(io,h.seenGates);}
-void museumSave(Writer& w,const Career& K){unsigned n=(unsigned)K.clubHistories.size();w.pod(n);for(auto& pair:K.clubHistories){auto& h=const_cast<ClubHistory&>(pair.second);historyIO(w,h);}}
-void museumLoad(Reader& r,Career& K){K.clubHistories.clear();unsigned n=0;r.pod(n);if(n>g_world.teams.size()){r.ok=false;return;}for(unsigned i=0;i<n&&r.ok;i++){ClubHistory h;historyIO(r,h);if(h.clubId<0||h.clubId>=(int)g_world.teams.size()||K.clubHistories.count(h.clubId)){r.ok=false;return;}for(auto& rec:h.records)if(rec.kind<0||rec.kind>=MR_COUNT)r.ok=false;K.clubHistories.emplace(h.clubId,std::move(h));}}
+template<class T> static void museumVector(Reader& r,std::vector<T>& v){if(r.packed){r.vpod(v);return;}unsigned n=0;r.pod(n);if(!r.ok)return;long pos=ftell(r.f);fseek(r.f,0,SEEK_END);long end=ftell(r.f);fseek(r.f,pos,SEEK_SET);if(n>1000000||pos<0||end<pos||(uint64_t)n*sizeof(T)>(uint64_t)(end-pos)){r.ok=false;return;}v.resize(n);if(n&&fread(v.data(),sizeof(T),n,r.f)!=n)r.ok=false;}
+template<class T> static void museumVector(PackW& w,std::vector<T>& v){w.vpod(v);}
+template<class T> static void museumVector(PackR& r,std::vector<T>& v){r.vpod(v,1000000);}
+static long g_mb[13];static long ioPos(PackW& w){return ftell(w.w.f);}template<class IO>static long ioPos(IO&){return 0;}
+#define MV(i,v) {long a_=ioPos(io);museumVector(io,v);g_mb[i]+=ioPos(io)-a_;}
+template<class IO> static void historyIO(IO& io,ClubHistory& h){io.pod(h.clubId);io.pod(h.firstYear);io.pod(h.seenYear);io.pod(h.unbeaten);io.pod(h.winStreak);io.pod(h.cleanStreak);io.pod(h.firstFlags);MV(0,h.seasons);MV(1,h.trophies);MV(2,h.finals);MV(3,h.legendaryMatches);MV(4,h.records);MV(5,h.timeline);MV(6,h.players);MV(7,h.managers);MV(8,h.stadiums);MV(9,h.shirts);MV(10,h.seenMatches);MV(11,h.seenEvents);MV(12,h.seenGates);}
+#undef MV
+void museumProfile(const Career& K,FILE* out){const char* N[13]={"seasons","trophies","finals","legendary","records","timeline","players","managers","stadiums","shirts","seenMatches","seenEvents","seenGates"};size_t B[13]={},C[13]={};for(auto& pair:K.clubHistories){auto& h=pair.second;size_t c[13]={h.seasons.size(),h.trophies.size(),h.finals.size(),h.legendaryMatches.size(),h.records.size(),h.timeline.size(),h.players.size(),h.managers.size(),h.stadiums.size(),h.shirts.size(),h.seenMatches.size(),h.seenEvents.size(),h.seenGates.size()};size_t z[13]={sizeof(MuseumSeason),sizeof(MuseumTrophy),sizeof(MuseumMatch),sizeof(MuseumMatch),sizeof(MuseumRecord),sizeof(MuseumEvent),sizeof(MuseumPlayer),sizeof(MuseumManager),sizeof(MuseumStadium),sizeof(MuseumShirt),8,8,8};for(int k=0;k<13;k++){C[k]+=c[k];B[k]+=c[k]*z[k];}}fprintf(out,"MUSEUM detail (%zu clubs)\n",K.clubHistories.size());for(int k=0;k<13;k++)fprintf(out,"  %-12s %9.2f MB  count %zu\n",N[k],B[k]/1048576.0,C[k]);}
+void museumSave(Writer& w,const Career& K){museumTrimAll(const_cast<Career&>(K));if(getenv("FOOT_SAVE_PROFILE"))museumProfile(K,stderr);unsigned n=(unsigned)K.clubHistories.size();w.pod(n);PackW pw{w};memset(g_mb,0,sizeof g_mb);for(auto& pair:K.clubHistories){auto& h=const_cast<ClubHistory&>(pair.second);historyIO(pw,h);}if(getenv("FOOT_SAVE_PROFILE")){const char* N[13]={"seasons","trophies","finals","legendary","records","timeline","players","managers","stadiums","shirts","seenMatches","seenEvents","seenGates"};fprintf(stderr,"MUSEUM packed :");for(int k=0;k<13;k++)fprintf(stderr," %s %.1f",N[k],g_mb[k]/1048576.0);fprintf(stderr,"\n");}}
+void museumLoad(Reader& r,Career& K,int ver){K.clubHistories.clear();unsigned n=0;r.pod(n);if(n>g_world.teams.size()){r.ok=false;return;}PackR pr(r);for(unsigned i=0;i<n&&r.ok;i++){ClubHistory h;if(ver>=35)historyIO(pr,h);else historyIO(r,h);if(h.clubId<0||h.clubId>=(int)g_world.teams.size()||K.clubHistories.count(h.clubId)){r.ok=false;return;}for(auto& rec:h.records)if(rec.kind<0||rec.kind>=MR_COUNT)r.ok=false;K.clubHistories.emplace(h.clubId,std::move(h));}}
 
 void Career::museumEnrich(int ci,int mi,const MuseumMatch& actual){if(!museumEnabled()||ci<0||ci>=(int)season.comps.size()||mi<0||mi>=(int)season.comps[ci].matches.size())return;const auto& r=season.comps[ci].matches[mi];for(int t:{r.home,r.away}){auto it=clubHistories.find(t);if(it==clubHistories.end())continue;auto& H=it->second;if(actual.attendance>=0)record(H,MR_ATTENDANCE,actual.attendance,year,season.now,actual.venue,season.comps[ci].name);for(auto* v:{&H.finals,&H.legendaryMatches})for(auto& m:*v)if(m.year==year&&m.comp==ci&&m.match==mi){m.exactLineup=actual.exactLineup;memcpy(m.xi,actual.xi,sizeof m.xi);memcpy(m.lineupNames,actual.lineupNames,sizeof m.lineupNames);memcpy(m.captain,actual.captain,sizeof m.captain);m.attendance=actual.attendance;label(m.venue,actual.venue);}}}

@@ -1,5 +1,6 @@
 #include "game.h"
 #include "serial.h"
+#include "packio.h"
 #include <cstring>
 #include <set>
 namespace {
@@ -49,8 +50,48 @@ float personalityMatchMultiplier(Career& K,const Player& p,int club,int key,bool
 float personalityTeamMultiplier(Career& K,int club,const MatchRes& M,const Competition* C){if(!K.personalityEnabled()||!clubOk(club)||!g_world.teams[club].squadGen)return 1;bool big=personalityBigMatch(K,M,C);auto xi=g_world.pickLineup(club,g_world.teams[club].formation,RULESET_CAREER);float sum=0;int n=0;for(int i=0;i<11&&i<(int)xi.size();i++)if(xi[i]>=0){sum+=personalityMatchMultiplier(K,g_world.teams[club].squad[xi[i]],club,(int)(K.season.now*1000)+M.home*31+M.away,big,.5f);n++;}return n?sum/n:1;}
 namespace {
 template<class T>void vectorIO(Writer& w,std::vector<T>& v){w.vpod(v);}
-template<class T>void vectorIO(Reader& r,std::vector<T>& v){unsigned n=0;r.pod(n);long pos=ftell(r.f);fseek(r.f,0,SEEK_END);long end=ftell(r.f);fseek(r.f,pos,SEEK_SET);if(!r.ok||n>2000000||pos<0||end<pos||(uint64_t)n*sizeof(T)>(uint64_t)(end-pos)){r.ok=false;return;}v.resize(n);if(n&&fread(v.data(),sizeof(T),n,r.f)!=n)r.ok=false;}
+template<class T>void vectorIO(Reader& r,std::vector<T>& v){if(r.packed){r.vpod(v);return;}unsigned n=0;r.pod(n);long pos=ftell(r.f);fseek(r.f,0,SEEK_END);long end=ftell(r.f);fseek(r.f,pos,SEEK_SET);if(!r.ok||n>2000000||pos<0||end<pos||(uint64_t)n*sizeof(T)>(uint64_t)(end-pos)){r.ok=false;return;}v.resize(n);if(n&&fread(v.data(),sizeof(T),n,r.f)!=n)r.ok=false;}
+template<class T>static void vectorIO(PackW& w,std::vector<T>& v){w.vpod(v);}
+template<class T>static void vectorIO(PackR& r,std::vector<T>& v){r.vpod(v,3000);}
 template<class IO>void recordIO(IO& io,PersonalityPlayer& P){io.pod(P.pid);io.pod(P.activeClub);io.pod(P.retired);io.pod(P.knowledge);io.pod(P.scoutQuality);io.pod(P.lastYear);io.pod(P.lastAge);io.pod(P.name);io.pod(P.traits);vectorIO(io,P.relations);vectorIO(io,P.events);}
 }
-void personalitySave(Writer& w,const Career& K){w.pod(K.personalities.matchYear);w.vpod(K.personalities.matches);unsigned n=(unsigned)K.personalities.players.size();w.pod(n);for(auto& pair:K.personalities.players)recordIO(w,const_cast<PersonalityPlayer&>(pair.second));}
-void personalityLoad(Reader& r,Career& K){if(getenv("FOOT_PERSONALITY_DEBUG"))fprintf(stderr,"Personality input valid=%d position=%ld\n",r.ok,ftell(r.f));K.personalities=PersonalityState();r.pod(K.personalities.matchYear);vectorIO(r,K.personalities.matches);unsigned n=0;r.pod(n);if(!r.ok||n>2000000){r.ok=false;return;}auto& ledger=K.personalities.matches;if(!std::is_sorted(ledger.begin(),ledger.end())||std::adjacent_find(ledger.begin(),ledger.end())!=ledger.end())r.ok=false;for(unsigned i=0;i<n&&r.ok;i++){PersonalityPlayer P;recordIO(r,P);if(!r.ok)break;P.name[79]=0;if(P.pid<=0||P.activeClub< -1||P.activeClub>=(int)g_world.teams.size()||P.retired<0||P.retired>1||P.knowledge<0||P.knowledge>100||P.scoutQuality<0||P.scoutQuality>100||P.relations.size()>80||P.events.size()>60||K.personalities.players.count(P.pid)){r.ok=false;break;}for(int t=0;t<10;t++)if(personalityTrait(P.traits,t)<0||personalityTrait(P.traits,t)>100)r.ok=false;std::set<int> clubs;for(auto& R:P.relations){if(!clubOk(R.clubId)||!clubs.insert(R.clubId).second||R.mentorPid<0||R.mentorPid==P.pid||R.temporary<0||R.temporary>1)r.ok=false;for(int v:{R.attachment,R.fanPopularity,R.managerRelationship,R.squadInfluence,R.adaptationProgress})if(v<0||v>100)r.ok=false;}for(auto& e:P.events){e.text[159]=0;if(e.club< -1||e.club>=(int)g_world.teams.size()||e.type<0||e.type>10)r.ok=false;}if(!r.ok&&getenv("FOOT_PERSONALITY_DEBUG"))fprintf(stderr,"Rejected pid=%d active=%d relations=%zu events=%zu\n",P.pid,P.activeClub,P.relations.size(),P.events.size());if(r.ok)K.personalities.players.emplace(P.pid,std::move(P));}}
+// format compact (version 35) : nom omis s'il est celui du joueur en effectif, traits et relations notés en écart
+// à leur valeur de référence (traits générés à partir de l'identifiant, relation par défaut), textes à longueur variable
+struct SquadRef{const Player* p;int club;};
+static std::map<int,SquadRef> squadIndex(){std::map<int,SquadRef> m;for(int c=0;c<(int)g_world.teams.size();c++)for(auto& p:g_world.teams[c].squad)m[p.id]={&p,c};return m;}
+static int g_cpPrevPid=0,g_cpYear=0;
+static void compactWrite(Writer& w,const PersonalityPlayer& P,const std::map<int,SquadRef>& idx){
+ PackW pw{w};auto it=idx.find(P.pid);const Player* pl=it==idx.end()?nullptr:it->second.p;int club=it==idx.end()?-1:it->second.club;
+ // en-tête noté en écart à la valeur attendue (identifiant précédent, club de l'effectif, année et âge actuels)
+ int hdr[7]={P.pid-g_cpPrevPid,P.activeClub-club,P.retired,P.knowledge,P.scoutQuality,P.lastYear-g_cpYear,P.lastAge-(pl?pl->age:0)};pw.pod(hdr);g_cpPrevPid=P.pid;
+ bool sameName=pl&&pl->name==P.name;uint8_t flags=(sameName?1:0)|(pl?2:0);w.pod(flags);
+ if(!sameName)pw.str(P.name);
+ if(pl)packDeltaW(w.f,P.traits,generatePersonality(*pl));else pw.pod(P.traits);
+ pw.count(P.relations.size());for(auto& R:P.relations){PlayerClubRelation d;d.clubId=R.clubId;d.joinedYear=g_cpYear;int dc=R.clubId-club;pw.pod(dc);packDeltaW(w.f,R,d);}
+ pw.count(P.events.size());for(auto& e:P.events){int h[3]={e.year,e.club,e.type};pw.pod(h);pw.str(std::string(e.text,strnlen(e.text,sizeof e.text)));}
+}
+static void compactRead(Reader& r,PersonalityPlayer& P,const std::map<int,SquadRef>& idx){
+ PackR pr(r);int hdr[7];pr.pod(hdr);P.pid=hdr[0]+g_cpPrevPid;g_cpPrevPid=P.pid;
+ auto it=idx.find(P.pid);const Player* pl=it==idx.end()?nullptr:it->second.p;int club=it==idx.end()?-1:it->second.club;
+ P.activeClub=hdr[1]+club;P.retired=hdr[2];P.knowledge=hdr[3];P.scoutQuality=hdr[4];P.lastYear=hdr[5]+g_cpYear;P.lastAge=hdr[6]+(pl?pl->age:0);
+ uint8_t flags=0;r.pod(flags);if(!r.ok||flags>3){r.ok=false;return;}
+ if((flags&2)&&!pl){r.ok=false;return;}
+ if(flags&1){if(!pl){r.ok=false;return;}snprintf(P.name,sizeof P.name,"%s",pl->name.c_str());}else{std::string n;pr.str(n,200);snprintf(P.name,sizeof P.name,"%s",n.c_str());}
+ if(flags&2)packDeltaR(r.f,P.traits,generatePersonality(*pl),r.ok);else pr.pod(P.traits);
+ size_t nr=pr.count(80);P.relations.resize(nr);for(auto& R:P.relations){PlayerClubRelation d;int dc=0;pr.pod(dc);d.clubId=dc+club;d.joinedYear=g_cpYear;packDeltaR(r.f,R,d,r.ok);}
+ size_t ne=pr.count(60);P.events.resize(ne);for(auto& e:P.events){int h[3];pr.pod(h);e.year=h[0];e.club=h[1];e.type=h[2];std::string t;pr.str(t,400);snprintf(e.text,sizeof e.text,"%s",t.c_str());}
+}
+// joueurs retraités : personnalité conservée seulement s'ils comptent pour l'histoire suivie (Musée, clubs du joueur, événements)
+static void personalityTrim(Career& K){std::set<int> keepPid,clubs,inSquad;if(K.userTeam>=0)clubs.insert(K.userTeam);for(auto& t:g_world.teams)for(auto& p:t.squad)inSquad.insert(p.id);
+ for(auto& e:K.clubHistories){if(!e.second.managers.empty())clubs.insert(e.first);for(auto& p:e.second.players)keepPid.insert(p.pid);}
+ for(auto it=K.personalities.players.begin();it!=K.personalities.players.end();){auto& P=it->second;bool keep=(!P.retired&&inSquad.count(P.pid))||keepPid.count(P.pid);   // retraités et joueurs sortis des effectifs : seulement s'ils comptent pour le Musée ou un club du joueur
+  if(!keep)for(auto& R:P.relations)if(clubs.count(R.clubId)){keep=true;break;}
+  if(keep){bool mine=clubs.count(P.activeClub)>0;if(!mine)for(auto& R:P.relations)if(clubs.count(R.clubId)){mine=true;break;}
+   if(!mine&&P.events.size()>1)P.events.erase(P.events.begin(),P.events.end()-1);   // joueurs étrangers aux clubs du joueur : dernier fait marquant
+   if(!mine&&P.relations.size()>2){   // et seulement la relation au club actuel + la précédente
+    std::vector<PlayerClubRelation> keepR;for(auto& R:P.relations)if(R.clubId==family(P.activeClub))keepR.push_back(R);
+    for(auto it2=P.relations.rbegin();it2!=P.relations.rend()&&keepR.size()<2;++it2)if(it2->clubId!=family(P.activeClub))keepR.insert(keepR.begin(),*it2);
+    P.relations.swap(keepR);}
+   ++it;}else it=K.personalities.players.erase(it);}}
+void personalitySave(Writer& w,const Career& K){personalityTrim(const_cast<Career&>(K));w.pod(K.personalities.matchYear);w.vpod(K.personalities.matches);unsigned n=(unsigned)K.personalities.players.size();w.pod(n);auto idx=squadIndex();g_cpPrevPid=0;g_cpYear=K.year;for(auto& pair:K.personalities.players)compactWrite(w,pair.second,idx);}
+void personalityLoad(Reader& r,Career& K,int ver){PackR pr(r);std::map<int,SquadRef> idx;if(ver>=35)idx=squadIndex();g_cpPrevPid=0;g_cpYear=K.year;if(getenv("FOOT_PERSONALITY_DEBUG"))fprintf(stderr,"Personality input valid=%d position=%ld\n",r.ok,ftell(r.f));K.personalities=PersonalityState();r.pod(K.personalities.matchYear);vectorIO(r,K.personalities.matches);unsigned n=0;r.pod(n);if(!r.ok||n>2000000){r.ok=false;return;}auto& ledger=K.personalities.matches;if(!std::is_sorted(ledger.begin(),ledger.end())||std::adjacent_find(ledger.begin(),ledger.end())!=ledger.end())r.ok=false;for(unsigned i=0;i<n&&r.ok;i++){PersonalityPlayer P;if(ver>=35)compactRead(r,P,idx);else recordIO(r,P);if(!r.ok)break;P.name[79]=0;if(P.pid<=0||P.activeClub< -1||P.activeClub>=(int)g_world.teams.size()||P.retired<0||P.retired>1||P.knowledge<0||P.knowledge>100||P.scoutQuality<0||P.scoutQuality>100||P.relations.size()>80||P.events.size()>60||K.personalities.players.count(P.pid)){r.ok=false;break;}for(int t=0;t<10;t++)if(personalityTrait(P.traits,t)<0||personalityTrait(P.traits,t)>100)r.ok=false;std::set<int> clubs;for(auto& R:P.relations){if(!clubOk(R.clubId)||!clubs.insert(R.clubId).second||R.mentorPid<0||R.mentorPid==P.pid||R.temporary<0||R.temporary>1)r.ok=false;for(int v:{R.attachment,R.fanPopularity,R.managerRelationship,R.squadInfluence,R.adaptationProgress})if(v<0||v>100)r.ok=false;}for(auto& e:P.events){e.text[159]=0;if(e.club< -1||e.club>=(int)g_world.teams.size()||e.type<0||e.type>10)r.ok=false;}if(!r.ok&&getenv("FOOT_PERSONALITY_DEBUG"))fprintf(stderr,"Rejected pid=%d active=%d relations=%zu events=%zu\n",P.pid,P.activeClub,P.relations.size(),P.events.size());if(r.ok)K.personalities.players.emplace(P.pid,std::move(P));}}

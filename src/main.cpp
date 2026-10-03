@@ -34,6 +34,15 @@ static void saveScreenshot(const RenderTexture2D& target) {
 }
 
 int main(int argc, char** argv) {
+    // --save-profile : profil détaillé de chaque sauvegarde / chargement (fichier save_profile.txt à côté du jeu)
+    for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--save-profile")) {
+#ifdef _WIN32
+        _putenv("FOOT_SAVE_PROFILE=1");
+#else
+        setenv("FOOT_SAVE_PROFILE", "1", 1);
+#endif
+        freopen("save_profile.txt", "a", stderr);
+    }
     if (argc > 1 && !strcmp(argv[1], "--validate-france")) {
         g_world.build();
         for (const auto& p : g_basePyramids) if (p.country == "FRA" && p.dom < 0) {

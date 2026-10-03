@@ -30,6 +30,6 @@ int supporterDistance(int home,int away);int supporterPrice(int club);int suppor
 MatchAtmosphere supportersMatchAtmosphere(Career* k,int home,int away,int comp=-1,int mi=-1,int weather=0,bool neutral=false);
 void supportersApplySetup(Career* k,MatchSetup& setup,int comp=-1,int mi=-1);
 int supportersLiveChant(const MatchSetup& setup,int homeGoals,int awayGoals,float minute);
-void supportersSave(Writer& w,const Career& k);void supportersLoad(Reader& r,Career& k);
+void supportersSave(Writer& w,const Career& k);void supportersLoad(Reader& r,Career& k,int ver);
 
 float supporterPlayerMultiplier(const MatchSetup& setup,int team,int age);float supporterPenaltyPressure(const MatchSetup& setup,int team);

@@ -40,4 +40,4 @@ struct ClubHistory {
 const char* museumRecordName(int kind);
 const char* museumCategoryName(int kind);
 void museumSave(Writer& w,const Career& K);
-void museumLoad(Reader& r,Career& K);
+void museumLoad(Reader& r,Career& K,int ver);

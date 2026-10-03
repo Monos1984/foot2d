@@ -877,7 +877,9 @@ struct Career {
     void onCompetitionDone(int comp);
     void onStageDone(int comp, int stage);
     void update();
-    bool save(const char* path) const;
+    bool save(const char* path) const;      // conteneur compressé, écriture atomique (+ .bak)
+    bool saveRaw(const char* path) const;   // données brutes
+    bool loadRaw(const char* path);
     bool load(const char* path);
     int tierOfTeam(int team, int* pyramidOut = nullptr, int* poolOut = nullptr, int* groupOut = nullptr) const;
     std::string teamLevelName(int team) const;

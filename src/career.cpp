@@ -4,6 +4,7 @@
 #include <map>
 #include <set>
 #include <cstring>
+#include <chrono>
 
 Career g_career;
 float frTierBase(int tier);                                  // pyramid.cpp
@@ -3118,9 +3119,10 @@ void Career::update() {}
 
 // ------------------------------------------------------------------ sauvegarde
 #include "serial.h"
+#include "packio.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 34;
+static const unsigned SAVE_VERSION = 35;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -3159,13 +3161,30 @@ static void rComp(Reader& r, Competition& c, unsigned ver) {
 }
 template <class IO> static void ioKit(IO& io, Kit& k) { io.pod(k.shirt); io.pod(k.shirt2); io.pod(k.shorts); io.pod(k.socks); io.pod(k.pattern); }
 
-bool Career::save(const char* path) const {
+// ------------------------------------------------------------------ profil des sauvegardes (FOOT_SAVE_PROFILE=1 ou --save-profile)
+struct SaveProf { const char* name; long bytes; long count; };
+static std::vector<SaveProf> g_saveProf; static long g_profPos = 0;
+static void profMark(FILE* f, const char* name, long count = 0) { long p = ftell(f); g_saveProf.push_back({ name, p - g_profPos, count }); g_profPos = p; }
+const std::vector<SaveProf>& saveProfile();
+const std::vector<SaveProf>& saveProfile() { return g_saveProf; }
+void saveProfileReport(FILE* out) {
+    long tot = 0; for (auto& s : g_saveProf) tot += s.bytes;
+    std::vector<SaveProf> v = g_saveProf; std::stable_sort(v.begin(), v.end(), [](const SaveProf& a, const SaveProf& b) { return a.bytes > b.bytes; });
+    fprintf(out, "SAVE PROFILE\n");
+    for (auto& s : v) { fprintf(out, "%-26s %10.2f MB", s.name, s.bytes / 1048576.0); if (s.count) fprintf(out, "   count %ld  avg %.0f B", s.count, (double)s.bytes / s.count); fprintf(out, "\n"); }
+    fprintf(out, "%-26s %10.2f MB\n", "RAW TOTAL", tot / 1048576.0);
+}
+bool Career::saveRaw(const char* path) const {
+    g_saveProf.clear(); g_profPos = 0;
     FILE* f = fopen(path, "wb");
     if (!f) return false;
     static char wbuf[1 << 20]; setvbuf(f, wbuf, _IOFBF, sizeof wbuf);
     Writer w{ f };
     w.pod(SAVE_MAGIC); w.pod(SAVE_VERSION);
+    w.packed = true;            // version 35 : tout le reste du flux en format compact
+    profMark(f, "HEADER");
     unsigned nt = (unsigned)g_world.teams.size(); w.pod(nt);
+    long squadBytes = 0, nPlayers = 0;
     for (auto& t0 : g_world.teams) {
         Team& t = const_cast<Team&>(t0);
         w.str(t.name); w.str(t.shortName); w.str(t.stadium); w.str(t.town);
@@ -3173,16 +3192,19 @@ bool Career::save(const char* path) const {
         w.pod(t.seed); w.pod(t.formation); w.pod(t.dbClub); w.pod(t.parent); w.pod(t.resLevel); w.pod(t.custom); w.pod(t.edited);
         w.pod(t.lastTier); w.pod(t.founded); w.pod(t.squadGen); w.vstr(t.honours);
         unsigned np = (unsigned)t.squad.size(); w.pod(np);
+        long sq0 = ftell(f); nPlayers += np;
         for (auto& p : t.squad) {
             w.str(p.name); w.pod(p.pos); w.pod(p.num); w.pod(p.speed); w.pod(p.shoot); w.pod(p.pass); w.pod(p.tackle); w.pod(p.keep);
             w.pod(p.stamina); w.pod(p.skin); w.pod(p.hair); w.pod(p.suspended); w.pod(p.yellows); w.pod(p.injured); w.pod(p.goals); w.pod(p.apps); w.pod(p.nation);
             w.pod(p.id); w.pod(p.age); w.pod(p.pot); w.pod(p.assists); w.pod(p.contract);
             w.pod(p.cond); w.pod(p.morale); w.pod(p.dribble); w.pod(p.heading);
         }
+        squadBytes += ftell(f) - sq0;
         w.vpod(t.xi); w.pod(t.status); w.pod(t.sta); w.str(t.sponsor);
         for (float c : t.coefs) w.pod(c);
         w.pod(t.condT);
     }
+    { long p = ftell(f); g_saveProf.push_back({ "CLUBS (hors effectifs)", p - g_profPos - squadBytes, (long)nt }); g_saveProf.push_back({ "PLAYERS (effectifs)", squadBytes, nPlayers }); g_profPos = p; }
     w.pod(kind); w.pod(userTeam); w.pod(year); w.pod(cdf); w.pod(cdfNational); w.vpod(cdfRegional); w.vpod(nationalCups);
     w.vpod(regionalCups); w.vpod(deptCups); w.vpod(superCups); w.pod(ucl); w.pod(uel); w.pod(uecl); w.pod(uefaSuper);
     w.vpod(nextEuro.uclQ1); w.vpod(nextEuro.uclQ2); w.vpod(nextEuro.uclQ3); w.vpod(nextEuro.uclGS); w.vpod(nextEuro.uefaQR); w.vpod(nextEuro.uefaR1);
@@ -3201,6 +3223,7 @@ bool Career::save(const char* path) const {
     w.pod(mgr.budget); w.pod(mgr.seasonIncome); w.pod(mgr.seasonWages); w.pod(mgr.seasonTransfers); w.pod(mgr.objective); w.pod(mgr.objTarget);
     w.pod(mgr.confidence); w.pod(mgr.lastMonth); w.pod(mgr.sacked); w.vpod(mgr.transfers); w.pod(mgr.incomeBase);
     w.pod(mgr.managerMode); w.pod(mgr.sponsorIncome); w.vpod(mgr.staff); w.vpod(mgr.ctrlReserves); w.pod(mgr.noSack); w.pod(mgr.statusChoice); w.pod(mgr.needStatus); w.vpod(mgr.projects); w.pod(mgr.seasonGate); w.pod(mgr.seasonShop); w.pod(mgr.seasonStadiumCost); w.pod(cdl);
+    profMark(f, "CAREER (état, finances)");
     unsigned np = (unsigned)pyramids.size(); w.pod(np);
     for (auto& P : pyramids) {
         w.str(P.country); w.str(P.name); w.pod(P.barrageUp); w.pod(P.dom);
@@ -3209,46 +3232,103 @@ bool Career::save(const char* path) const {
         n = (unsigned)P.pools.size(); w.pod(n);
         for (auto& pl : P.pools) { w.pod(pl.tier); w.pod(pl.key); w.pod(pl.nGroups); w.pod(pl.size); w.pod(pl.upCap); w.pod(pl.terminal); w.vpod(pl.clubs); w.vvi(pl.groups); w.vpod(pl.comps); w.vpod(pl.groupSizes); w.pod(pl.officialGroups); w.vpod(pl.nextGroupSizes); }
     }
+    profMark(f, "PYRAMIDS", (long)pyramids.size());
     const Season& S = season;
     w.vpod(S.controlled); w.pod(S.now); w.pod(S.year); w.pod(S.finished); w.vstr(S.news); w.pod(S.mode);
     unsigned nc = (unsigned)S.comps.size(); w.pod(nc);
+    profMark(f, "SEASON (news)", (long)S.news.size());
     for (auto& c : S.comps) wComp(w, c);
+    profMark(f, "COMPETITIONS (saison)", (long)S.comps.size());
     // version 6
     w.pod(mgr.trainFocus); w.pod(mgr.trainInt); w.pod(superRegions);
     { std::vector<std::pair<int, int>> v(prevRegCupWinner.begin(), prevRegCupWinner.end()); w.vpod(v); }
     // version 7
+    profMark(f, "V6");
     saveV7(w);
+    profMark(f, "V7");
     w.vstr(honourVenue);          // version 8
+    profMark(f, "V8");
     saveV9(w);                    // version 9
+    profMark(f, "V9");
     w.vpod(mgr.offers);           // version 10
     saveV11(w);                   // version 11
+    profMark(f, "V10-V11");
     saveV12(w);                   // version 12
+    profMark(f, "V12");
     saveV13(w);                   // version 13
+    profMark(f, "V13");
     saveV14(w);                   // version 14
+    profMark(f, "V14");
     saveV15(w);                   // version 15
+    profMark(f, "V15");
     saveV17(w);                   // version 17 : vie privée, corruption
+    profMark(f, "V17 (vie privée)");
     // version 23 : coupes éditeur persistantes
     w.vpod(customCups); { std::vector<std::pair<int,int>> v(prevCustomCupWinner.begin(), prevCustomCupWinner.end()); w.vpod(v); }
     w.vpod(ballonEditions); // version 26
     w.vpod(seasonAwards);w.vpod(clubDebuts);w.vpod(poleTeams);w.vpod(poleRecruits);w.pod(poleCup); // version 27
-    for(auto& t:g_world.teams){w.pod(t.tactical);for(auto& p:t.squad){initPositions(p);w.pod(p.positions);}} // version 28
+    profMark(f, "V23-V27 (coupes, ballon, awards)");
+    {PackW pw{w};for(auto& t:g_world.teams){pw.pod(t.tactical);for(auto& p:t.squad){initPositions(p);Player d;d.id=p.id;d.pos=p.pos;initPositions(d);bool same=memcmp(&d.positions,&p.positions,sizeof(PositionKnowledge))==0;uint8_t flag=same?0:1;w.pod(flag);if(!same)packDeltaW(w.f,p.positions,d.positions);}}} // version 28 (35 : compact, postes par défaut omis)
+    profMark(f, "TACTICAL + POSITIONS", nPlayers);
     museumSave(w,*this); // version 29
+    profMark(f, "MUSEUM", (long)clubHistories.size());
     directorSave(w,*this); // version 30
+    profMark(f, "DIRECTOR");
     sportingSave(w,*this); // version 31
+    profMark(f, "SPORTING");
     supportersSave(w,*this); // version 32
+    profMark(f, "SUPPORTERS", (long)supporters.profiles.size());
     personalitySave(w,*this); // version 33
+    profMark(f, "PERSONALITY", (long)personalities.players.size());
     w.pod(monthly.pressYear);w.pod(monthly.pressComp);w.pod(monthly.pressMatch);w.pod(monthly.awMonth);w.pod(monthly.awYear);w.pod(monthly.awTeam);w.vpod(monthly.awGoals);w.vpod(monthly.awPts);w.vpod(monthly.talked); // version 34
+    profMark(f, "MONTHLY");
     fclose(f);
+    if (getenv("FOOT_SAVE_PROFILE")) saveProfileReport(stderr);
     return true;
 }
 
+bool saveContainerWrite(const char* rawPath, const char* finalPath, bool compress);
+int saveContainerOpen(const char* path, const std::string& rawOut);
+extern double g_saveTimes[4];
+bool Career::save(const char* path) const {
+    std::string raw = std::string(path) + ".raw";
+    auto t0 = std::chrono::steady_clock::now();
+    if (!saveRaw(raw.c_str())) { remove(raw.c_str()); return false; }
+    double ser = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    bool ok = saveContainerWrite(raw.c_str(), path, true);
+    if (!ok) remove(raw.c_str());
+    if (getenv("FOOT_SAVE_PROFILE")) fprintf(stderr, "SAVE BENCHMARK  serialisation %.2f s  compression %.2f s  ecriture %.2f s  verification+remplacement %.2f s  total %.2f s\n", ser, g_saveTimes[0], g_saveTimes[1], g_saveTimes[2], ser + g_saveTimes[3]);
+    return ok;
+}
+// chargement : conteneur compressé vérifié (CRC32), sinon ancien format brut ; si le fichier est corrompu, la copie .bak est essayée
 bool Career::load(const char* path) {
+    auto tryOne = [&](const char* p) {
+        std::string raw = std::string(p) + ".rawload";
+        auto t0 = std::chrono::steady_clock::now();
+        int k = saveContainerOpen(p, raw);
+        double tu = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        bool ok = false;
+        if (k == 0) ok = loadRaw(p);
+        else if (k == 1) { ok = loadRaw(raw.c_str()); remove(raw.c_str()); }
+        if (getenv("FOOT_SAVE_PROFILE")) fprintf(stderr, "LOAD BENCHMARK  lecture+decompression %.2f s  total %.2f s  (%s)\n", tu, std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), k < 0 ? "corrompu" : k == 0 ? "ancien format" : "compresse");
+        return ok;
+    };
+    if (tryOne(path)) return true;
+    std::string bak = std::string(path) + ".bak";
+    FILE* f = fopen(bak.c_str(), "rb");
+    if (!f) return false;
+    fclose(f);
+    fprintf(stderr, "Sauvegarde illisible : chargement de la copie de secours %s\n", bak.c_str());
+    return tryOne(bak.c_str());
+}
+bool Career::loadRaw(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) return false;
     static char rbuf[1 << 20]; setvbuf(f, rbuf, _IOFBF, sizeof rbuf);
     Reader r{ f };
     unsigned magic = 0, ver = 0; r.pod(magic); r.pod(ver);
     if (magic != SAVE_MAGIC || ver < 21 || ver > SAVE_VERSION) { fclose(f); return false; }   // build 5 : anciennes sauvegardes incompatibles
+    r.packed = ver >= 35;
     g_world.build();
     unsigned nt = 0; r.pod(nt);
     if (!r.ok || nt > 200000) { fclose(f); return false; }
@@ -3347,11 +3427,17 @@ bool Career::load(const char* path) {
     if(ver>=26) r.vpod(ballonEditions);
     seasonAwards.clear();clubDebuts.clear();poleTeams.clear();poleRecruits.clear();poleCup=-1;
     if(ver>=27){r.vpod(seasonAwards);r.vpod(clubDebuts);r.vpod(poleTeams);r.vpod(poleRecruits);r.pod(poleCup);}
-    for(auto& t:g_world.teams){t.tactical=TacticalPlan();if(ver>=28){r.pod(t.tactical);if(t.tactical.customized>1||t.tactical.model>1)r.ok=false;for(auto& v:t.tactical.slot)if(v.duty>2||v.instructions>>TI_COUNT||v.position!=255&&v.position>=DP_COUNT)r.ok=false;}for(auto& p:t.squad){if(ver>=28){r.pod(p.positions);if(p.positions.primary>=DP_COUNT||p.positions.target!=255&&p.positions.target>=DP_COUNT)r.ok=false;for(auto v:p.positions.familiarity)if(v>100)r.ok=false;}else initPositions(p);}}
-    clubHistories.clear();if(ver>=29)museumLoad(r,*this);
+    PackR posR(r);for(auto& t:g_world.teams){t.tactical=TacticalPlan();if(ver>=28){if(ver>=35)posR.pod(t.tactical);else r.pod(t.tactical);if(t.tactical.customized>1||t.tactical.model>1)r.ok=false;for(auto& v:t.tactical.slot)if(v.duty>2||v.instructions>>TI_COUNT||v.position!=255&&v.position>=DP_COUNT)r.ok=false;}for(auto& p:t.squad){if(ver>=35){uint8_t flag=0;r.pod(flag);if(flag>1)r.ok=false;{Player d;d.id=p.id;d.pos=p.pos;initPositions(d);if(flag)packDeltaR(r.f,p.positions,d.positions,r.ok);else p.positions=d.positions;}}if(ver>=28&&ver<35){r.pod(p.positions);}if(ver>=28){if(p.positions.primary>=DP_COUNT||p.positions.target!=255&&p.positions.target>=DP_COUNT)r.ok=false;for(auto v:p.positions.familiarity)if(v>100)r.ok=false;}else initPositions(p);}}
+    auto lt = [&](const char* sec) { if (getenv("FOOT_SAVE_PROFILE")) fprintf(stderr, "LOAD %-14s ok=%d pos=%ld\n", sec, (int)r.ok, ftell(r.f)); };
+    lt("base");
+    clubHistories.clear();if(ver>=29)museumLoad(r,*this,(int)ver);{void museumPruneUntracked(Career&);if(ver<35){rebuildLevelCache(*this);museumPruneUntracked(*this);}}
+    lt("museum");
     director=DirectorState();if(ver>=30)directorLoad(r,*this);
+    lt("director");
     sporting=SportingCareer();if(ver>=31)sportingLoad(r,*this);
-    supporters=SupporterState();personalities=PersonalityState();if(ver>=32)supportersLoad(r,*this);if(ver>=33)personalityLoad(r,*this);
+    lt("sporting");
+    supporters=SupporterState();personalities=PersonalityState();if(ver>=32)supportersLoad(r,*this,(int)ver);lt("supporters");if(ver>=33)personalityLoad(r,*this,(int)ver);
+    lt("personality");
     monthly=MonthlyState();if(ver>=34&&r.ok){r.pod(monthly.pressYear);r.pod(monthly.pressComp);r.pod(monthly.pressMatch);r.pod(monthly.awMonth);r.pod(monthly.awYear);r.pod(monthly.awTeam);r.vpod(monthly.awGoals);r.vpod(monthly.awPts);r.vpod(monthly.talked);
         if(!r.ok||monthly.awGoals.size()>400000||monthly.awPts.size()>2000||monthly.talked.size()>20000)r.ok=false;}
     for(const auto& e:ballonEditions) if(e.presented>1 || e.count[0]>3 || e.count[1]>3) r.ok=false;
