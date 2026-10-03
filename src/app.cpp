@@ -1145,7 +1145,7 @@ static void screenMatch(float dt) {
         // entraînement : pas de public
         bool anth = m.ceremony && (m.cerPhase == 10 || m.cerPhase == 11);
         audioCrowd(!m.S.training, anth ? 0.08f : .10f+m.S.supporterAtmosphere*.003f);
-        if(!m.S.training&&!anth)audioSupporters(supportersLiveChant(m.S,m.score[0],m.score[1],m.clock),m.S.supporterAtmosphere/100.f);
+        if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||m.state==MS_REPLAY)&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
     } else audioCrowd(false, 0);
     if (m.finished && !g_trophyChecked && !g_paused) {
         g_trophyChecked = true;
@@ -3483,6 +3483,7 @@ static int g_roleSlot=0,g_roleInstr=0,g_rolePlayerTab=0;
 #include "app_manager.inc"
 #include "app_club.inc"
 #include "app_club2.inc"
+#include "app_stage.inc"
 #include "app_museum.inc"
 #include "app_director.inc"
 #include "app_supporters.inc"
@@ -4084,7 +4085,7 @@ void appTestStart(const char* mode) {
             Match& M = *g_match; M.ceremony = false; M.startPeriod(0);
             M.state = MS_PLAY; M.clock = 20;
             if (m == "subtest") { M.substitute(0, 6, 0); M.state = MS_STOP; M.stateT = 0; M.nextSp = SP_THROWIN; M.nextSpTeam = 0; M.nextSpPos = V2(0.2f, 45.f); M.cam = V2(10, 50); }
-            if (m == "goaltest") { int f = 10; M.ball.pos = V2(PITCH_W / 2, 3); M.pl[f].pos = V2(PITCH_W / 2 + 3, 8); M.ball.lastTouch = f; M.ball.lastTeam = 0; M.attackDir[0] = -1; M.goalScored(0); if (getenv("FOOT_CELEB")) M.celebType = atoi(getenv("FOOT_CELEB")); }
+            if (m == "goaltest") { int f = 10; M.ball.pos = V2(PITCH_W / 2, 3); M.pl[f].pos = V2(PITCH_W / 2 + 3, 8); M.ball.lastTouch = f; M.ball.lastTeam = 0; M.attackDir[0] = -1; M.goalScored(0); if (getenv("FOOT_CELEB")) M.setCelebration(atoi(getenv("FOOT_CELEB"))); }
             if (m == "cardtest") { M.pl[14].pos = M.pl[3].pos + V2(0.5f, 0); M.foul(14, 3, true); M.pendCardOff = 14; M.pendCardType = 1; }
         }
     } else if (m == "setup") {
@@ -4312,6 +4313,7 @@ void appTestStart(const char* mode) {
         g_careerActive=true;g_needAdvance=false;openMuseum(g_career.userTeam,SC_MAIN);
         if(getenv("FOOT_MUSEUM_PAGE"))g_muPage=std::clamp(atoi(getenv("FOOT_MUSEUM_PAGE")),0,11);
         if(m=="museum-detail")g_muDetail=0;
+        if(getenv("FOOT_MUSEUM_DEMO")){auto& H=g_career.clubHistories[g_career.userTeam];const char* N[]={"Ligue 1","Coupe de France","Ligue des champions","Trophée des champions","Ligue 1","Coupe de France"};int K[]={0,1,3,1,0,1};bool F[]={false,true,true,true,false,true};for(int i=0;i<6;i++){MuseumTrophy tr;tr.year=2027+i;tr.kind=K[i];tr.finalMatch.final=F[i];snprintf(tr.name,sizeof tr.name,"%s",N[i]);H.trophies.push_back(tr);}}
         if(m=="museum-filter"){g_muPage=10;g_muYear=2028;g_muCategory=MH_TROPHY;g_muComp=1;}
         if(m=="museum-switch"){int old=g_career.userTeam,next=-1;for(auto& pair:g_career.clubHistories)if(pair.first!=old){next=pair.first;break;}if(next>=0){g_career.museumLeave(old);g_career.userTeam=next;g_career.museumState(next);openMuseum(next,SC_MAIN);IN.click=true;IN.mouse=Vector2{40,40};screenMuseum();IN.click=false;g_muPage=8;}}
         return;
@@ -4374,7 +4376,7 @@ void appTestStart(const char* mode) {
             int pi,qi,gi;g_career.tierOfTeam(user,&pi,&qi,&gi);int league=g_career.pyramids[pi].pools[qi].comps[gi];
             for(int i=0;i<(int)g_career.season.comps.size();i++)if(i!=g_career.poleCup && (m!="season-awards"||i!=league)){auto& c=g_career.season.comps[i];c.done=true;for(auto& st:c.stages)st.finished=true;}
             for(int n=0;n<500&&!g_career.season.finished;n++)g_career.season.advance(true);
-            if(m=="pole-scout")g_screen=SC_POLESCOUT;else openSeasonAwards();
+            if(m=="pole-scout")g_screen=SC_POLESCOUT;else{openSeasonAwards();if(getenv("FOOT_AWARD_PAGE"))g_awardPage=atoi(getenv("FOOT_AWARD_PAGE"));}
         }
     }
     else if(m=="aboutthanks")g_screen=SC_ABOUT;

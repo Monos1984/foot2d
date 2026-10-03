@@ -18,6 +18,17 @@ void drawTextCentered(const std::string& s, int cx, int y, int size, Color c, bo
 int textWidth(const std::string& s, int size);
 void drawKitIcon(const Kit& k, int x, int y, int scale);
 void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir, int frame, int state, bool gk, unsigned gkShirt, int scale = 1);
+// poses particulières (bancs, célébrations, cérémonies)
+enum SprPose { POSE_NONE = 0, POSE_SIT, POSE_KNEEL, POSE_SHUSH, POSE_HEAD, POSE_POINT, POSE_ARMSOUT, POSE_CRADLE, POSE_CLAP };
+void drawPosedSprite(int x, int y, const Kit& kit, int skin, int hair, int dir, int frame, int state, int pose, int scale = 1);
+// décors animés communs aux cérémonies (scenes.cpp)
+void fxCrowd(int x, int y, int w, int h, Color c1, Color c2, float t, float excite, unsigned seed, int cell = 4);
+void fxConfetti(int x, int y, int w, int h, float t, const Color* cols, int ncol, int n, unsigned seed);
+void fxFireworks(int x, int y, int w, int h, float t, unsigned seed, int n = 4);
+void fxSpotlights(int x, int y, int w, int h, float t, int n, Color c);
+void fxBigTrophy(int x, int y, int style, int s, float t);
+void fxCurtains(int x, int y, int w, int h, Color c1, Color c2);
+void fxFlare(int x, int y, float t, unsigned seed);
 const int NUM_SKINS = 6, NUM_HAIRS = 7;
 extern const char* SKIN_NAMES[NUM_SKINS];
 extern const char* HAIR_NAMES[NUM_HAIRS];

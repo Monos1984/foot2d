@@ -12,6 +12,15 @@ static void openSeasonAwards(bool replay){
  g_awardPage=0;g_awardTime=0;g_screen=SC_SEASONAWARDS;
  if(g_awardEdition>=0)audioJingle(1);
 }
+// podium final du championnat de l'équipe dirigée (3 premiers), si la saison est encore disponible
+static bool seasonPodium(int out[3],std::string& comp){
+ int p,q,g,u=g_career.userTeam;
+ if(g_career.tierOfTeam(u,&p,&q,&g)<0)return false;
+ const Competition& C=g_career.season.comps[g_career.pyramids[p].pools[q].comps[g]];
+ if(C.result.size()<3)return false;
+ for(int i=0;i<3;i++){out[i]=C.result[i];}
+ comp=C.name;return true;
+}
 static void screenSeasonAwards(){
  drawBackground("La soirée du championnat");
  if(g_awardEdition<0 || g_awardEdition>=(int)g_career.seasonAwards.size()){
@@ -20,32 +29,79 @@ static void screenSeasonAwards(){
   if(button(220,280,200,16,"Retour à la carrière")||IN.back||IN.ok)openHub();return;
  }
  auto& a=g_career.seasonAwards[g_awardEdition];g_awardTime+=GetFrameTime();
- static const char* labels[]={"Joueur de la saison","Meilleur buteur","Meilleur passeur","Gardien de la saison","Espoir de la saison (21 ans et moins)","Entraîneur de la saison"};
+ float t=(float)GetTime();
+ static const char* labels[]={"Joueur de la saison","Meilleur buteur","Meilleur passeur","Gardien de la saison","Espoir de la saison (21 ans et moins)","Entraîneur de la saison","Podium du championnat"};
+ int podium[3]={-1,-1,-1};std::string podComp;
+ bool hasPodium=!g_awardReplay&&seasonPodium(podium,podComp);
+ int last=hasPodium?6:5;
+ if(g_awardPage>last)g_awardPage=last;
  drawTextCentered(fitText(a.competition,VW-70,10),VW/2,36,10,C_HI);
- drawTextCentered(fmt("Saison %d / %d  -  Distinction %d sur 6",a.year,a.year+1,g_awardPage+1),VW/2,52,10,C_DIM);
- DrawRectangle(40,78,VW-80,224,Color{8,13,27,255});
- for(int side=0;side<2;side++)for(int i=0;i<6;i++)DrawRectangle(side?VW-66+i*4:42+i*4,78,4,206,i%2?Color{130,22,44,255}:Color{94,16,35,255});
- drawTextCentered(labels[g_awardPage],VW/2,96,10,C_HI);
- DrawRectangle(VW/2-18,122,36,24,C_HI);DrawRectangle(VW/2-10,146,20,7,C_HI);DrawRectangle(VW/2-4,153,8,16,C_HI);DrawRectangle(VW/2-20,169,40,6,C_HI);
+ drawTextCentered(fmt("Saison %d / %d  -  Distinction %d sur %d",a.year,a.year+1,g_awardPage+1,last+1),VW/2,50,10,C_DIM);
  bool reveal=g_awardReplay||g_awardTime>=1.5f;
- if(reveal && a.valid[g_awardPage]){
-  const auto& n=a.winners[g_awardPage];
-  if(n.team>=0&&n.team<(int)g_world.teams.size()){
-   drawPlayerSprite(VW/2,195,g_world.teams[n.team].home,1,0,0,0,PS_NORMAL,false,0,3);
-   drawTextCentered(fitText(g_world.teams[n.team].name,480,10),VW/2,248,10,C_TXT);
+ const int X0=20,X1=VW-20,Y0=62,Y1=304,FLOOR=250;
+ stageBackdrop(X0,Y0,X1,Y1,t,C_HI,reveal);
+ int sy=Y0+6;
+ drawTextCentered(labels[g_awardPage],VW/2,sy+6,10,C_HI,false);
+ stageFloor(X0+34,FLOOR,X1-34,Y1-FLOOR,C_HI);
+ static const Color CONF[5]={{255,214,80,255},{255,255,255,255},{90,200,255,255},{255,90,110,255},{140,255,120,255}};
+ if(g_awardPage==6){
+  // podium : maillots des trois premiers, champion avec le trophée
+  drawTextCentered(fitText(podComp,220,10),VW/2,sy+22,10,C_TXT,false);
+  for(int rank=2;rank>=0;--rank){
+   if(!reveal&&g_awardTime<(3-rank)*0.45f)continue;
+   int team=podium[rank];if(team<0)continue;
+   int x=rank==0?VW/2:rank==1?200:440,top=rank==0?196:rank==1?212:222;
+   podiumBlock(x,top,FLOOR,rank==0?110:96,rank);
+   const Team& T=g_world.teams[team];
+   for(int k=0;k<3;k++){int px=x-22+k*22;int sq=k<(int)T.squad.size()?k*3:0;int skin=sq<(int)T.squad.size()?T.squad[sq].skin:0,hair=sq<(int)T.squad.size()?T.squad[sq].hair:0;
+    if(rank==0&&reveal)drawPlayerSprite(px,top-1-(int)(std::fabs(std::sin(t*6+k))*3),T.home,skin,hair,0,(int)(t*4)+k,PS_CELEB,false,0,2);
+    else drawPosedSprite(px,top-1,T.home,skin,hair,0,(int)(t*3)+k,PS_NORMAL,reveal?POSE_CLAP:POSE_NONE,2);}
+   if(rank==0&&reveal)fxBigTrophy(x,top-30-(int)(std::fabs(std::sin(t*3))*2),2,1,t);
+   drawTextCentered(fitText(T.name,rank==0?190:150,10),x,top-(rank==0?58:40),10,team==g_career.userTeam?C_GOOD:rank==0?C_HI:C_TXT);
   }
-  drawTextCentered(fitText(n.name,480,10),VW/2,230,10,C_HI);
-  if(g_awardPage!=5)drawTextCentered(fmt("%d buts  /  %d passes  /  %d matchs",n.goals,n.assists,n.apps),VW/2,268,10,C_DIM);
-  else drawTextCentered("Récompense attribuée à l'entraîneur du champion.",VW/2,268,10,C_DIM);
- }else drawTextCentered(reveal?"Aucun joueur éligible cette saison.":"Le jury révèle le lauréat...",VW/2,232,10,C_TXT);
- if(button(28,312,98,16,"Précédent",false,g_awardPage>0)|| (IN.left&&g_awardPage>0)){g_awardPage--;g_awardTime=0;}
- bool next=button(390,312,222,16,g_awardPage<5?"Récompense suivante":"Continuer");
+  if(reveal){fxConfetti(X0+34,Y0+6,X1-X0-68,FLOOR-Y0,t,CONF,5,120,3);fxFireworks(X0+40,Y0+60,X1-X0-80,80,t,5,3);}
+  stageAudience(X0,Y1-30,X1,32,t,reveal);
+ }else{
+  // statuette sur son pupitre, enveloppe, puis lauréat sous le projecteur
+  int style=g_awardPage==5?0:g_awardPage==3?1:4;
+  DrawRectangle(VW/2+92,FLOOR-34,30,34,Color{40,30,26,255});DrawRectangle(VW/2+90,FLOOR-36,34,4,C_HI);
+  fxBigTrophy(VW/2+107,FLOOR-36,style,1,t);
+  if(!reveal){
+   // l'enveloppe s'ouvre
+   float u=std::min(1.f,g_awardTime/1.5f);
+   int ex=VW/2-30,ey=FLOOR-70;
+   DrawRectangle(ex,ey,60,38,Color{240,232,210,255});DrawRectangleLines(ex,ey,60,38,Color{180,150,90,255});
+   DrawTriangle(Vector2{(float)ex,(float)ey},Vector2{(float)ex+30,(float)ey+(int)(20*(1-u))-4},Vector2{(float)ex+60,(float)ey},Color{214,200,170,255});
+   DrawRectangle(ex+26,ey+14,8,8,Color{190,30,40,255});
+   drawTextCentered("Le jury révèle le lauréat...",VW/2,FLOOR-96,10,C_TXT);
+  }else if(a.valid[g_awardPage]){
+   const auto& n=a.winners[g_awardPage];
+   DrawTriangle(Vector2{(float)VW/2,(float)Y0+8},Vector2{(float)VW/2-40,(float)FLOOR},Vector2{(float)VW/2+40,(float)FLOOR},Color{255,245,200,46});
+   if(n.team>=0&&n.team<(int)g_world.teams.size()){
+    int skin=(int)(n.pid%NUM_SKINS),hair=(int)((n.pid/7)%NUM_HAIRS);playerLook(n.team,n.pid,skin,hair);
+    if(g_awardPage==5){Kit suit;suit.shirt=0x22252E;suit.shirt2=0xE8E8E8;suit.shorts=0x1A1C22;suit.socks=0x111111;drawPlayerSprite(VW/2,FLOOR-2,suit,skin,hair,0,0,PS_CELEB,false,0,3);}
+    else drawPlayerSprite(VW/2,FLOOR-2,g_world.teams[n.team].home,skin,hair,0,0,PS_CELEB,false,0,3);
+    fxBigTrophy(VW/2,FLOOR-40-(int)(std::fabs(std::sin(t*3))*2),style,1,t);
+    drawTextCentered(fitText(g_world.teams[n.team].name,240,10),VW/2,sy+38,10,C_DIM,false);
+   }
+   drawTextCentered(fitText(n.name,220,20),VW/2,sy+20,20,C_HI);
+   fxConfetti(X0+34,Y0+6,X1-X0-68,FLOOR-Y0,t,CONF,5,70,g_awardPage+1);
+  }else drawTextCentered("Aucun joueur éligible cette saison.",VW/2,FLOOR-80,10,C_TXT);
+  stageAudience(X0,Y1-30,X1,32,t,reveal&&a.valid[g_awardPage]);
+  if(reveal&&a.valid[g_awardPage]){
+   const auto& n=a.winners[g_awardPage];
+   if(g_awardPage!=5)drawTextCentered(fmt("%d buts  /  %d passes  /  %d matchs",n.goals,n.assists,n.apps),VW/2,308,10,C_DIM);
+   else drawTextCentered("Récompense attribuée à l'entraîneur du champion.",VW/2,308,10,C_DIM);
+  }
+ }
+ if(button(28,322,98,16,"Précédent",false,g_awardPage>0)|| (IN.left&&g_awardPage>0)){g_awardPage--;g_awardTime=0;}
+ bool next=button(390,322,222,16,g_awardPage<last?"Récompense suivante":"Continuer");
  if(next||IN.ok||IN.right||IN.start){
   if(!reveal){g_awardTime=2;return;}
-  if(g_awardPage<5){g_awardPage++;g_awardTime=0;}
+  if(g_awardPage<last){g_awardPage++;g_awardTime=0;if(g_awardPage==6)audioJingle(4);}
   else {if(!g_awardReplay){a.presented=1;autosave();g_screen=SC_SEASONEND;}else openHub();}
  }
- if(g_awardReplay && g_career.seasonAwards.size()>1 && button(154,312,212,16,"Édition précédente")){g_awardEdition=(g_awardEdition+(int)g_career.seasonAwards.size()-1)%(int)g_career.seasonAwards.size();g_awardPage=0;g_awardTime=0;}
+ if(g_awardReplay && g_career.seasonAwards.size()>1 && button(154,322,212,16,"Édition précédente")){g_awardEdition=(g_awardEdition+(int)g_career.seasonAwards.size()-1)%(int)g_career.seasonAwards.size();g_awardPage=0;g_awardTime=0;}
  if(IN.back){if(!g_awardReplay){a.presented=1;autosave();g_screen=SC_SEASONEND;}else openHub();}
  drawFooter("Jury du jeu : performances dans ce championnat   OK : suite   Retour");
 }

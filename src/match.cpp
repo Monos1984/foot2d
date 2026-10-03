@@ -646,6 +646,7 @@ void Match::giveCard(int off, int type) {
     Team& T = g_world.teams[o.team == 0 ? S.home : S.away];
     const Team& T0 = team(o.team);
     bool second = type == 1 && o.yellow >= 1;
+    if (!S.neutral && !S.training) playSfx(o.team == 0 ? SFX_FANS_WHISTLE : SFX_CLAPS);   // carton : sifflets du public local, ou applaudissements ironiques
     MatchEvent e; e.team = o.team; e.minute = clock; e.player = playerName(off);
     if (o.squad >= 0 && o.squad < (int)T0.squad.size()) e.pid = T0.squad[o.squad].id;
     refCardFor = off; refCardT = 2.2f;
@@ -875,6 +876,7 @@ void Match::checkOffsideTouch(int i, bool deliberate) {
     offsideArmed = false;
     if (off && state == MS_PLAY) {
         playSfx(SFX_WHISTLE);
+        if (pl[i].team == 0 && !S.neutral && !S.training) playSfx(SFX_FANS_WHISTLE);   // le public local conteste le hors-jeu
         msg = "HORS-JEU"; msg2 = playerName(i); msgT = 2.0f; offsides[pl[i].team]++;
         state = MS_STOP; stateT = 0;
         nextSp = SP_INDIRECT; nextSpTeam = 1 - pl[i].team; nextSpPos = pl[i].pos;
@@ -1011,6 +1013,14 @@ void Match::updateBall(float dt) {
                 // tacle debout : tacle du défenseur contre dribble / vitesse / conduite du porteur
                 float chance = dt * 2.6f * (q.tackle / (q.tackle + o.dribble * 0.75f + o.speed * 0.25f + 18.f));
                 if (q.human >= 0) chance *= 1.3f;
+                else {
+                    // défenseur bien placé (entre le porteur et son but, face au jeu) : il gagne plus souvent le duel
+                    V2 toGoal = (ownGoal(q.team) - o.pos).norm();
+                    float side = (q.pos - o.pos).norm().dot(toGoal);
+                    if (side > 0.35f) chance *= 1.25f + 0.35f * side;
+                    else if (side < -0.4f) chance *= 0.7f;                 // revient de l'arrière : moins efficace
+                    chance *= 0.85f + q.posi / 330.f;
+                }
                 if (o.human >= 0 && S.difficulty == 2) chance *= 1.35f;
                 if (o.human >= 0 && S.difficulty == 0) chance *= 0.7f;
                 if (R.chance(chance)) {
@@ -1033,9 +1043,11 @@ void Match::updateBall(float dt) {
             g.smother = false;
             int oi = b.owner;
             float win = 0.5f + g.keep / 280.f - (o.dribble * 0.6f + o.speed * 0.4f) / 380.f;
+            // face-à-face contre un joueur humain : le gardien de l'ordinateur ferme mieux l'angle et anticipe le crochet
+            if (o.human >= 0 && g.human < 0) win += S.difficulty == 0 ? 0.02f : S.difficulty == 2 ? 0.2f : 0.12f;
             if (o.human >= 0 && S.difficulty == 0) win -= 0.1f;
             if (o.human >= 0 && S.difficulty == 2) win += 0.08f;
-            win = clampf(win, 0.25f, 0.85f);
+            win = clampf(win, 0.25f, 0.9f);
             float r = R.f();
             if (r < win) {
                 // le gardien s'empare du ballon
@@ -1170,6 +1182,9 @@ void Match::updateBall(float dt) {
         float d = (p.pos - b.pos).len();
         bool gkCatch = p.gk && inOwnBox(p.team, p.pos) && !(b.backpass && b.lastTeam == p.team);
         float reach = p.state == PS_DIVE ? 1.25f + p.keep / 220.f : (p.gk ? 0.85f + p.keep / 400.f : 0.7f);   // allonge du gardien selon son niveau
+        // gardien de l'ordinateur face à une frappe humaine rapprochée : réflexe et placement légèrement meilleurs
+        if (p.gk && p.human < 0 && b.lastTeam != p.team && b.lastTouch >= 0 && pl[b.lastTouch].human >= 0 && i != penGk && (pl[b.lastTouch].pos - ownGoal(p.team)).len() < 18.f)
+            reach += S.difficulty == 0 ? 0.04f : S.difficulty == 2 ? 0.2f : 0.12f;
         if (i == penGk && p.gk) reach = p.state == PS_DIVE ? 0.7f + p.keep / 330.f : 0.55f + p.keep / 500.f;    // penalty : réflexe à 11 m
         float zmax = gkCatch ? (p.state == PS_DIVE ? 2.2f : 2.6f) : 0.95f;
         if (p.state == PS_SLIDE) { reach = 1.0f; zmax = 0.6f; }
@@ -1421,17 +1436,32 @@ void Match::goalScored(int t) {
     playSfx(SFX_GOAL);
     // célébration : le buteur court vers le poteau de corner ou vers le public, ses coéquipiers le rejoignent
     celebScorer = (sc >= 0 && pl[sc].team == t) ? sc : -1;
-    celebType = R.range(0, 6);     // 0 poteau de corner, 1 glissade à genoux, 2 vers le public, 3 l'avion, 4 salto, 5 la pile humaine, 6 la danse
-    {
-        V2 g = goalCenter(t);
-        float gy = g.y == 0 ? 1.5f : PITCH_L - 1.5f;
-        if (celebScorer >= 0) {
-            V2 sp = pl[celebScorer].pos;
-            celebTarget = celebType == 2 || celebType == 6 ? V2(PITCH_W / 2 + R.frange(-8, 8), gy) : V2(sp.x < PITCH_W / 2 ? 2.f : PITCH_W - 2.f, sp.y + (g.y == 0 ? -1.f : 1.f) * std::min(12.f, std::fabs(sp.y - gy) * 0.5f));
-            pl[celebScorer].state = PS_CELEB; pl[celebScorer].st = 0;
-        }
-    }
+    // 0 poteau de corner, 1 glissade à genoux, 2 vers le public, 3 l'avion, 4 salto, 5 la pile humaine, 6 la danse,
+    // 7 course vers le banc, 8 le petit train, 9 saut et réception bras écartés, 10 le bébé, 11 « chut » au public adverse,
+    // 12 à genoux, doigts vers le ciel, 13 cœur avec les mains vers les supporters
+    setCelebration(R.range(0, 13));
     for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch && !pl[i].gk && i != celebScorer) { pl[i].state = PS_NORMAL; pl[i].st = 0; }
+}
+
+void Match::setCelebration(int type) {
+    celebType = type; celebSfx = false;
+    if (celebScorer < 0) return;
+    int t = pl[celebScorer].team;
+    V2 g = goalCenter(t);
+    float gy = g.y == 0 ? 1.5f : PITCH_L - 1.5f;
+    V2 sp = pl[celebScorer].pos;
+    // « chut » : seulement vers le public adverse le plus proche (kop au nord, parcage visiteur au sud)
+    if (celebType == 11 && !((t == 1 && g.y == 0) || (t == 0 && g.y != 0)) ) celebType = 12;
+    if (celebType == 7 && (sp - V2(0.f, PITCH_L / 2 + (t ? 6.f : -6.f))).len() > 32.f) celebType = 0;   // banc trop loin : poteau de corner
+    V2 corner(sp.x < PITCH_W / 2 ? 2.f : PITCH_W - 2.f, sp.y + (g.y == 0 ? -1.f : 1.f) * std::min(12.f, std::fabs(sp.y - gy) * 0.5f));
+    switch (celebType) {
+    case 2: case 6: case 13: celebTarget = V2(PITCH_W / 2 + R.frange(-8, 8), gy); break;
+    case 7: celebTarget = V2(-0.2f, PITCH_L / 2 + (t ? 6.f : -6.f)); break;                       // le banc de son équipe
+    case 11: celebTarget = t == 0 ? V2(PITCH_W - 9.f, PITCH_L - 1.f) : V2(PITCH_W / 2 + R.frange(-6, 6), 1.f); break;
+    case 12: celebTarget = V2(corner.x < PITCH_W / 2 ? 7.f : PITCH_W - 7.f, corner.y); break;
+    default: celebTarget = corner; break;
+    }
+    pl[celebScorer].state = PS_CELEB; pl[celebScorer].st = 0;
 }
 
 // ------------------------------------------------------------------ fautes et cartons
@@ -1513,6 +1543,8 @@ void Match::foul(int off, int vic, bool fromBehind) {
         return;
     }
     playSfx(SFX_WHISTLE);
+    // réaction du public local : sifflets contre l'arbitre, ou huées contre l'auteur d'une faute dure
+    if (!S.neutral && !S.training) { if (o.team == 0) playSfx(SFX_FANS_WHISTLE); else if (fromBehind || inOwnBox(o.team, spot)) playSfx(SFX_BOO); }
     state = MS_STOP; stateT = 0;
     ball.vel = V2(); ball.vz = 0;
     if (inOwnBox(o.team, spot)) {
@@ -2552,6 +2584,12 @@ void Match::aiControl(int i, float dt) {
             float aggr = S.difficulty == 2 ? 1.3f : S.difficulty == 0 ? 0.6f : 1.0f;
             aggr *= p.effects.press*(S.personalityActive?p.personalityEngagement:1.f);
             aggr *= S.tac[t][0] == 2 ? 1.25f : S.tac[t][0] == 0 ? 0.8f : 1.f;
+            if (pl[owner].human >= 0 && S.difficulty >= 1) aggr *= 1.15f;
+            {   // évite le tacle glissé par derrière (faute, carton) et dans sa propre surface (penalty)
+                V2 ov = pl[owner].vel.len() > 0.5f ? pl[owner].vel.norm() : pl[owner].face;
+                if ((pl[owner].pos - p.pos).norm().dot(ov) > 0.45f) aggr *= 0.3f;
+                if (inOwnBox(t, pl[owner].pos)) aggr *= 0.55f;
+            }
             if (d < 2.6f && d > 0.9f && R.chance(dt * 0.9f * aggr * (p.tackle / 70.f))) {
                 p.state = PS_SLIDE; p.st = 0;
                 p.slideDir = (ball.pos + ball.vel * 0.15f - p.pos).norm();
@@ -2566,7 +2604,11 @@ void Match::aiControl(int i, float dt) {
         float danger = progress(pl[owner].team, pl[owner].pos);
         float pressFrom = S.tac[t][0] == 2 ? 0.3f : S.tac[t][0] == 0 ? 0.6f : 0.45f;     // consigne de pressing
         pressFrom=clampf(pressFrom-(p.effects.press-1)*.2f,.1f,.8f);
-        if (danger > pressFrom) { target = pl[owner].pos + pl[owner].vel * 0.25f + (og - pl[owner].pos).norm() * 0.9f; run = 1.0f; }
+        if (danger > pressFrom) {
+            // temporise côté but : colle au porteur sans se jeter, en anticipant sa course
+            float gap = danger > 0.75f ? 1.1f : 1.4f;
+            target = pl[owner].pos + pl[owner].vel * 0.35f + (og - pl[owner].pos).norm() * gap; run = 1.0f;
+        }
         else { target = pl[owner].pos + (og - pl[owner].pos).norm() * 2.5f; run = 0.95f; }
         // attaque le ballon s'il est à portée
         if ((ball.pos - p.pos).len() < 1.6f) { target = ball.pos; run = 1.0f; }
@@ -2596,8 +2638,30 @@ void Match::aiControl(int i, float dt) {
         // marquage de zone : se rapprocher de l'attaquant le plus proche en défense
         if (oppHas && p.role == 1) {
             int ot = 1 - t; int m = -1; float md = 9;
-            for (int j = ot * 11 + 1; j < ot * 11 + 11; j++) if (pl[j].onPitch) { float d = (pl[j].pos - target).len(); if (d < md) { md = d; m = j; } }
-            if (m >= 0) target = target * 0.4f + (pl[m].pos + (ownGoal(t) - pl[m].pos).norm() * 1.5f) * 0.6f;
+            for (int j = ot * 11 + 1; j < ot * 11 + 11; j++) if (pl[j].onPitch && j != owner) { float d = (pl[j].pos - target).len(); if (d < md) { md = d; m = j; } }
+            if (m >= 0) {
+                // près de son but, le marquage se resserre (côté but, à un mètre) pour couper les centres et les passes en retrait
+                float danger = progress(ot, pl[owner].pos);
+                float w = danger > 0.7f ? 0.8f : 0.6f, gap = danger > 0.7f ? 1.0f : 1.5f;
+                target = target * (1 - w) + (pl[m].pos + (ownGoal(t) - pl[m].pos).norm() * gap) * w;
+            }
+        }
+        // milieux : en phase défensive, ils ferment la ligne de passe entre le porteur et l'attaquant le plus dangereux
+        if (oppHas && p.role == 2 && progress(1 - t, pl[owner].pos) > 0.45f) {
+            int ot = 1 - t, m = -1; float best = -1;
+            for (int j = ot * 11 + 1; j < ot * 11 + 11; j++) if (pl[j].onPitch && j != owner) {
+                float pr = progress(ot, pl[j].pos), d = (pl[j].pos - p.pos).len();
+                if (d < 14.f && pr > best) { best = pr; m = j; }
+            }
+            if (m >= 0) { V2 lane = pl[owner].pos + (pl[m].pos - pl[owner].pos) * 0.55f; target = target * 0.5f + lane * 0.5f; }
+        }
+        // ballon en mouvement vers un adversaire : couper la trajectoire si on peut l'atteindre à temps
+        if (owner < 0 && ball.lastTeam == 1 - t && ball.vel.len() > 7.f && ball.z < 1.6f) {
+            V2 bv = ball.vel; float bs = bv.len(); V2 bd = bv * (1.f / bs);
+            float u = clampf((p.pos - ball.pos).dot(bd), 0.f, bs * 1.1f);
+            V2 q = ball.pos + bd * u;
+            float tb = u / bs, tp = (q - p.pos).len() / std::max(spd, 1.f);
+            if (tp < tb + 0.12f && (q - p.pos).len() < 9.f) { target = q; run = 1.0f; }
         }
     }
     if(S.rules==RULESET_CAREER&&oppHas&&(p.tactic.instructions&(1u<<TI_MARK)))for(int j=(1-t)*11+1;j<(1-t)*11+11;j++)if(pl[j].onPitch&&team(1-t).squad[pl[j].squad].id==p.tactic.markPid){target=pl[j].pos+(ownGoal(t)-pl[j].pos).norm()*1.6f;run=.95f;}
@@ -2725,7 +2789,8 @@ void Match::gkControl(int i, float dt) {
     }
     if (rush && owner >= 0 && pl[owner].team != t && p.cool <= 0) {
         float dd = (bp - p.pos).len();
-        if (dd < 2.6f && dd > 0.4f && inOwnBox(t, p.pos)) {
+        float trig = 2.6f + (pl[owner].human >= 0 && p.human < 0 ? (S.difficulty == 0 ? 0.f : S.difficulty == 2 ? 0.8f : 0.5f) : 0.f);
+        if (dd < trig && dd > 0.4f && inOwnBox(t, p.pos)) {
             // plongeon dans les pieds
             V2 dir = (bp + pl[owner].vel * 0.15f - p.pos).norm();
             p.state = PS_DIVE; p.st = 0.2f; p.smother = true;
@@ -2740,8 +2805,11 @@ void Match::gkControl(int i, float dt) {
         float od = opp >= 0 ? (pl[opp].pos - bp).len() : 99;
         if ((p.pos - bp).len() < od + 1) rush = true;
     }
-    if (rush) target = bp;
-    else {
+    if (rush) {
+        target = bp;
+        // face-à-face : sortie sur l'axe ballon-but pour fermer l'angle, en restant entre le ballon et le but
+        if (owner >= 0 && pl[owner].team != t) target = bp + pl[owner].vel * 0.2f + (og - bp).norm() * 0.9f;
+    } else {
         float out = clampf(dist * 0.11f+p.effects.advance*100, 0.8f, 9.f);
         target = og + (bp - og).norm() * out;
         target.x = clampf(target.x, PITCH_W / 2 - GOAL_W / 2 - 1, PITCH_W / 2 + GOAL_W / 2 + 1);
@@ -3180,9 +3248,18 @@ void Match::update(float dt) {
             if (i == celebScorer) {
                 V2 d = celebTarget - p.pos;
                 bool arrived = d.len() <= 0.6f;
+                if (celebType == 9 && p.st >= 20.f) arrived = true;
                 if (!arrived && p.state != PS_DOWN) {
-                    want = d.norm() * 6.5f; p.face = d.norm(); p.state = PS_CELEB;
-                    if (celebType == 3) want += d.norm().perp() * (std::sin(stateT * 5.f) * 3.5f);   // l'avion : course en zigzag, bras écartés
+                    want = d.norm() * (celebType == 8 ? 4.6f : 6.5f); p.face = d.norm(); p.state = PS_CELEB;
+                    if (celebType == 3 || celebType == 8) want += d.norm().perp() * (std::sin(stateT * (celebType == 8 ? 3.f : 5.f)) * (celebType == 8 ? 2.f : 3.5f));   // l'avion / le petit train : zigzag
+                }
+                else if (celebType == 8) { float a = stateT * 1.6f; want = V2(std::cos(a), std::sin(a)) * 3.2f; p.face = want.norm(); }          // le train tourne en rond
+                else if (celebType == 9 && p.st < 20.f) { p.vz = 5.6f; p.z = 0.01f; p.st = 20.f; }                                                     // grand saut
+                else if (celebType == 9) { if (p.z <= 0.f) p.face = V2(0, 1); }                                                                       // réception face caméra, bras écartés
+                else if (celebType == 7 || celebType == 10 || celebType == 12) { p.face = V2(0, 1); }
+                else if (celebType == 11 || celebType == 13) {
+                    p.face = V2(0, celebTarget.y < PITCH_L / 2 ? -1.f : 1.f);
+                    if (celebType == 11 && !celebSfx) { celebSfx = true; playSfx(p.team == 1 ? SFX_FANS_WHISTLE : SFX_BOO); }   // le public adverse siffle le buteur
                 }
                 else if (celebType == 1 && p.state != PS_SLIDE && p.st < 10.f) { p.state = PS_SLIDE; p.st = 0; p.slideDir = p.face; p.vel = p.face * 4.f; }   // glissade à genoux
                 else if (p.state == PS_SLIDE) { want = p.vel * 0.9f; if (p.st > 0.8f) { p.state = PS_CELEB; p.st = 10.f; } }
@@ -3195,10 +3272,18 @@ void Match::update(float dt) {
                 // les coéquipiers courent féliciter le buteur (pile humaine : ils se jettent dessus)
                 bool pile = celebType == 5 && pl[celebScorer].state == PS_DOWN;
                 float spread = pile ? 0.45f : 1.f;
-                V2 d = pl[celebScorer].pos + V2((i % 3 - 1) * 1.1f * spread, (i % 2 ? 0.9f : -0.9f) * spread) - p.pos;
-                if (d.len() > (pile ? 0.5f : 1.0f) && stateT < 5.6f) { want = d.norm() * std::min(6.f, d.len() * 2.f); p.face = d.norm(); if (p.state == PS_CELEB) p.state = PS_NORMAL; }
+                int rank = 0; for (int j = p.team * 11; j < i; j++) if (pl[j].onPitch && !pl[j].gk && j != celebScorer) rank++;
+                V2 spot = pl[celebScorer].pos + V2((i % 3 - 1) * 1.1f * spread, (i % 2 ? 0.9f : -0.9f) * spread);
+                const MPlayer& sc = pl[celebScorer];
+                if (celebType == 8) { V2 back = sc.vel.len() > 0.3f ? sc.vel.norm() : sc.face; spot = sc.pos - back * (1.05f * (rank + 1)); }          // à la queue leu leu
+                else if (celebType == 10) spot = sc.pos + V2((rank % 2 ? 1.f : -1.f) * (1.1f + (rank / 2) * 1.1f), 0.f);                              // alignés pour bercer le bébé
+                else if (celebType == 11 && stateT < 2.2f) spot = sc.pos + (spot - sc.pos) * 3.f + V2(0, celebTarget.y < PITCH_L / 2 ? 3.f : -3.f);  // laissent le buteur savourer
+                V2 d = spot - p.pos;
+                bool lineUp = celebType == 8 || celebType == 10;
+                if (d.len() > (pile ? 0.5f : lineUp ? 0.35f : 1.0f) && stateT < 5.6f) { want = d.norm() * std::min(celebType == 8 ? 7.f : 6.f, d.len() * (lineUp ? 3.f : 2.f)); p.face = celebType == 8 ? sc.face : d.norm(); if (p.state == PS_CELEB && celebType != 8) p.state = PS_NORMAL; }
                 else if (pile && p.state != PS_DOWN) { p.state = PS_DOWN; p.st = 0; }
                 else if (!pile && p.state != PS_CELEB) { p.state = PS_CELEB; p.st = 0; }
+                if (celebType == 10 && d.len() <= 0.6f) p.face = V2(0, 1);
             } else if (p.team != (celebScorer >= 0 ? pl[celebScorer].team : -1) && !p.gk) {
                 // l'équipe qui encaisse regagne tête basse son camp
                 V2 home = fromTeamFrame(p.team, 0.35f, 0.5f);

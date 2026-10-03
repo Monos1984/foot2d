@@ -379,7 +379,8 @@ struct Match {
     bool autoSubDone = false;
     struct Walker { V2 pos, target; int team; int skin, hair; bool gk; unsigned gkShirt; float anim; };
     std::vector<Walker> walkers;
-    int celebScorer = -1, celebType = 0; V2 celebTarget;
+    int celebScorer = -1, celebType = 0; V2 celebTarget; bool celebSfx = false;
+    void setCelebration(int type);         // choisit la célébration du buteur et sa destination
     void doSub(int team, int slot, int incoming, bool anim);
     void updatePending(float dt);
     // temps additionnel : panneau du 4e arbitre
@@ -419,7 +420,7 @@ struct Match {
     int shootBtn(int human, bool pressedOnly) const;
 };
 
-enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER };
+enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER, SFX_FANS_WHISTLE, SFX_CLAPS, NUM_SFX };
 extern const char* METEO_NAMES[6];
 int meteoForMonth(int month, int climate, uint64_t seed);   // month 0 août ... 10 juin ; climate 0 tempéré, 1 chaud, 2 hémisphère sud, 3 nordique
 void meteoApply(MatchSetup& s, bool heated, int turf);       // terrain et affichage selon la météo

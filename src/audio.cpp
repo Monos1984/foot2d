@@ -7,9 +7,9 @@
 #include <cstdlib>
 #include <algorithm>
 
-static Sound g_sfx[12];
+static Sound g_sfx[NUM_SFX];
 static Sound g_crowd;
-static Sound g_fanVoice[3];
+static Sound g_fanVoice[5];
 static Sound g_music;
 static bool g_musicOk = false, g_musicOn = true;
 static bool g_ok = false, g_enabled = true;
@@ -38,6 +38,166 @@ static std::vector<float> noise(float sec, float lp, float gain, float (*env)(fl
         y += (frand() - y) * lp; y2 += (y - y2) * lp;
         v[i] = y2 * gain * env(t);
     }
+    return v;
+}
+
+// ------------------------------------------------------------------ public : chœurs, tambours, clappements, sifflets
+// Une voix de supporter = fondamentale + harmoniques pondérées par deux formants (voyelle chantée).
+struct Vowel { float f1, f2; };
+static const Vowel V_A = { 750, 1250 }, V_E = { 420, 2000 }, V_O = { 480, 850 }, V_I = { 300, 2300 }, V_OU = { 330, 750 };
+static float formantGain(float f, const Vowel& v) {
+    float a = (f - v.f1) / 170.f, b = (f - v.f2) / 300.f;
+    return std::exp(-a * a) + 0.6f * std::exp(-b * b) + 0.06f;
+}
+struct Syll { float t0, len; int semi; const Vowel* v; float accent; };
+// chœur de nv voix légèrement désaccordées et décalées, sur une suite de syllabes ; base = fréquence du demi-ton 0
+static void addChoir(std::vector<float>& out, const std::vector<Syll>& song, float base, int nv, float gain, unsigned seed) {
+    const float PI2 = 6.2831853f;
+    srand(seed);
+    for (int v = 0; v < nv; v++) {
+        float det = std::pow(2.f, (frand() * 22.f) / 1200.f) * (v % 3 == 0 ? 0.5f : 1.f);   // un tiers chante à l'octave basse
+        float onset = (frand() * 0.5f + 0.5f) * 0.07f, vibF = 4.5f + frand() * 1.2f, vibA = 0.004f + 0.004f * std::fabs(frand());
+        float loud = 0.7f + 0.3f * std::fabs(frand()), ph = std::fabs(frand()) * PI2;
+        for (const Syll& sy : song) {
+            int i0 = (int)((sy.t0 + onset) * SR), n = (int)(sy.len * SR);
+            float f0 = base * det * std::pow(2.f, sy.semi / 12.f);
+            float scoop = 1.f - 0.04f * std::fabs(frand());                     // attaque un peu en dessous de la note
+            float hg[10] = {}; int nh = 0;                                      // poids des harmoniques (voyelle), calculés une fois par syllabe
+            for (int h = 1; h <= 9 && f0 * h < 4500; h++, nh++) hg[h] = formantGain(f0 * h, *sy.v) / (0.6f + h * 0.4f);
+            for (int i = 0; i < n && i0 + i < (int)out.size(); i++) {
+                if (i0 + i < 0) continue;
+                float t = (float)i / SR, u = (float)i / n;
+                float env = std::min(1.f, t * 28.f) * (u > 0.7f ? (1 - u) / 0.3f : 1.f) * sy.accent * loud;
+                float f = f0 * (scoop + (1 - scoop) * std::min(1.f, t * 12.f)) * (1 + vibA * std::sin(PI2 * vibF * t));
+                ph += PI2 * f / SR; if (ph > PI2 * 64) ph -= PI2 * 64;
+                float smp = 0;
+                float s1 = std::sin(ph), c1 = std::cos(ph), sh = s1, ch = c1;     // sin(h·ph) par récurrence
+                for (int h = 1; h <= nh; h++) { smp += hg[h] * sh; float ns = sh * c1 + ch * s1; ch = ch * c1 - sh * s1; sh = ns; }
+                smp += frand() * 0.05f;                                             // souffle
+                out[i0 + i] += smp * env * gain / nv;
+            }
+        }
+    }
+}
+// grosse caisse du kop
+static void addDrum(std::vector<float>& out, float t0, float amp) {
+    const float PI2 = 6.2831853f;
+    int i0 = (int)(t0 * SR), n = (int)(0.35f * SR);
+    for (int i = 0; i < n && i0 + i < (int)out.size(); i++) { float t = (float)i / SR; out[i0 + i] += (std::sin(PI2 * (52 + 70 * std::exp(-t * 25)) * t) * 0.9f + frand() * 0.15f * std::exp(-t * 60)) * std::exp(-t * 9) * amp; }
+}
+// clappements de milliers de mains : bruit filtré à attaque franche, légèrement étalé
+static void addClap(std::vector<float>& out, float t0, float amp) {
+    int i0 = (int)(t0 * SR), n = (int)(0.16f * SR);
+    float y = 0, y2 = 0;
+    for (int i = 0; i < n && i0 + i < (int)out.size(); i++) {
+        float t = (float)i / SR;
+        float x = frand();
+        y += (x - y) * 0.55f; y2 += (y - y2) * 0.55f;
+        float hp = y - y2;                                                          // bande médium
+        float env = std::min(1.f, t * 300.f) * std::exp(-t * 26.f) * (1.f + 0.3f * std::exp(-t * 90.f));
+        out[i0 + i] += hp * env * amp * 2.2f;
+    }
+}
+// rumeur de fond (foule)
+static void addMurmur(std::vector<float>& out, float amp, float lp) {
+    float y = 0, y2 = 0;
+    for (size_t i = 0; i < out.size(); i++) { y += (frand() - y) * lp; y2 += (y - y2) * lp; out[i] += y2 * amp; }
+}
+// sifflets du public : des dizaines de sifflements aigus, glissés, qui démarrent et s'arrêtent au hasard
+static void addCrowdWhistles(std::vector<float>& out, int nw, float amp, unsigned seed) {
+    const float PI2 = 6.2831853f;
+    srand(seed);
+    float total = (float)out.size() / SR;
+    for (int w = 0; w < nw; w++) {
+        float f0 = 1900.f + std::fabs(frand()) * 1700.f, ph = 0;
+        float start = std::fabs(frand()) * total * 0.25f, len = total * (0.55f + 0.4f * std::fabs(frand()));
+        float glide = frand() * 300.f, wob = 3.f + std::fabs(frand()) * 6.f, finger = std::fabs(frand()) > 0.5f ? 1.f : 0.f;
+        int i0 = (int)(start * SR), n = (int)(len * SR);
+        for (int i = 0; i < n && i0 + i < (int)out.size(); i++) {
+            float t = (float)i / SR, u = (float)i / n;
+            float f = f0 + glide * u + 60.f * std::sin(PI2 * wob * t) * finger;
+            ph += PI2 * f / SR; if (ph > PI2) ph -= PI2;
+            float env = std::min(1.f, t * 15.f) * std::min(1.f, (1 - u) * 8.f) * (0.75f + 0.25f * std::sin(PI2 * 0.7f * t + w));
+            out[i0 + i] += (std::sin(ph) + 0.12f * std::sin(ph * 2)) * env * amp / std::sqrt((float)nw);
+        }
+    }
+}
+static void normalize(std::vector<float>& v, float peak, float fade) {
+    float m = 0.0001f; for (float x : v) m = std::max(m, std::fabs(x));
+    int nf = (int)(fade * SR);
+    for (size_t i = 0; i < v.size(); i++) {
+        float g = peak / m;
+        if ((int)i < nf) g *= (float)i / nf;
+        if ((int)(v.size() - i) < nf) g *= (float)(v.size() - i) / nf;
+        v[i] *= g;
+    }
+}
+// chants complets (boucles) : 0 « Allez ! », 1 sifflets, 2 contestation, 3 encouragements rythmés, 4 « Olé ! »
+static std::vector<float> renderChant(int kind) {
+    float len = kind == 1 ? 5.f : 6.4f;
+    std::vector<float> v((size_t)(len * SR), 0.f);
+    const float b = 60.f / 132.f;                    // une noire à 132 bpm
+    std::vector<Syll> song;
+    switch (kind) {
+    case 0: {   // « Al-lez, al-lez, al-lez... » sur une mélodie montante, grosse caisse sur les temps
+        static const int MEL[12] = { 0, 4, 7, 7, 5, 4, 2, 4, 5, 4, 2, 0 };
+        for (int r = 0; r < 2; r++) for (int k = 0; k < 6; k++) {
+            float t0 = r * 6 * b * 2 + k * b * 2;
+            song.push_back({ t0, b * 0.8f, MEL[(r * 6 + k) % 12], &V_A, 0.85f });
+            song.push_back({ t0 + b, b * 0.95f, MEL[(r * 6 + k) % 12] + 2, &V_E, 1.f });
+        }
+        addChoir(v, song, 196.f, 26, 1.2f, 11);
+        for (float t = 0; t < len; t += b) addDrum(v, t, (int)(t / b + 0.5f) % 2 ? 0.25f : 0.45f);
+        addMurmur(v, 0.18f, 0.06f);
+        break;
+    }
+    case 1:     // sifflets nourris et huées
+        addCrowdWhistles(v, 46, 1.1f, 23);
+        song.push_back({ 0.2f, len - 0.5f, 0, &V_OU, 0.55f });
+        addChoir(v, song, 120.f, 14, 0.9f, 29);
+        addMurmur(v, 0.25f, 0.09f);
+        break;
+    case 2: {   // « Dé-mis-sion ! » scandé, clappements entre les mots
+        for (int r = 0; r < 4; r++) {
+            float t0 = r * b * 3.f;
+            song.push_back({ t0, b * 0.45f, 0, &V_E, 0.9f });
+            song.push_back({ t0 + b * 0.5f, b * 0.45f, 0, &V_I, 0.9f });
+            song.push_back({ t0 + b, b * 0.9f, -3, &V_O, 1.f });
+            addClap(v, t0 + b * 2.f, 0.8f); addClap(v, t0 + b * 2.5f, 0.8f);
+        }
+        addChoir(v, song, 150.f, 24, 1.3f, 31);
+        for (int r = 0; r < 4; r++) addDrum(v, r * b * 3.f + b, 0.5f);
+        addMurmur(v, 0.2f, 0.07f);
+        break;
+    }
+    case 3: {   // clap clap / clap-clap-clap + « Al-lez ! » et tambour
+        for (int r = 0; r < 3; r++) {
+            float t0 = r * b * 4.f + 0.1f;
+            addClap(v, t0, 1.f); addClap(v, t0 + b, 1.f);
+            addClap(v, t0 + b * 2.f, 1.f); addClap(v, t0 + b * 2.5f, 1.f); addClap(v, t0 + b * 3.f, 1.f);
+            addDrum(v, t0, 0.5f); addDrum(v, t0 + b * 2.f, 0.4f);
+            song.push_back({ t0 + b * 3.4f, b * 0.35f, 5, &V_A, 0.9f });
+            song.push_back({ t0 + b * 3.8f, b * 0.5f, 7, &V_E, 1.f });
+        }
+        addChoir(v, song, 196.f, 22, 1.1f, 37);
+        addMurmur(v, 0.2f, 0.07f);
+        break;
+    }
+    case 4: {   // « O-lé, o-lé o-lé o-lééé » : mélodie classique des stades, chœur fourni
+        static const float T[8] = { 0, 0.5f, 1.5f, 2.f, 2.5f, 3.f, 3.5f, 4.f };
+        static const int N[8] = { 0, 4, 4, 7, 4, 7, 9, 7 };
+        static const float L[8] = { 0.45f, 0.9f, 0.45f, 0.45f, 0.45f, 0.45f, 0.45f, 1.6f };
+        for (int r = 0; r < 2; r++) for (int k = 0; k < 8; k++) {
+            float t0 = r * b * 6.f + T[k] * b;
+            song.push_back({ t0, L[k] * b, N[k], k % 2 ? &V_E : &V_O, k == 7 ? 1.f : 0.9f });
+        }
+        addChoir(v, song, 220.f, 30, 1.3f, 41);
+        for (float t = 0; t < len; t += b) addDrum(v, t, 0.35f);
+        addMurmur(v, 0.2f, 0.07f);
+        break;
+    }
+    }
+    normalize(v, 0.85f, 0.04f);
     return v;
 }
 
@@ -259,7 +419,6 @@ void audioInit() {
     // sifflets du public
     // tonnerre (orage)
     g_sfx[SFX_THUNDER] = makeSound(noise(3.0f, 0.03f, 3.2f, [](float t) { return (t < 0.04f ? t * 25 : 1.f) * std::exp(-t * 2.2f) * (0.7f + 0.3f * std::sin(t * 40)); }));
-    g_sfx[SFX_BOO] = makeSound(noise(1.6f, 0.10f, 1.2f, [](float t) { return std::sin(t * 3.14159f) * 0.8f; }));
     // but : clameur
     g_sfx[SFX_GOAL] = makeSound(noise(3.5f, 0.25f, 2.2f, [](float t) { return std::min(1.f, t * 8) * (1 - t) * (1 - t) + 0.2f * (1 - t); }));
     g_sfx[SFX_CROWD_OOH] = makeSound(noise(1.2f, 0.12f, 2.5f, [](float t) { return std::sin(t * 3.14159f); }));
@@ -274,7 +433,25 @@ void audioInit() {
         g_sfx[SFX_POST] = makeSound(v);
     }
     g_crowd = makeSound(noise(4.0f, 0.08f, 1.6f, [](float t) { return 0.75f + 0.25f * std::sin(t * 6.2831f * 2); }));
-    for(int kind=0;kind<3;kind++){std::vector<float> v(SR*2);for(int i=0;i<(int)v.size();i++){float t=i/(float)SR;float beat=std::max(0.f,std::sin(t*6.283185f*2));float hz=kind==1?2300.f+140.f*std::sin(t*12):kind==2?110.f:165.f+(int)(t*2)%3*22.f;float voice=std::sin(t*6.283185f*hz)+.35f*std::sin(t*6.283185f*hz*2.03f);v[i]=voice*(kind==1?.12f:.16f)*(kind==2?.75f:beat)*std::min(1.f,t*10)*std::min(1.f,(2-t)*10);}g_fanVoice[kind]=makeSound(v);}
+    for (int kind = 0; kind < 5; kind++) g_fanVoice[kind] = makeSound(renderChant(kind));
+    // sifflets brefs du public (décision contre l'équipe locale) et applaudissements
+    {
+        std::vector<float> v((size_t)(2.2f * SR), 0.f);
+        addCrowdWhistles(v, 34, 1.f, 53); addMurmur(v, 0.15f, 0.1f);
+        normalize(v, 0.8f, 0.25f);
+        g_sfx[SFX_FANS_WHISTLE] = makeSound(v);
+        std::vector<float> c((size_t)(2.4f * SR), 0.f);
+        srand(59);
+        for (int k = 0; k < 90; k++) addClap(c, std::fabs(frand()) * 2.1f, 0.35f + 0.3f * std::fabs(frand()));
+        normalize(c, 0.7f, 0.3f);
+        g_sfx[SFX_CLAPS] = makeSound(c);
+        // huées : « Hououou » grave, chœur d'hommes
+        std::vector<float> bo((size_t)(1.8f * SR), 0.f);
+        std::vector<Syll> song = { { 0.05f, 1.6f, 0, &V_OU, 1.f } };
+        addChoir(bo, song, 110.f, 20, 1.2f, 61); addMurmur(bo, 0.25f, 0.08f);
+        normalize(bo, 0.75f, 0.3f);
+        g_sfx[SFX_BOO] = makeSound(bo);
+    }
     // musiques des menus : thèmes chiptune originaux (voir renderTrack)
     for (int k = 0; k < NUM_TRACKS; k++) { g_tracks[k] = makeSound(renderTrack(TRACKS[k])); }
     g_music = g_tracks[0];
@@ -298,7 +475,7 @@ void audioShutdown() {
 void audioSetEnabled(bool e) { g_enabled = e; if (!e && g_ok){StopSound(g_crowd);for(auto& sound:g_fanVoice)StopSound(sound);} }
 
 void audioPlay(int s) {
-    if (!g_ok || !g_enabled || s < 0 || s >= 12) return;
+    if (!g_ok || !g_enabled || s < 0 || s >= NUM_SFX) return;
     PlaySound(g_sfx[s]);
 }
 
@@ -473,4 +650,16 @@ void audioJingle(int j) {
     PlaySound(g_jingles[j]);
 }
 
-void audioSupporters(int state,float strength){if(!g_ok||!g_enabled)return;int kind=state==CH_WHISTLES?1:state==CH_PROTEST?2:0;for(int i=0;i<3;i++)if(i!=kind&&IsSoundPlaying(g_fanVoice[i]))StopSound(g_fanVoice[i]);if(state==CH_TENSE||strength<=0){for(auto& sound:g_fanVoice)StopSound(sound);return;}float volume=std::clamp(strength,0.f,1.f)*(state==CH_NORMAL?.12f:state==CH_ENCOURAGE?.25f:.4f);SetSoundVolume(g_fanVoice[kind],volume);if(!IsSoundPlaying(g_fanVoice[kind]))PlaySound(g_fanVoice[kind]);}
+// chants en boucle selon l'humeur du public ; un court silence entre deux reprises, comme dans un vrai stade
+void audioSupporters(int state, float strength) {
+    if (!g_ok || !g_enabled) return;
+    static float rest = 0; static int last = -1;
+    int kind = state == CH_WHISTLES ? 1 : state == CH_PROTEST ? 2 : state == CH_ENCOURAGE ? 3 : state == CH_CELEBRATE ? 4 : 0;
+    for (int i = 0; i < 5; i++) if (i != kind && IsSoundPlaying(g_fanVoice[i])) StopSound(g_fanVoice[i]);
+    if (state == CH_TENSE || strength <= 0) { for (auto& sound : g_fanVoice) StopSound(sound); last = -1; return; }
+    float volume = std::clamp(strength, 0.f, 1.f) * (state == CH_NORMAL ? .16f : state == CH_LOUD ? .3f : state == CH_ENCOURAGE ? .3f : state == CH_WHISTLES ? .34f : .42f);
+    SetSoundVolume(g_fanVoice[kind], volume);
+    if (IsSoundPlaying(g_fanVoice[kind])) { rest = (state == CH_NORMAL ? 2.5f : 0.6f); last = kind; return; }
+    if (last == kind && rest > 0) { rest -= GetFrameTime(); return; }
+    PlaySound(g_fanVoice[kind]); last = kind;
+}

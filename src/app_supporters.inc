@@ -13,6 +13,47 @@ static void screenSupporters(){auto& K=g_career;if(g_supClub<0||g_supClub>=(int)
  else if(g_supPage==6){int choice=listRun(g_supRows,(int)P.supporterEvents.size(),12,82,616,12,17,[&](int i,int x,int y,bool sel){auto& e=P.supporterEvents[P.supporterEvents.size()-1-i];drawTextPx(fitText(fmt("%d | %s | ",e.year,supporterEventName(e.type))+e.reason,597,10),x+5,y+4,10,sel?BLACK:C_TXT);});if(choice>=0){int at=(int)P.supporterEvents.size()-1-choice;auto& e=P.supporterEvents[at];if(g_supClub==K.userTeam&&(e.type==SU_TITLE_PARTY||e.type==SU_PROMOTION_PARTY)){g_supParty=at;g_supPartyBack=SC_SUPPORTERS;g_screen=SC_SUPPORTPARTY;}}drawTextPx("Cliquez une fête du titre ou de montée pour revoir la cérémonie.",16,309,10,C_DIM);}
  else if(g_supPage==7){listRun(g_supRows,(int)P.attendanceHistory.size(),12,82,616,14,17,[&](int i,int x,int y,bool sel){auto& a=P.attendanceHistory[P.attendanceHistory.size()-1-i];drawTextPx(fitText(fmt("%d/%d | %d matches | moy. %d | max. %d | min. %d | %d abonnés",a.year,a.year+1,a.matches,a.matches?a.total/a.matches:0,a.best,a.worst,a.subscribers),597,10),x+5,y+4,10,sel?BLACK:C_TXT);});}
  if(IN.back)g_screen=g_supBack;drawFooter("Tab : rubrique suivante | Retour : club");}
-static void screenSupporterParty(float dt){auto& K=g_career;auto it=K.supporters.profiles.find(K.userTeam);if(it==K.supporters.profiles.end()||g_supParty<0||g_supParty>=(int)it->second.supporterEvents.size()){g_screen=g_supPartyBack;return;}auto& e=it->second.supporterEvents[g_supParty];auto& T=g_world.teams[K.userTeam];drawBackground(supporterEventName(e.type));drawTextCentered(T.name,VW/2,43,20,C_HI);drawTextCentered(fmt("Saison %d/%d",e.year,e.year+1),VW/2,71,10,C_DIM);Color c1=hexc(T.home.shirt),c2=hexc(T.home.shorts);for(int i=0;i<92;i++){int x=20+(i%23)*26,y=190+(i/23)*23;int wave=(int)(std::sin(GetTime()*3+i)*2);DrawRectangle(x,y+wave,7,7,c1);DrawRectangle(x+1,y-4+wave,5,4,Color{220,180,140,255});if(i%4==0){DrawLine(x+10,y+3,x+10,y-13,c2);DrawRectangle(x+11,y-13,11,7,i%8==0?c1:C_HI);}}drawKitIcon(T.home,VW/2-10,101,4);if(e.type==SU_TITLE_PARTY){DrawRectangle(VW/2-12,167,24,5,C_HI);DrawRectangle(VW/2-4,149,8,18,C_HI);DrawRectangle(VW/2-10,131,20,18,Color{255,215,70,255});}auto lines=wrapText(e.reason,580);for(int i=0;i<(int)lines.size()&&i<3;i++)drawTextCentered(lines[i],VW/2,286+i*13,10,C_TXT);audioCrowd(true,.25f);audioSupporters(CH_CELEBRATE,.8f);if(button(155,327,330,19,"Saluer les supporters et continuer")||IN.ok||IN.back){e.presented=1;audioCrowd(false,0);g_screen=g_supPartyBack;}drawFooter("Une mémoire vivante du club");(void)dt;}
+static void screenSupporterParty(float dt){auto& K=g_career;auto it=K.supporters.profiles.find(K.userTeam);if(it==K.supporters.profiles.end()||g_supParty<0||g_supParty>=(int)it->second.supporterEvents.size()){g_screen=g_supPartyBack;return;}auto& e=it->second.supporterEvents[g_supParty];auto& T=g_world.teams[K.userTeam];
+ drawBackground(supporterEventName(e.type));
+ float t=(float)GetTime();bool title=e.type==SU_TITLE_PARTY;
+ Color c1=hexc(T.home.shirt),c2=hexc(T.home.shirt2!=T.home.shirt?T.home.shirt2:T.home.shorts);
+ const int X0=12,X1=VW-12,Y0=30,Y1=282;
+ // ciel de nuit, feux d'artifice au-dessus de la ville
+ DrawRectangleGradientV(X0,Y0,X1-X0,Y1-Y0,Color{8,10,34,255},Color{40,26,60,255});
+ for(int i=0;i<40;i++)DrawRectangle(X0+(i*137)%(X1-X0),Y0+(i*71)%80,1,1,((int)(t*2)+i)%4?Color{200,200,240,255}:Color{90,90,140,255});
+ fxFireworks(X0,Y0,X1-X0,120,t,(unsigned)e.year,5);
+ // immeubles, hôtel de ville et son balcon pavoisé
+ for(int k=0;k<12;k++){int w=34+(k*17)%22,h=52+(k*29)%46,x=X0+k*52-10;DrawRectangle(x,Y1-70-h,w,h+40,Color{22,20,40,255});for(int wy=Y1-66-h;wy<Y1-40;wy+=9)for(int wx=x+4;wx<x+w-4;wx+=8)if((wx*7+wy*3+k)%5)DrawRectangle(wx,wy,3,4,((wx+wy+(int)(t*0.5f))%11)?Color{250,210,110,255}:Color{80,70,60,255});}
+ {int hx=VW/2-70,hy=Y1-170;DrawRectangle(hx,hy,140,130,Color{70,64,80,255});DrawTriangle(Vector2{(float)hx-6,(float)hy},Vector2{(float)hx+146,(float)hy},Vector2{(float)hx+70,(float)hy-26},Color{60,54,70,255});
+  DrawRectangle(hx+62,hy-44,16,22,Color{60,54,70,255});DrawCircle(hx+70,hy-36,5,Color{240,230,200,255});DrawLine(hx+70,hy-36,hx+70,hy-39,BLACK);DrawLine(hx+70,hy-36,hx+72,hy-36,BLACK);
+  for(int k=0;k<5;k++)DrawRectangle(hx+10+k*26,hy+12,14,22,Color{250,214,120,255});
+  for(int k=0;k<14;k++){DrawRectangle(hx+k*10,hy+40,10,3,k%2?c1:c2);DrawTriangle(Vector2{(float)hx+k*10,(float)hy+43},Vector2{(float)hx+k*10+5,(float)hy+48},Vector2{(float)hx+k*10+10,(float)hy+43},k%2?c2:c1);}}
+ // bus à impériale aux couleurs du club, joueurs sur le pont supérieur
+ float bx=VW/2-100+std::sin(t*0.25f)*14.f;int by=Y1-56;
+ DrawRectangle((int)bx+4,by+4,200,40,Color{0,0,0,90});
+ DrawRectangle((int)bx,by,200,40,c1);DrawRectangle((int)bx,by+26,200,6,c2);DrawRectangle((int)bx,by+2,200,2,Color{255,255,255,60});
+ for(int k=0;k<8;k++)DrawRectangle((int)bx+10+k*23,by+8,16,12,Color{40,60,90,255});
+ DrawRectangle((int)bx+178,by+8,18,24,Color{150,190,220,255});
+ for(int w=0;w<2;w++){int wx=(int)bx+(w?160:34);DrawCircle(wx,by+40,7,Color{20,20,20,255});DrawCircle(wx,by+40,3,Color{150,150,160,255});}
+ drawTextCentered(fitText(T.shortName,150,10),(int)bx+90,by+30,10,BLACK,false);
+ DrawRectangle((int)bx,by-4,200,4,Color{230,230,230,255});
+ for(int k=0;k<7;k++){
+  int sq=k<(int)T.squad.size()?k*2%std::max(1,(int)T.squad.size()):0;int skin=sq<(int)T.squad.size()?T.squad[sq].skin:0,hair=sq<(int)T.squad.size()?T.squad[sq].hair:0;
+  int px=(int)bx+22+k*26,py=by-4-(int)(std::fabs(std::sin(t*5+k*0.9f))*3);
+  drawPlayerSprite(px,py,T.home,skin,hair,0,(int)(t*4)+k,PS_CELEB,false,0,2);
+  if(k==3){if(title)fxBigTrophy(px,py-26-(int)(std::fabs(std::sin(t*3))*3),2,1,t);else{DrawRectangle(px-30,py-34,60,12,c2);drawTextCentered("MONTÉE !",px,py-33,10,c1,false);}}
+ }
+ // marée humaine aux couleurs du club, fumigènes et confettis
+ fxCrowd(X0,Y1-36,X1-X0,30,c1,c2,t,0.9f,(unsigned)K.userTeam,6);
+ for(int k=0;k<6;k++)fxFlare(X0+40+k*110,Y1-24+(k%2)*6,t,(unsigned)k*5);
+ Color cc[4]={c1,c2,C_HI,WHITE};fxConfetti(X0,Y0,X1-X0,Y1-Y0,t,cc,4,140,(unsigned)e.year);
+ drawTextCentered(T.name,VW/2,Y0+6,20,C_HI);
+ drawTextCentered(fmt("Saison %d/%d",e.year,e.year+1),VW/2,Y0+30,10,C_TXT);
+ auto lines=wrapText(e.reason,580);for(int i=0;i<(int)lines.size()&&i<3;i++)drawTextCentered(lines[i],VW/2,290+i*12,10,C_TXT);
+ audioCrowd(true,.25f);audioSupporters(CH_CELEBRATE,.8f);
+ if(button(155,327,330,19,"Saluer les supporters et continuer")||IN.ok||IN.back){e.presented=1;audioCrowd(false,0);audioSupporters(CH_TENSE,0);g_screen=g_supPartyBack;}
+ drawFooter("Une mémoire vivante du club");
+ (void)dt;
+}
 
 static bool showSupporterParty(Screen back){int event=g_career.supportersPendingEvent();if(event<0)return false;g_supParty=event;g_supPartyBack=back;g_screen=SC_SUPPORTPARTY;return true;}

@@ -19,49 +19,65 @@ static void screenBallon() {
     }
     const BallonEdition& E=g_career.ballonEditions[g_ballonEdition];
     g_ballonTime+=GetFrameTime();
+    float t=(float)GetTime();
     bool revealed=g_ballonReplay || g_ballonTime>=4.0f;
-    if(button(205,58,110,14,"Masculin",g_ballonGender==0)){g_ballonGender=0;g_ballonTime=0;}
-    if(button(325,58,110,14,"Féminin",g_ballonGender==1)){g_ballonGender=1;g_ballonTime=0;}
     drawTextCentered(fmt("28 octobre %d  -  %s",E.year,g_ballonGender ? "Ballon d'or féminin" : "Ballon d'or"),VW/2,36,10,C_HI);
     if(g_ballonReplay){
         if(button(22,36,24,14,"<") || IN.left){g_ballonEdition=(g_ballonEdition+(int)g_career.ballonEditions.size()-1)%(int)g_career.ballonEditions.size();g_ballonTime=0;return;}
         if(button(VW-46,36,24,14,">") || IN.right){g_ballonEdition=(g_ballonEdition+1)%(int)g_career.ballonEditions.size();g_ballonTime=0;return;}
     }
-    // Scène, rideaux et projecteurs en gros pixels, adaptés au rendu 16 bits.
-    DrawRectangle(36,82,VW-72,218,Color{6,10,24,255});
-    for(int side=0;side<2;side++)for(int x=0;x<7;x++)DrawRectangle(side ? VW-70+x*4 : 38+x*4,82,4,174,x%2 ? Color{94,16,35,255} : Color{130,22,44,255});
-    for(int i=0;i<20;i++){
-        int x=75+(i*83)%490,y=92+(i*37)%60;
-        DrawRectangle(x,y,2,2,((int)(g_ballonTime*3)+i)%3 ? Color{122,106,46,255} : C_HI);
-    }
-    DrawRectangle(68,254,VW-136,42,Color{38,31,26,255});
-    DrawRectangle(68,254,VW-136,3,C_HI);
-    // Trophée doré, dessiné par le jeu.
-    DrawRectangle(VW/2-8,136,16,8,Color{154,109,28,255});
-    DrawRectangle(VW/2-4,122,8,14,C_HI);
-    DrawRectangle(VW/2-12,103,24,20,C_HI);
-    DrawRectangle(VW/2-8,99,16,28,Color{242,193,59,255});
-    DrawRectangle(VW/2-8,104,7,6,Color{255,240,144,255});
-    DrawRectangle(VW/2+2,114,6,6,Color{155,103,25,255});
+    // salle, écran géant, projecteurs ; la scène s'illumine à la révélation
+    const int X0=20,X1=VW-20,Y0=52,Y1=304,FLOOR=244;
+    stageBackdrop(X0,Y0,X1,Y1,t,C_HI,revealed);
     int n=E.count[g_ballonGender];
+    {   // écran : titre puis nom du lauréat
+        int sy=Y0+6;
+        if(revealed&&n){
+            const auto& winner=E.podium[g_ballonGender][0];
+            drawTextCentered(g_ballonGender?"LAURÉATE":"LAURÉAT",VW/2,sy+5,10,C_TXT,false);
+            drawTextCentered(fitText(winner.name,220,20),VW/2,sy+19,20,C_HI);
+            if(winner.team>=0&&winner.team<(int)g_world.teams.size())drawTextCentered(fitText(g_world.teams[winner.team].name,220,10),VW/2,sy+39,10,C_DIM,false);
+        }else{
+            drawTextCentered(g_ballonGender?"BALLON D'OR FÉMININ":"BALLON D'OR",VW/2,sy+10,20,C_HI);
+            drawTextCentered(fmt("Édition %d",E.year),VW/2,sy+34,10,C_DIM,false);
+        }
+    }
+    stageFloor(X0+34,FLOOR,X1-34,Y1-FLOOR,C_HI);
+    // le Ballon d'or sur sa colonne, puis dans les mains du lauréat
+    if(!revealed||!n){DrawRectangle(VW/2-6,FLOOR-30,12,30,Color{30,30,40,255});DrawRectangle(VW/2-8,FLOOR-32,16,3,C_HI);fxBigTrophy(VW/2,FLOOR-32,3,2,t);}
     for(int rank=2;rank>=0;--rank){
         if(rank>=n || (!revealed && g_ballonTime<(3-rank)*1.15f))continue;
         const BallonNominee& P=E.podium[g_ballonGender][rank];
-        int x=rank==0 ? VW/2 : rank==1 ? 176 : 464;
-        int y=rank==0 ? 164 : 186;
-        Color medal=rank==0 ? C_HI : rank==1 ? Color{206,220,234,255} : Color{218,150,83,255};
-        DrawRectangle(x-52,y+39,104,255-(y+39),medal);
-        drawTextCentered(fmt("%d",rank+1),x,y+46,20,Color{24,24,32,255});
-        if(P.team>=0 && P.team<(int)g_world.teams.size())drawPlayerSprite(x,y+8,g_world.teams[P.team].home,1,0,0,0,PS_NORMAL,false,0,3);
-        drawTextCentered(fitText(P.name,170,10),x,rank==0 ? 145 : 163,10,rank==0 ? C_HI : C_TXT);
+        int x=rank==0 ? VW/2 : rank==1 ? 196 : 444;
+        int top=rank==0 ? 196 : rank==1 ? 212 : 222;
+        if(!revealed&&rank==0)continue;
+        // cône de lumière sur la personne nommée
+        DrawTriangle(Vector2{(float)x,(float)Y0+8},Vector2{(float)x-34,(float)top},Vector2{(float)x+34,(float)top},Color{255,245,200,(unsigned char)(rank==0?46:28)});
+        podiumBlock(x,top,FLOOR,rank==0?96:84,rank);
+        if(P.team>=0 && P.team<(int)g_world.teams.size()){
+            int skin=(int)(P.pid%NUM_SKINS),hair=(int)((P.pid/7)%NUM_HAIRS);
+            playerLook(P.team,P.pid,skin,hair);
+            if(rank==0&&revealed){
+                int bob=(int)(std::fabs(std::sin(t*3.f))*2);
+                drawPlayerSprite(x,top-1,g_world.teams[P.team].home,skin,hair,0,0,PS_CELEB,false,0,3);
+                fxBigTrophy(x,top-36-bob,3,1,t);
+            }else drawPosedSprite(x,top-1,g_world.teams[P.team].home,skin,hair,0,(int)(t*3),PS_NORMAL,revealed?POSE_CLAP:POSE_NONE,3);
+        }
+        drawTextCentered(fitText(P.name,rank==0?200:150,10),x,top-(rank==0&&revealed?66:50),10,rank==0 ? C_HI : C_TXT);
     }
+    if(revealed&&n){
+        static const Color GOLDC[4]={{255,214,80,255},{255,244,170,255},{214,150,32,255},{255,255,255,255}};
+        fxConfetti(X0+34,Y0+6,X1-X0-68,FLOOR-Y0,t,GOLDC,4,110,7);
+        fxFireworks(X0+40,Y0+60,X1-X0-80,90,t,11,3);
+    }
+    stageAudience(X0,Y1-34,X1,36,t,revealed);
     if(revealed && n){
         const auto& winner=E.podium[g_ballonGender][0];
-        drawTextCentered(std::string("LAURÉAT")+(g_ballonGender ? "E : " : " : ")+winner.name,VW/2,275,10,C_HI);
-        if(winner.team>=0 && winner.team<(int)g_world.teams.size())drawTextCentered(fitText(g_world.teams[winner.team].name,VW-40,10),VW/2,298,10,C_TXT);
-        drawTextCentered(fmt("%d buts  /  %d passes  /  %d matchs",winner.goals,winner.assists,winner.apps),VW/2,311,10,C_DIM);
-    }else drawTextCentered("Le jury va révéler le podium...",VW/2,275,10,C_TXT);
-    bool next=button(VW/2-104,328,208,14,revealed ? "Continuer la carrière" : "Révéler le podium");
+        drawTextCentered(fmt("%d buts  /  %d passes  /  %d matchs",winner.goals,winner.assists,winner.apps),VW/2,310,10,C_DIM);
+    }else drawTextCentered("Le jury va révéler le podium...",VW/2,310,10,C_TXT);
+    if(button(52,34,96,14,"Masculin",g_ballonGender==0)){g_ballonGender=0;g_ballonTime=0;}
+    if(button(VW-148,34,96,14,"Féminin",g_ballonGender==1)){g_ballonGender=1;g_ballonTime=0;}
+    bool next=button(VW/2-104,326,208,14,revealed ? "Continuer la carrière" : "Révéler le podium");
     drawFooter(g_ballonReplay ? "Jury simulé   G/D : édition   Tab : masculin/féminin   Retour" : "Jury simulé   Tab : masculin/féminin   OK : révéler / continuer");
     if(IN.tab){g_ballonGender=1-g_ballonGender;g_ballonTime=0;}
     if(IN.ok || IN.start || next || IN.back){
@@ -70,4 +86,3 @@ static void screenBallon() {
         openHub();
     }
 }
-

@@ -336,6 +336,8 @@ static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair,
 }
 
 static bool g_sprLongHair = false;      // joueuse / arbitre : cheveux longs (queue de cheval)
+// poses particulières (bancs, célébrations) : modifient le sprite debout
+static int g_sprPose = POSE_NONE;
 // dir : 0 bas, 1 haut, 2 droite, 3 gauche
 void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir, int frame, int state, bool gk, unsigned gkShirt, int scale) {
     // (x,y) = pieds
@@ -363,7 +365,10 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     int f = ((frame % 4) + 4) % 4;
     // léger rebond du corps pendant la course
 
-    if (state == PS_CELEB) src = (frame / 3) % 2 ? SPR_CELEB2 : SPR_CELEB;
+    if (g_sprPose == POSE_ARMSOUT) src = SPR_CELEB2;
+    else if (g_sprPose == POSE_CRADLE) src = SPR_HOLD;
+    else if (g_sprPose == POSE_KNEEL) src = SPR_CELEB;
+    else if (state == PS_CELEB) src = (frame / 3) % 2 ? SPR_CELEB2 : SPR_CELEB;
     else if (state == PS_THROW) src = SPR_CELEB;
     else if (state == PS_GKHOLD) src = SPR_HOLD;
     else if (state == PS_HEAD) src = SPR_HEAD;
@@ -388,9 +393,16 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     if (gk) for (int r = 6; r < 9; r++) for (int c = 0; c < 7; c++) if (buf[r][c] == 's') buf[r][c] = 'g';
     if (state == PS_CELEB && gk) for (int r = 0; r < 3; r++) for (int c = 0; c < 7; c++) if ((c == 0 || c == 6) && buf[r][c] == 's') buf[r][c] = 'g';
     g_bootCol = (skin * 5 + hair * 3) % 5;
-    // course : le haut du corps rebondit d'un pixel pendant les foulées
-    bool bob = state == PS_NORMAL && (f == 1 || f == 3) && scale == 1;
     int NR = 12;
+    // poses : assis (bancs), à genoux, « chut », mains sur la tête, bras tendu, applaudissements
+    bool front = dir == 0;
+    if (g_sprPose == POSE_SIT || g_sprPose == POSE_KNEEL) { strcpy(buf[9], g_sprPose == POSE_SIT ? ".kk.kk." : "bkk.kkb"); NR = 10; }
+    else if (g_sprPose == POSE_SHUSH && front) { buf[3][4] = 's'; buf[4][5] = 's'; buf[5][6] = '.'; buf[6][6] = '.'; }
+    else if (g_sprPose == POSE_HEAD && (front || dir == 1)) { buf[0][0] = buf[0][6] = buf[1][0] = buf[1][6] = 's'; buf[2][0] = buf[2][6] = 'S'; buf[5][0] = buf[5][6] = buf[6][0] = buf[6][6] = '.'; }
+    else if (g_sprPose == POSE_POINT) { int c = dir == 3 ? 0 : 6; buf[1][c] = 's'; buf[2][c] = 's'; buf[3][c] = 'S'; buf[5][c] = '.'; buf[6][c] = '.'; }
+    else if (g_sprPose == POSE_CLAP && front) { buf[5][0] = buf[5][6] = '.'; buf[6][0] = buf[6][6] = '.'; buf[4][(frame & 1) ? 2 : 3] = 's'; buf[5][(frame & 1) ? 4 : 3] = 's'; }
+    // course : le haut du corps rebondit d'un pixel pendant les foulées
+    bool bob = state == PS_NORMAL && (f == 1 || f == 3) && scale == 1 && g_sprPose == POSE_NONE;
     if (bob) { for (int r = 12; r >= 10; r--) memcpy(buf[r], buf[r - 1], 8); NR = 13; }     // jambes en extension : corps relevé d'un pixel
     const char* spr[13]; for (int r = 0; r < 13; r++) spr[r] = buf[r];
     auto filled = [&](int r, int c) {
@@ -423,6 +435,12 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
             DrawRectangle(x + (cc - 3) * scale, y - (NR - r) * scale, scale, scale, col);
         }
     }
+}
+
+void drawPosedSprite(int x, int y, const Kit& kit, int skin, int hair, int dir, int frame, int state, int pose, int scale) {
+    g_sprPose = pose;
+    drawPlayerSprite(x, y, kit, skin, hair, dir, frame, state, false, 0, scale);
+    g_sprPose = POSE_NONE;
 }
 
 void drawKitIcon(const Kit& k, int x, int y, int scale) {
@@ -756,6 +774,236 @@ static void drawTrophy(int x, int y, int style, int s) {
     }
 }
 
+// ------------------------------------------------------------------ stade vivant
+static uint32_t mix32(uint32_t h) { h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15; return h; }
+// excitation du public de chaque camp (0 calme ... 1 explosion de joie), selon le score, l'action et les chants
+static float crowdExcite(const Match& m, int side, int chant) {
+    if (m.S.training) return 0;
+    if (m.state == MS_GOAL || (m.state == MS_REPLAY && m.lastScorerTeam >= 0)) return m.lastScorerTeam == side ? 1.f : 0.f;
+    if (m.trophyActive || m.lapActive) return (m.trophyActive ? m.trophyTeam : m.lapTeam) == side ? 0.9f : 0.05f;
+    if (m.finished) { int d = m.score[side] - m.score[1 - side]; return d > 0 ? 0.8f : 0.03f; }
+    float e = 0.12f + m.S.supporterAtmosphere * 0.002f;
+    if (side == 0) {
+        if (chant == CH_CELEBRATE) e = 0.6f; else if (chant == CH_LOUD) e = 0.4f; else if (chant == CH_ENCOURAGE) e = 0.32f;
+        else if (chant == CH_TENSE) e = 0.05f; else if (chant == CH_WHISTLES || chant == CH_PROTEST) e = 0.02f;
+    } else e *= 0.8f + 0.1f * m.S.supporterVisitors / 1000.f;
+    // occasion : le public se lève quand son équipe approche du but adverse
+    if (m.state == MS_PLAY && m.possTeam == side && m.progress(side, m.ball.pos) > 0.78f) e = std::max(e, 0.5f);
+    return std::min(1.f, e);
+}
+
+// public animé par-dessus les tribunes précalculées : supporters qui sautent, écharpes, drapeaux, parcage visiteur, fumigènes
+static void drawCrowdLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
+    if (m.S.training || g_look.fill <= 0.01f) return;
+    const StadiumLook& L0 = g_look;
+    const float edge = 4.0f + 2.2f;
+    const float t = (float)GetTime();
+    int chant = supportersLiveChant(m.S, m.score[0], m.score[1], m.clock);
+    float ex[2] = { crowdExcite(m, 0, chant), crowdExcite(m, 1, chant) };
+    Color hk1 = hexc(m.kit[0].shirt), hk2 = hexc(m.kit[0].shirt2 != m.kit[0].shirt ? m.kit[0].shirt2 : m.kit[0].shorts);
+    Color ak1 = hexc(m.kit[1].shirt), ak2 = hexc(m.kit[1].shirt2 != m.kit[1].shirt ? m.kit[1].shirt2 : m.kit[1].shorts);
+    // parcage visiteur : coin de la tribune sud (bas, côté droit), proportionnel aux supporters adverses
+    float vf = m.S.attendance > 0 ? std::min(0.3f, std::max(m.S.neutral ? 0.45f : 0.04f, m.S.supporterVisitors / (float)std::max(1, m.S.attendance))) : 0.08f;
+    if (m.S.neutral) vf = 0.5f;
+    float awayX0 = PITCH_W + edge - (PITCH_W + 2 * edge) * vf;
+    bool whistles = chant == CH_WHISTLES || chant == CH_PROTEST;
+    int x0 = std::max(0, ox) / 3 * 3, y0 = std::max(0, oy) / 3 * 3;
+    for (int Y = y0; Y < oy + MHZ + 3; Y += 3) for (int X = x0; X < ox + MWZ + 3; X += 3) {
+        float wx = X / PPM - MARGIN, wy = Y / PPM - MARGIN;
+        bool left = wx < -edge, right = wx > PITCH_W + edge, top = wy < -edge, bot = wy > PITCH_L + edge;
+        if (!(left || right || top || bot)) continue;
+        int side; float dist;
+        if (left && !(top || bot)) { side = 0; dist = -edge - wx; }
+        else if (right && !(top || bot)) { side = 1; dist = wx - PITCH_W - edge; }
+        else if (top && !(left || right)) { side = 2; dist = -edge - wy; }
+        else if (bot && !(left || right)) { side = 3; dist = wy - PITCH_L - edge; }
+        else continue;
+        float depth = L0.depth[side];
+        int kind = L0.kind[side];
+        if (dist > depth || (kind == 2 && dist > depth - 2.2f)) continue;
+        bool vert = side == 0 || side == 1;
+        int row = vert ? X / 3 : Y / 3, col = vert ? Y / 3 : X / 3;
+        uint32_t h = mix32((uint32_t)(row * 7919 + col * 104729));
+        float f = L0.fill * (kind == 0 ? 0.6f : 1.f);
+        bool away = side == 3 && wx > awayX0;
+        bool buffer = side == 3 && !m.S.neutral && wx > awayX0 - 2.4f && wx <= awayX0;   // zone tampon vide entre les deux publics
+        Color seat = kind == 0 ? ((row % 2) ? hexc(0x4A6B3A) : hexc(0x44633A)) : ((row % 2) ? hexc(0x3A3F58) : hexc(0x323650));
+        int sx = X - ox, sy = Y - oy;
+        if (buffer) { DrawRectangle(sx, sy, 2, 2, seat); if (col % 2 == 0) DrawRectangle(sx, sy + 2, 3, 1, hexc(0x9A9AA8)); continue; }
+        bool occupied = (h % 1000) < (uint32_t)(f * 1000);
+        if (away && !occupied && (h % 1000) < (uint32_t)(std::min(1.f, f + 0.25f) * 1000)) occupied = true;   // parcage plein
+        if (!occupied) continue;
+        int camp = away ? 1 : 0;
+        float e = ex[camp];
+        bool kop = (side == 2 && !m.S.neutral) || away;        // virage nord : kop des supporters locaux
+        Color body = hexc(0x2B2D42);
+        {
+            static const unsigned CROWD[] = { 0x2B2D42, 0x8D99AE, 0xB23A48, 0xD9D9D9, 0x1D3557, 0xC98A4B, 0x3A3A3A, 0x6D597A, 0xC9A94F, 0x3F8F7A };
+            body = hexc(CROWD[(h / 10) % 10]);
+        }
+        if (away) body = (h >> 5) % 3 ? ak1 : ak2;
+        else if (kop && (h >> 5) % 3 != 0) body = (h >> 7) % 2 ? hk1 : hk2;
+        uint32_t ph = (h >> 11) & 63;
+        bool active = ((h >> 17) % 100) < (uint32_t)(e * 100);
+        int lift = 0;
+        if (active) lift = std::sin(t * (7.f + (ph % 5)) + ph) > 0.f ? 1 : 0;
+        if (!active && !(kop && e > 0.25f) && !(whistles && camp == 0)) continue;   // rien à animer : le fond précalculé suffit
+        Color skin = hexc(SKIN[(h >> 3) % NUM_SKINS]);
+        DrawRectangle(sx, sy, 2, 2, seat);
+        DrawRectangle(sx, sy - lift, 2, 2, body);
+        if ((h % 3) == 0) DrawRectangle(sx, sy - lift, 2, 1, hexc(0x2A1E14));
+        else DrawRectangle(sx, sy - lift, 2, 1, skin);
+        // bras levés / écharpe tendue au-dessus de la tête
+        if (active && e > 0.45f && (h >> 9) % 2) DrawRectangle(sx + ((h >> 13) & 1), sy - 1 - lift, 1, 1, skin);
+        if (kop && e > 0.25f && (h >> 19) % 4 == 0) {
+            bool up = std::sin(t * 3.f + ph * 0.2f) > -0.2f;
+            Color sc = away ? ((col % 2) ? ak1 : ak2) : ((col % 2) ? hk1 : hk2);
+            if (up) DrawRectangle(sx - 1, sy - 2 - lift, 4, 1, sc);
+        }
+        // sifflets : mains portées à la bouche (pixel blanc qui clignote)
+        if (whistles && camp == 0 && !kop && (h >> 21) % 3 == 0 && ((int)(t * 6) + ph) % 2) DrawRectangle(sx + 1, sy, 1, 1, Color{ 240, 240, 240, 255 });
+    }
+    // grands drapeaux qui flottent dans les virages et le parcage
+    for (int k = 0; k < 10; k++) {
+        bool aw = k >= 7;
+        if (aw && m.S.neutral) continue;
+        float fx = aw ? awayX0 + 2.f + (k - 7) * 4.5f : -edge + 6.f + k * (PITCH_W + 2 * edge - 12.f) / 6.f;
+        float fy = aw ? PITCH_L + edge + 2.2f + (k % 2) * 2.f : -edge - 1.6f - (k % 3) * 2.2f;
+        int side = aw ? 3 : 2;
+        if ((aw ? fy - PITCH_L - edge : -edge - fy) > L0.depth[side] - (L0.kind[side] == 2 ? 2.4f : 0.4f)) continue;
+        int x = (int)std::round((fx + MARGIN) * PPM) - ox, y = (int)std::round((fy + MARGIN) * PPM) - oy;
+        if (x < -20 || x > MWZ + 20 || y < -20 || y > MHZ + 20) continue;
+        float e = ex[aw ? 1 : 0];
+        if (e < 0.08f) continue;
+        Color c1 = aw ? ak1 : hk1, c2 = aw ? ak2 : hk2;
+        DrawLine(x, y, x, y - 9, Color{ 200, 200, 200, 255 });
+        for (int c = 0; c < 9; c++) {
+            int wave = (int)std::round(std::sin(t * (4.f + e * 4.f) + c * 0.7f + k) * 1.2f);
+            DrawRectangle(x + 1 + c, y - 9 + wave, 1, 3, c1);
+            DrawRectangle(x + 1 + c, y - 6 + wave, 1, 2, c2);
+        }
+    }
+    // fumigènes : but, fête, ou grosse ambiance dans le kop
+    for (int camp = 0; camp < 2; camp++) {
+        if (ex[camp] < 0.85f || m.S.neutral) continue;
+        for (int k = 0; k < 4; k++) {
+            float fx = camp ? awayX0 + 1.5f + k * 2.6f : PITCH_W / 2 - 14.f + k * 9.f;
+            float fy = camp ? PITCH_L + edge + 1.f : -edge - 1.f;
+            int x = (int)std::round((fx + MARGIN) * PPM) - ox, y = (int)std::round((fy + MARGIN) * PPM) - oy;
+            if (x < -30 || x > MWZ + 30 || y < -40 || y > MHZ + 30) continue;
+            fxFlare(x, y, t, (unsigned)(k * 31 + camp * 7));
+        }
+    }
+}
+
+// fumigène : flamme rouge vif, halo et fumée qui dérive
+void fxFlare(int x, int y, float t, unsigned seed) {
+    for (int k = 0; k < 7; k++) {
+        float a = std::fmod(t * 0.35f + k / 7.f + (seed % 13) * 0.07f, 1.f);
+        int r = 2 + (int)(a * 6);
+        DrawCircle(x + (int)(a * 10.f) + (int)(std::sin(t + k) * 2), y - 3 - (int)(a * 16.f), (float)r, Color{ 210, 205, 215, (unsigned char)(110 * (1 - a)) });
+    }
+    DrawCircle(x, y, 4, Color{ 255, 60, 30, 70 });
+    bool fl = ((int)(t * 15) + seed) % 2;
+    DrawRectangle(x - 1, y - 1, 2, 2, fl ? Color{ 255, 240, 200, 255 } : Color{ 255, 90, 40, 255 });
+    DrawRectangle(x, y - 2, 1, 1, Color{ 255, 200, 80, 255 });
+}
+
+// bancs de touche : remplaçants assis, entraîneur et adjoint dans la zone technique, kiné ; échauffement le long de la ligne
+static void drawBenchesLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
+    if (m.S.training) return;
+    const float t = (float)GetTime();
+    auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
+    auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
+    if (SX(-0.2f) < -30 || SX(-4.f) > MWZ + 30) return;
+    bool goal = m.state == MS_GOAL || (m.state == MS_REPLAY && m.lastScorerTeam >= 0);
+    for (int tm = 0; tm < 2; tm++) {
+        float yc = PITCH_L / 2 + (tm ? 7.5f : -7.5f);
+        if (SY(yc + 9) < -20 || SY(yc - 9) > MHZ + 20) continue;
+        const Team& T = m.team(tm);
+        bool joy = (goal && m.lastScorerTeam == tm) || (m.finished && m.score[tm] > m.score[1 - tm]) || (m.trophyActive && m.trophyTeam == tm);
+        bool sad = (goal && m.lastScorerTeam == 1 - tm) || (m.finished && m.score[tm] < m.score[1 - tm]);
+        Kit bib; bib.shirt = tm ? 0x30B050 : 0xF07A20; bib.shirt2 = bib.shirt; bib.shorts = m.kit[tm].shorts; bib.socks = m.kit[tm].socks;
+        Kit track; track.shirt = m.kit[tm].shorts == 0xFFFFFF ? 0x1C2A55 : m.kit[tm].shorts; track.shirt2 = m.kit[tm].shirt; track.shorts = track.shirt; track.socks = 0x151515; track.pattern = KP_SHOULDERS;
+        Kit suit; suit.shirt = 0x22252E; suit.shirt2 = 0xE8E8E8; suit.shorts = 0x1A1C22; suit.socks = 0x111111;
+        // remplaçants : assis sur le banc, debout et sautant lors d'un but
+        int nb = std::min(7, (int)m.bench[tm].size());
+        for (int k = 0; k < nb; k++) {
+            int sq = m.bench[tm][k];
+            int skin = 0, hair = 0;
+            if (sq >= 0 && sq < (int)T.squad.size()) { skin = T.squad[sq].skin; hair = T.squad[sq].hair; g_sprLongHair = T.squad[sq].gender; }
+            int x = SX(-2.2f), y = SY(yc - 3.3f + k * 1.0f) + 3;
+            if (joy) { y -= (int)(std::fabs(std::sin(t * 7.f + k)) * 3.f) + 2; drawPlayerSprite(x + 2, y, bib, skin, hair, 2, (int)(t * 4) + k, PS_CELEB, false, 0, 1); }
+            else drawPosedSprite(x, y, bib, skin, hair, 2, 0, PS_NORMAL, sad && k % 2 ? POSE_HEAD : POSE_SIT, 1);
+            g_sprLongHair = false;
+        }
+        // entraîneur : fait les cent pas, donne des consignes, exulte ou se prend la tête
+        {
+            float pace = std::sin(t * 0.45f + tm * 2.f);
+            float cy = yc + (tm ? -1.f : 1.f) * 1.5f + pace * 2.6f;
+            int x = SX(-0.6f), y = SY(cy);
+            int pose = POSE_NONE, state = PS_NORMAL, dir = std::cos(t * 0.45f + tm * 2.f) > 0 ? 0 : 1, fr = (int)(t * 6);
+            if (joy) { state = PS_CELEB; dir = 0; y -= (int)(std::fabs(std::sin(t * 6.f)) * 4.f); }
+            else if (sad) { pose = POSE_HEAD; dir = 0; fr = 0; }
+            else if (((int)(t * 0.5f) + tm) % 3 == 0) { pose = POSE_POINT; dir = 2; fr = 0; }
+            drawPosedSprite(x, y, suit, (tm * 3 + 1) % NUM_SKINS, tm ? 5 : 0, dir, fr, state, pose, 1);
+            // adjoint : debout au bout du banc, bras croisés ou applaudissements
+            drawPosedSprite(SX(-1.5f), SY(yc + (tm ? 4.6f : -4.6f)), track, (tm * 2 + 2) % NUM_SKINS, tm + 1, 2, (int)(t * 5), joy ? PS_CELEB : PS_NORMAL, joy ? POSE_NONE : POSE_CLAP, 1);
+            // kiné assis avec sa sacoche
+            int kx = SX(-2.2f), ky = SY(yc + 3.9f) + 3;
+            drawPosedSprite(kx, ky, track, (tm + 4) % NUM_SKINS, 4, 2, 0, PS_NORMAL, POSE_SIT, 1);
+            DrawRectangle(kx + 3, ky - 3, 4, 3, WHITE); DrawRectangle(kx + 4, ky - 3, 2, 3, Color{ 220, 30, 30, 255 }); DrawRectangle(kx + 3, ky - 2, 4, 1, Color{ 220, 30, 30, 255 });
+        }
+        // échauffement : deux remplaçants trottinent derrière la ligne, entre le banc et le poteau de corner
+        if (m.state == MS_PLAY || m.state == MS_SETPIECE || m.state == MS_STOP) {
+            for (int k = 0; k < 2 && k + nb - 2 >= 0 && nb >= 3; k++) {
+                int sq = m.bench[tm][nb - 1 - k];
+                int skin = sq >= 0 && sq < (int)T.squad.size() ? T.squad[sq].skin : 0, hair = sq >= 0 && sq < (int)T.squad.size() ? T.squad[sq].hair : 0;
+                float u = std::sin(t * 0.35f + k * 0.9f + tm);
+                float wy = tm ? PITCH_L / 2 + 22.f + u * 10.f : PITCH_L / 2 - 22.f - u * 10.f;
+                float vy = std::cos(t * 0.35f + k * 0.9f + tm) * (tm ? 1.f : -1.f);
+                drawPlayerSprite(SX(-2.6f - k * 0.9f), SY(wy), bib, skin, hair, vy > 0 ? 0 : 1, (int)(t * 7) + k, PS_NORMAL, false, 0, 1);
+            }
+        }
+    }
+    g_sprLongHair = false;
+}
+
+// ramasseurs de balles et stadiers
+static void drawPitchsideLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
+    if (m.S.training) return;
+    const float t = (float)GetTime();
+    auto vis = [&](int x, int y) { return x > -12 && x < MWZ + 12 && y > -16 && y < MHZ + 16; };
+    auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
+    auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
+    Kit kid; kid.shirt = 0x2A5CC8; kid.shirt2 = 0xF4F4F4; kid.shorts = 0x1A2A55; kid.socks = 0x1A2A55; kid.pattern = KP_SHOULDERS;
+    static const float BB[6][2] = { { PITCH_W / 2 - 17.f, -2.6f }, { PITCH_W / 2 + 17.f, -2.6f }, { PITCH_W / 2 - 17.f, PITCH_L + 2.6f }, { PITCH_W / 2 + 17.f, PITCH_L + 2.6f },
+                                    { PITCH_W + 1.9f, PITCH_L * 0.3f }, { PITCH_W + 1.9f, PITCH_L * 0.7f } };
+    for (int k = 0; k < 6; k++) {
+        int x = SX(BB[k][0]), y = SY(BB[k][1]);
+        if (!vis(x, y)) continue;
+        // le ramasseur se lève quand le ballon sort près de lui
+        float bd = (m.ball.pos - V2(BB[k][0], BB[k][1])).len();
+        bool up = bd < 12.f && (m.state == MS_SETPIECE || m.state == MS_STOP);
+        int dir = k < 2 ? 0 : k < 4 ? 1 : 3;
+        drawPosedSprite(x, y + (up ? 0 : 2), kid, (k * 2 + 1) % NUM_SKINS, (k * 3) % NUM_HAIRS, dir, (int)(t * 6), PS_NORMAL, up ? POSE_NONE : POSE_SIT, 1);
+        if (!up) { DrawRectangle(x + (k < 4 ? 4 : -6), y - 1, 3, 3, WHITE); DrawRectangle(x + (k < 4 ? 5 : -5), y, 1, 1, Color{ 30, 30, 30, 255 }); }   // ballon de réserve
+    }
+    // stadiers en chasuble fluo, dos au terrain, face aux tribunes
+    Kit vest; vest.shirt = 0xF09020; vest.shirt2 = 0xE8F040; vest.shorts = 0x22242C; vest.socks = 0x111111; vest.pattern = KP_BAND;
+    const float e = 3.3f;
+    static const float ST[8][3] = { { 2.5f, -1, 1 }, { 65.5f, -1, 1 }, { 2.5f, -2, 0 }, { 65.5f, -2, 0 }, { 34.f, -3, 3 }, { 72.f, -3, 3 }, { 6.f, -3, 3 }, { 99.f, -3, 3 } };
+    for (int k = 0; k < 8; k++) {
+        float wx, wy; int dir = (int)ST[k][2];
+        if (ST[k][1] == -1) { wx = ST[k][0]; wy = -e; }
+        else if (ST[k][1] == -2) { wx = ST[k][0]; wy = PITCH_L + e; }
+        else { wx = PITCH_W + e; wy = ST[k][0]; dir = 2; }
+        int x = SX(wx), y = SY(wy);
+        if (!vis(x, y)) continue;
+        drawPlayerSprite(x, y, vest, (k * 5 + 2) % NUM_SKINS, (k * 2 + 1) % NUM_HAIRS, dir, 0, PS_NORMAL, false, 0, 1);
+    }
+}
+
 static float g_asVel[2] = { 0, 0 }, g_asAnim[2] = { 0, 0 };
 void renderMatch(const Match& m, bool radar) {
     rlDrawRenderBatchActive();
@@ -803,6 +1051,9 @@ void renderMatch(const Match& m, bool radar) {
     auto SX = [&](float x) { return (int)std::round((x + MARGIN) * PPM) - ox; };
     auto SY = [&](float y) { return (int)std::round((y + MARGIN) * PPM) - oy; };
 
+    drawCrowdLive(m, ox, oy, MWZ, MHZ);
+    drawPitchsideLive(m, ox, oy, MWZ, MHZ);
+    if (!replay) drawBenchesLive(m, ox, oy, MWZ, MHZ);
     if(!m.S.training){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if(m.S.supporterTifo>=0&&(m.clock<8||m.ceremony)){Color c1=hexc(m.kit[0].shirt),c2=hexc(m.kit[0].shorts);int tx=SX(-6.f),ty=SY(PITCH_L/2-8.f);for(int y=0;y<16;y++)for(int x=0;x<4;x++)DrawRectangle(tx+x*2,ty+y*2,2,2,(x+y)%2?c1:c2);DrawRectangleLines(tx-1,ty-1,10,34,Color{240,220,130,255});}if(chant==CH_PROTEST){int bx=SX(-5.5f),by=SY(PITCH_L/2+9.f);DrawRectangle(bx-2,by,9,31,Color{235,235,220,255});for(int y=1;y<29;y+=4)DrawRectangle(bx,by+y,5,2,Color{190,30,40,255});}}
     // ombres des buts
     for (int g = 0; g < 2; g++) {
@@ -896,6 +1147,16 @@ void renderMatch(const Match& m, bool radar) {
         DrawRectangle(tx - 4, ty - 4, 9, 5, Color{ 240, 240, 245, 255 });
         DrawRectangle(tx - 4, ty + 1, 9, 2, Color{ 170, 170, 185, 255 });
         if (m.trOnTable) drawTrophy(tx, ty - 3, m.trophyStyle, 1);
+        // projecteurs qui balayent le podium et colonnes de flammes au moment du sacre
+        float tt = (float)GetTime();
+        for (int k = 0; k < 3; k++) DrawEllipse(SX(8.6f + std::sin(tt * 0.8f + k * 2.1f) * 3.f), SY(c + std::cos(tt * 0.6f + k * 2.f) * 7.f), 16, 9, Color{ 255, 250, 210, 34 });
+        if (m.trLift) for (int f = 0; f < 4; f++) {
+            int fx = f < 2 ? x0 - 3 : x1 + 2, fy = f % 2 ? y1 + 2 : y0 - 4;
+            int hgt = 8 + (int)(std::fabs(std::sin(tt * 9.f + f)) * 9.f);
+            DrawRectangle(fx - 2, fy - hgt, 4, hgt, Color{ 255, 120, 30, 200 });
+            DrawRectangle(fx - 1, fy - hgt + 2, 2, hgt - 2, Color{ 255, 230, 120, 230 });
+            DrawCircle(fx, fy - hgt / 2, 6, Color{ 255, 150, 40, 50 });
+        }
     }
     drawGoal(0, true, ox, oy);
     // ombres
@@ -1078,12 +1339,25 @@ void renderMatch(const Match& m, bool radar) {
             if (((int)(GetTime() * 6)) % 2) { DrawRectangle(sx - 1, sy - 17, 2, 3, Color{ 255, 60, 60, 255 }); DrawRectangle(sx - 1, sy - 13, 2, 1, Color{ 255, 60, 60, 255 }); }
             continue;
         }
-        if (state == PS_CELEB) {
+        // poses des célébrations de but
+        int pose = POSE_NONE; bool heart = false;
+        if (!replay && m.state == MS_GOAL && m.celebScorer >= 0 && p.team == m.pl[m.celebScorer].team && !p.gk) {
+            bool still = p.vel.len() < 1.2f;
+            bool scorer = i == m.celebScorer;
+            int ct = m.celebType;
+            if (scorer && ct == 9 && p.st >= 20.f && p.z <= 0.f) { pose = POSE_ARMSOUT; state = PS_CELEB; dir = 0; }
+            else if (ct == 10 && still && state == PS_CELEB) { pose = POSE_CRADLE; dir = 0; sx += (int)std::round(std::sin(GetTime() * 4.f) * 1.4f); }
+            else if (scorer && ct == 11 && still) { pose = POSE_SHUSH; state = PS_NORMAL; dir = m.celebTarget.y < PITCH_L / 2 ? 1 : 0; if (dir == 1) pose = POSE_POINT; }
+            else if (scorer && ct == 12 && still) { pose = POSE_KNEEL; state = PS_CELEB; dir = 0; }
+            else if (scorer && ct == 13 && still) { heart = true; state = PS_CELEB; dir = m.celebTarget.y < PITCH_L / 2 ? 1 : 0; }
+            else if (scorer && ct == 7 && still) { pose = POSE_POINT; state = PS_NORMAL; dir = 3; }
+        }
+        if (state == PS_CELEB && pose == POSE_NONE && !heart) {
             // saut de joie, bras en l'air puis « l'avion »
             float ph = (float)GetTime() * 7.f + i * 1.3f;
             sy -= (int)(std::fabs(std::sin(ph)) * 3.f);
             frame = (int)(GetTime() * 4) + i;
-        }
+        } else if (heart) frame = 0;
         // poussière / gerbes d'eau sous les crampons en pleine course
         if (!replay && (state == PS_NORMAL || state == PS_SLIDE) && p.vel.len() > p.speed * 0.8f && (type == 1 || type == 2 || type == 3 || state == PS_SLIDE)) {
             V2 back = p.vel.norm() * -1.f;
@@ -1095,8 +1369,15 @@ void renderMatch(const Match& m, bool radar) {
             }
         }
         g_sprLongHair = p.squad >= 0 && p.squad < (int)T.squad.size() && T.squad[p.squad].gender;
+        g_sprPose = pose;
         drawPlayerSprite(sx, sy, m.kit[p.team], skin, hair, dir, frame, state == PS_HAND ? PS_NORMAL : state, p.gk, m.gkShirt[p.team], 1);
+        g_sprPose = POSE_NONE;
         g_sprLongHair = false;
+        if (heart) {   // cœur formé avec les mains au-dessus de la tête
+            int hy = sy - 17 - (int)(std::fabs(std::sin(GetTime() * 3.f)) * 2.f);
+            Color hc{ 235, 40, 70, 255 };
+            DrawRectangle(sx - 2, hy, 2, 1, hc); DrawRectangle(sx + 1, hy, 2, 1, hc); DrawRectangle(sx - 3, hy + 1, 7, 2, hc); DrawRectangle(sx - 2, hy + 3, 5, 1, hc); DrawRectangle(sx - 1, hy + 4, 3, 1, hc); DrawRectangle(sx, hy + 5, 1, 1, hc);
+        }
         if (state == PS_HAND) {   // poignée de main : bras tendu vers l'adversaire
             unsigned sk = 0xE0B090; if (p.squad >= 0 && p.squad < (int)T.squad.size()) { static const unsigned SK[4] = { 0xF2C9A0, 0xD9A066, 0xA86B3C, 0x6B4226 }; sk = SK[T.squad[p.squad].skin % 4]; }
             DrawRectangle(sx, sy - 6 + (p.team ? -3 : 1), 1, 3, hexc(sk));
