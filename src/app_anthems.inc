@@ -102,12 +102,12 @@ static void screenAnthems() {
         if (s == 3 || IN.back) { audioStopAnthem(); int keep = g_anSel; g_anSel = -1; g_anLW = ListW(); for (int i = 0; i < (int)nats.size(); i++) if (nats[i] == keep) g_anLW.cur = i; }
         return;
     }
-    drawTextCentered("Hymnes intégrés : France, Angleterre, Allemagne, États-Unis ; hymne générique pour les autres.", VW / 2, 30, 10, C_DIM, false);
+    drawTextCentered(fitText("Hymnes réels : France, Angleterre, Allemagne, États-Unis, Russie, Canada ; 6 hymnes originaux pour les autres.", VW - 20, 10), VW / 2, 30, 10, C_DIM, false);
     int s = listRun(g_anLW, (int)nats.size(), 20, 44, VW - 40, 18, 14, [&](int i, int x, int y, bool sel) {
         const Team& T = g_world.teams[nats[i]];
         std::string code = NATIONS[nats[i]].code, file = audioAnthemFile(code);
         drawTextPx(fitText(T.name, 190, 10), x + 6, y + 2, 10, sel ? BLACK : C_TXT);
-        drawTextPx(audioAnthemName(code), x + 210, y + 2, 10, sel ? BLACK : strcmp(audioAnthemName(code), "Hymne générique") ? C_HI : C_DIM);
+        drawTextPx(audioAnthemName(code), x + 210, y + 2, 10, sel ? BLACK : strncmp(audioAnthemName(code), "Hymne de la sélection", 21) ? C_HI : C_DIM);
         if (!file.empty()) drawTextPx(fitText(GetFileName(file.c_str()), VW - 40 - 400, 10), x + 390, y + 2, 10, sel ? BLACK : C_GOOD);
     });
     drawFooter("OK : écouter / choisir un fichier   Retour");

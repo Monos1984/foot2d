@@ -792,6 +792,23 @@ static float crowdExcite(const Match& m, int side, int chant) {
     return std::min(1.f, e);
 }
 
+// la ola : quand l'ambiance est bonne, une vague fait le tour du stade environ toutes les 19 minutes de jeu
+float crowdWavePhase(const Match& m) {
+    if (m.S.training || m.S.supporterAtmosphere < 45 || g_look.fill < 0.25f || m.finished || m.trophyActive) return -1;
+    if (m.state != MS_PLAY && m.state != MS_SETPIECE && m.state != MS_STOP) return -1;
+    if (m.clock < 10.f) return -1;
+    float c = std::fmod(m.clock + 7.f, 19.f);
+    return c < 2.2f ? c / 2.2f : -1.f;
+}
+// position d'un spectateur sur le tour du stade (0..1, sens horaire depuis le coin haut gauche)
+static float perimeterPos(float wx, float wy) {
+    const float W = PITCH_W, L = PITCH_L, P = 2 * (W + L);
+    if (wy < 0 && wx >= 0 && wx <= W) return wx / P;
+    if (wx > W) return (W + std::max(0.f, std::min(L, wy))) / P;
+    if (wy > L) return (W + L + (W - std::max(0.f, std::min(W, wx)))) / P;
+    return (2 * W + L + (L - std::max(0.f, std::min(L, wy)))) / P;
+}
+
 // public animé par-dessus les tribunes précalculées : supporters qui sautent, écharpes, drapeaux, parcage visiteur, fumigènes
 static void drawCrowdLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     if (m.S.training || g_look.fill <= 0.01f) return;
@@ -807,6 +824,7 @@ static void drawCrowdLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     if (m.S.neutral) vf = 0.5f;
     float awayX0 = PITCH_W + edge - (PITCH_W + 2 * edge) * vf;
     bool whistles = chant == CH_WHISTLES || chant == CH_PROTEST;
+    float wave = crowdWavePhase(m);
     int x0 = std::max(0, ox) / 3 * 3, y0 = std::max(0, oy) / 3 * 3;
     for (int Y = y0; Y < oy + MHZ + 3; Y += 3) for (int X = x0; X < ox + MWZ + 3; X += 3) {
         float wx = X / PPM - MARGIN, wy = Y / PPM - MARGIN;
@@ -847,14 +865,18 @@ static void drawCrowdLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
         bool active = ((h >> 17) % 100) < (uint32_t)(e * 100);
         int lift = 0;
         if (active) lift = std::sin(t * (7.f + (ph % 5)) + ph) > 0.f ? 1 : 0;
-        if (!active && !(kop && e > 0.25f) && !(whistles && camp == 0)) continue;   // rien à animer : le fond précalculé suffit
+        bool inWave = false;
+        if (wave >= 0) { float d = std::fabs(perimeterPos(wx, wy) - wave); d = std::min(d, 1.f - d); if (d < 0.035f) { inWave = true; active = true; e = 1.f; lift = d < 0.02f ? 2 : 1; } }
+        bool flash = m.S.night && ((h >> 23) % 211) == (uint32_t)((int)(t * 3) % 211);   // flashs des téléphones en nocturne
+        if (!active && !(kop && e > 0.25f) && !(whistles && camp == 0) && !flash) continue;   // rien à animer : le fond précalculé suffit
         Color skin = hexc(SKIN[(h >> 3) % NUM_SKINS]);
         DrawRectangle(sx, sy, 2, 2, seat);
         DrawRectangle(sx, sy - lift, 2, 2, body);
         if ((h % 3) == 0) DrawRectangle(sx, sy - lift, 2, 1, hexc(0x2A1E14));
         else DrawRectangle(sx, sy - lift, 2, 1, skin);
         // bras levés / écharpe tendue au-dessus de la tête
-        if (active && e > 0.45f && (h >> 9) % 2) DrawRectangle(sx + ((h >> 13) & 1), sy - 1 - lift, 1, 1, skin);
+        if (active && e > 0.45f && ((h >> 9) % 2 || inWave)) { DrawRectangle(sx + ((h >> 13) & 1), sy - 1 - lift, 1, 1, skin); if (inWave) DrawRectangle(sx + 1 - ((h >> 13) & 1), sy - 1 - lift, 1, 1, skin); }
+        if (flash) { DrawRectangle(sx, sy - 1, 2, 2, WHITE); DrawCircle(sx + 1, sy, 3, Color{ 255, 255, 255, 70 }); }
         if (kop && e > 0.25f && (h >> 19) % 4 == 0) {
             bool up = std::sin(t * 3.f + ph * 0.2f) > -0.2f;
             Color sc = away ? ((col % 2) ? ak1 : ak2) : ((col % 2) ? hk1 : hk2);

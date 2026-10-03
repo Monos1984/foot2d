@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -788,7 +788,11 @@ static const char* PITCH_NAMES[] = { "Normal", "Sec", "Humide", "Boueux", "Gelé
 static const char* DIFF_NAMES[] = { "Facile", "Normal", "Difficile" };
 
 static bool g_trophyChecked = false, g_trophyShown = false, g_podiumMusic = false, g_htShown = false;
+static std::vector<std::string> wrapText(const std::string& s, int maxw);
+#include "app_locker.inc"
+static int g_matchSerial = 0;
 static void launchMatch() {
+    g_matchSerial++;
     MatchSetup s = g_setup;
     if(g_mctx.career&&g_career.sportingMode()){g_career.sportingPrepare(s.home);g_career.sportingPrepare(s.away);for(auto& side:s.side)side=-1;s.managed=-1;s.delegSubs=true;s.highlights=false;}
     s.snes = g_settings.controlStyle == 1;
@@ -801,6 +805,7 @@ static void launchMatch() {
     g_screen = SC_MATCH;
     g_htStudio = g_ftStudio = false;
     g_trophyChecked = false; g_trophyShown = false; g_podiumMusic = false; g_htShown = false;
+    openLocker(0);
 }
 
 // options des matchs amicaux
@@ -1098,6 +1103,52 @@ static bool qualifyCheck(const Match& m, int& side) {
     return true;
 }
 
+static std::vector<std::string> wrapText(const std::string& s, int maxw);
+// match télévisé : désignation de l'homme du match à la fin de la rencontre (bandeau de la chaîne)
+static void drawManOfMatch(const Match& m) {
+    static const Match* done = nullptr; static int sq = -1, tm = -1; static float rating = 0;
+    if (done != &m) { done = &m; sq = m.manOfMatch(tm); rating = sq >= 0 ? m.playerRating(tm, sq) : 0; }
+    if (sq < 0 || m.stateT < 1.5f) return;
+    const Team& T = m.team(tm);
+    if (sq >= (int)T.squad.size()) return;
+    const Player& P = T.squad[sq];
+    float u = std::min(1.f, (m.stateT - 1.5f) * 3.f);
+    int w = 360, h = 112, x = VW / 2 - w / 2, y = VH - 132 + (int)((1 - u) * 140);
+    float t = (float)GetTime();
+    DrawRectangle(x + 4, y + 4, w, h, Color{ 0, 0, 0, 120 });
+    DrawRectangleGradientV(x, y, w, h, Color{ 18, 28, 64, 240 }, Color{ 8, 12, 30, 240 });
+    DrawRectangle(x, y, w, 18, Color{ 190, 30, 40, 255 });
+    drawTextPx(m.S.channel.empty() ? std::string("TV") : m.S.channel, x + 6, y + 4, 10, WHITE);
+    drawTextCentered("HOMME DU MATCH", x + w / 2 + 30, y + 4, 10, C_HI, false);
+    DrawRectangle(x, y + h - 3, w, 3, C_HI);
+    // projecteur et joueur dans sa tenue
+    DrawTriangle(Vector2{ (float)x + 48, (float)y + 18 }, Vector2{ (float)x + 22, (float)y + h - 6 }, Vector2{ (float)x + 74, (float)y + h - 6 }, Color{ 255, 245, 200, 40 });
+    int pskin = P.skin, phair = P.hair;
+    drawPlayerSprite(x + 48, y + h - 8, m.kit[tm], pskin, phair, 0, (int)(t * 4), PS_CELEB, false, 0, 3);
+    fxBigTrophy(x + 78, y + h - 8, 4, 1, t);
+    int tx = x + 100;
+    drawTextPx(fitText(P.name, w - 110, 20), tx, y + 24, 20, C_HI);
+    drawTextPx(fitText(T.name, w - 110, 10), tx, y + 46, 10, C_DIM);
+    // note sur 10
+    DrawRectangle(x + w - 58, y + 24, 50, 30, rating >= 8 ? Color{ 40, 140, 60, 255 } : rating >= 7 ? Color{ 90, 130, 40, 255 } : Color{ 140, 110, 30, 255 });
+    drawTextCentered(fmt("%.1f", rating), x + w - 33, y + 30, 20, WHITE, false);
+    // statistiques marquantes
+    int goals = 0, assists = 0;
+    for (auto& e : m.events) { if (e.type == 0 && e.team == tm && e.pid == P.id) goals++; if (e.type == 0 && e.team == tm && e.aid == P.id) assists++; }
+    std::string st;
+    auto add = [&](int v, const char* one, const char* many) { if (v <= 0) return; if (!st.empty()) st += "  -  "; st += fmt("%d %s", v, v > 1 ? many : one); };
+    auto it = m.pst[tm].find(sq);
+    add(goals, "but", "buts"); add(assists, "passe décisive", "passes décisives");
+    if (it != m.pst[tm].end()) {
+        const auto& ps = it->second;
+        if (ps.gk) add(ps.save, "arrêt", "arrêts");
+        add(ps.tackle, "tacle réussi", "tacles réussis"); add(ps.inter, "interception", "interceptions");
+        if (st.size() < 40) add(ps.passOk, "passe réussie", "passes réussies");
+    }
+    if (st.empty()) st = "Un match plein, présent dans tous les duels.";
+    for (auto& l : wrapText(st, w - 110)) { drawTextPx(l, tx, y + 62, 10, C_TXT); y += 12; }
+}
+
 static void screenMatch(float dt) {
     Match& m = *g_match;
     if(g_mctx.career&&g_career.sportingMode()){for(auto& side:m.S.side)side=-1;m.S.managed=-1;m.S.delegSubs=true;}
@@ -1144,7 +1195,16 @@ static void screenMatch(float dt) {
         else if (m.anthemReq == -2) { audioStopAnthem(); m.anthemReq = -1; }
         // entraînement : pas de public
         bool anth = m.ceremony && (m.cerPhase == 10 || m.cerPhase == 11);
-        audioCrowd(!m.S.training, anth ? 0.08f : .10f+m.S.supporterAtmosphere*.003f);
+        {   // rumeur du stade : enfle quand une équipe approche du but, explose sur les buts ; la ola
+            float danger = m.state == MS_PLAY && m.possTeam >= 0 ? std::max(0.f, m.progress(m.possTeam, m.ball.pos) - 0.62f) / 0.38f : 0.f;
+            if (m.possTeam == 1 && !m.S.neutral) danger *= 0.6f;
+            static float swell = 0; swell += (danger - swell) * std::min(1.f, dt * 2.5f);
+            float goalBoost = m.state == MS_GOAL ? 0.12f : 0.f;
+            audioCrowd(!m.S.training, anth ? 0.08f : .10f + m.S.supporterAtmosphere * .003f + swell * 0.12f + goalBoost);
+            static float lastWave = -1; float wv = crowdWavePhase(m);
+            if (wv >= 0 && lastWave < 0) audioPlay(SFX_OLA);
+            lastWave = wv;
+        }
         if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||m.state==MS_REPLAY)&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
     } else audioCrowd(false, 0);
     if (m.finished && !g_trophyChecked && !g_paused) {
@@ -1187,10 +1247,12 @@ static void screenMatch(float dt) {
     // plateau TV à la mi-temps et en fin de match
     if (m.S.studio && !g_paused) {
 
-        if (!g_ftStudio && m.finished && m.stateT > 1.2f) { g_ftStudio = true; g_studioPhase = 2; g_studioT = 0; g_screen = SC_STUDIO; return; }
+        if (!g_ftStudio && m.finished && m.stateT > (m.S.tv && !m.abandoned && !g_trophyShown ? 8.5f : 1.2f)) { g_ftStudio = true; g_studioPhase = 2; g_studioT = 0; g_screen = SC_STUDIO; return; }
     }
     if (m.finished) {
-        if (m.stateT > (g_trophyShown ? 2.5f : 5.0f) || IN.ok || IN.click) { audioCrowd(false, 0); finishMatchToResult(); }
+        bool motm = m.S.tv && !m.abandoned && !m.S.training && !g_trophyShown;
+        if (motm) drawManOfMatch(m);
+        if (m.stateT > (g_trophyShown ? 2.5f : motm ? 9.0f : 5.0f) || IN.ok || IN.click) { audioCrowd(false, 0); finishMatchToResult(); }
         m.stateT += dt;
         return;
     }
@@ -1357,7 +1419,7 @@ static void screenHalftime() {
         g_world.teams[ht == 0 ? m.S.home : m.S.away].mentality = m.mentality[ht];
     }
     drawFooter("Gauche/Droite : mentalité    OK : seconde période    (remplacements : menu pause)");
-    if (IN.ok || IN.start) { g_screen = SC_MATCH; }
+    if (IN.ok || IN.start) { g_screen = SC_MATCH; openLocker(1); }
 }
 
 // ------------------------------------------------------------------ après-match
@@ -1370,7 +1432,7 @@ static void openHub();
 
 struct EvLine { int side; int minute; int type; std::string txt; };   // type 0 but, 1 csc, 2 jaune, 3 rouge, 4 blessure
 struct PostInfo { int home, away, hg, ag, ph = -1, pa = -1; bool aet = false; std::vector<EvLine> ev; float poss = 50; int shots[2] = { 0, 0 }; std::string title, extra; int comp = -1, match = -1;
-                  bool hasStats = false; MStats st; int att = 0; int64_t gate = -1; bool realGate = false; std::string stadium, meteo, pitch; int turf = -1; float boost = 0; bool neutral = false; };
+                  bool hasStats = false; MStats st; int att = 0; int64_t gate = -1; bool realGate = false; std::string stadium, meteo, pitch; int turf = -1; float boost = 0; bool neutral = false; std::string motm; };
 static int g_postPage = 0;
 static PostInfo g_post;
 #include "app_tv.inc"
@@ -1438,6 +1500,7 @@ static void finishMatchToResult() {
     g_post.shots[0] = m.shots[0]; g_post.shots[1] = m.shots[1];
     g_post.title = m.S.title;
     g_post.hasStats = true; g_post.st = statsOf(m); g_postPage = 0;
+    if (!m.abandoned && !m.S.training) { int tm = -1, sq = m.manOfMatch(tm); if (sq >= 0 && sq < (int)m.team(tm).squad.size()) g_post.motm = fmt("Homme du match : %s (%s) - note %.1f", m.team(tm).squad[sq].name.c_str(), m.team(tm).shortName.c_str(), m.playerRating(tm, sq)); }
     g_post.att = m.S.attendance; g_post.stadium = m.S.stadium; g_post.meteo = METEO_NAMES[std::max(0, std::min(5, m.S.meteo))];
     g_post.pitch = PITCH_NAMES[std::max(0, std::min(4, m.S.pitch))]; g_post.turf = m.S.turf; g_post.boost = m.S.homeBoost; g_post.neutral = m.S.neutral;
     {   // recette estimée (billetterie) ; remplacée par la recette réelle du club du joueur
@@ -1561,6 +1624,12 @@ static int drawEventColumns(const std::vector<EvLine>& ev, int y, int maxY) {
 }
 
 static bool openMatchday(int comp, int mi, bool endOfDay);
+static void postContinue() { if (g_mctx.career) { autosave(); if (!openMatchday(g_mctx.comp, g_mctx.match, true)) openHub(); } else g_screen = SC_MAIN; }
+static void postExit() {
+    static int shown = -1;     // une seule scène de vestiaire par match
+    if (g_match && shown != g_matchSerial) { shown = g_matchSerial; openLocker(2); if (g_screen == SC_LOCKER) return; }
+    postContinue();
+}
 static void screenPost() {
     drawBackground("Résultat");
     const Team& H = g_world.teams[g_post.home]; const Team& A = g_world.teams[g_post.away];
@@ -1576,7 +1645,9 @@ static void screenPost() {
     if (g_post.ph >= 0) { drawTextCentered(fmt("Tirs au but : %d - %d", g_post.ph, g_post.pa), VW / 2, y, 10, C_HI); y += 12; }
     if (!g_post.extra.empty()) { drawTextCentered(g_post.extra, VW / 2, y, 10, C_GOOD); y += 12; }
     y += 4;
-    drawTextCentered(g_post.hasStats?fmt("%s spectateurs",thousands(g_post.att).c_str()):"Affluence non archivée",VW/2,y,10,C_GOOD);y+=16;
+    drawTextCentered(g_post.hasStats?fmt("%s spectateurs",thousands(g_post.att).c_str()):"Affluence non archivée",VW/2,y,10,C_GOOD);y+=12;
+    if(!g_post.motm.empty()){drawTextCentered(fitText(g_post.motm,VW-40,10),VW/2,y,10,C_HI);y+=12;}
+    y+=4;
     if(g_post.hasStats){if(IN.left)g_postPage=(g_postPage+2)%3;if(IN.right)g_postPage=(g_postPage+1)%3;
       const char* tabs[]={"Feuille de match","Jeu et attaque","Discipline / reprises"};for(int i=0;i<3;i++){bool clicked=button(12+i*210,y,204,18,tabs[i]);if(i==g_postPage){DrawRectangle(12+i*210,y,204,18,C_SEL);drawTextCentered(tabs[i],114+i*210,y+4,10,BLACK);}if(clicked){g_postPage=i;return;}}y+=25;}
 
@@ -1599,7 +1670,7 @@ static void screenPost() {
         if (g_post.gate >= 0) drawTextPx(fmt("%s (%s)", money(g_post.gate / 1000).c_str(), g_post.realGate ? "billetterie du club" : "estimation"), x2, yy, 10, C_TXT);
         drawFooter("OK : continuer   Gauche/Droite : feuille de match   Tab : lire l'article");
         if (IN.tab) { g_screen = SC_ARTICLE; return; }
-        if (IN.ok || IN.back || IN.click || IN.start) { if (g_mctx.career) { autosave(); if (!openMatchday(g_mctx.comp, g_mctx.match, true)) openHub(); } else g_screen = SC_MAIN; }
+        if (IN.ok || IN.back || IN.click || IN.start) postExit();
         return;
     }
     DrawRectangle(VW / 2, y, 1, 150, Color{ 255, 255, 255, 40 });
@@ -1618,7 +1689,7 @@ static void screenPost() {
     drawTextPx(fitText("PRESSE : " + g_articleTitle, VW - 60, 10), 28, VH - 32, 10, Color{ 30, 30, 30, 255 });
     drawFooter(g_post.hasStats ? "OK : continuer   Gauche/Droite : statistiques, stade et recette   Tab : article" : "OK : continuer   Tab : lire l'article");
     if (IN.tab) { g_screen = SC_ARTICLE; return; }
-    if (IN.ok || IN.back || IN.click || IN.start) { if (g_mctx.career) { autosave(); if (!openMatchday(g_mctx.comp, g_mctx.match, true)) openHub(); } else g_screen = SC_MAIN; }
+    if (IN.ok || IN.back || IN.click || IN.start) postExit();
 }
 
 // ------------------------------------------------------------------ détail d'un match (depuis les résultats)
@@ -3512,7 +3583,8 @@ static void screenOptions() {
         std::string("Musique des menus : ") + (!g_settings.music ? "non" : g_settings.musicTrack == 0 ? "tous les thèmes" : audioTrackName(g_settings.musicTrack - 1)),
         fmt("Commentaires pendant les matchs : %s", g_settings.commentary ? "oui" : "non"),
         fmt("Vibrations des manettes : %s", g_settings.vibration ? "oui" : "non"),
-        "Aide des commandes",
+        fmt("Scènes de vestiaire : %s", g_settings.lockerRoom ? "oui" : "non"),
+        "Aide des commandes  (F12 : capture d'écran)",
         "Retour" };
     int s = menuRun(g_optLW, items, 50, 340);
     if (s == 6) { g_ctlLW = ListW(); g_ctlCapture = -1; g_ctlBack = SC_OPTIONS; g_screen = SC_CONTROLS; return; }
@@ -3532,6 +3604,7 @@ static void screenOptions() {
         g_settings.vibration = !g_settings.vibration; g_settings.save();
         if (g_settings.vibration) for (int p = 0; p < 4; p++) if (IsGamepadAvailable(p)) rumbleStart(p, 0.6f, 0.3f);   // essai
     }
+    if (s == 10 || (g_optLW.cur == 10 && (IN.left || IN.right))) { g_settings.lockerRoom = !g_settings.lockerRoom; g_settings.save(); }
     int d = IN.left ? -1 : IN.right ? 1 : 0;
     int c = g_optLW.cur;
     if (s >= 0 && s < 6) d = 1;
@@ -3547,8 +3620,8 @@ static void screenOptions() {
         g_settings.save();
     }
     drawFooter("Gauche/Droite : modifier   Retour");
-    if (s == 10) { g_screen = SC_HELP; return; }
-    if (IN.back || s == 11) { g_settings.save(); g_screen = g_optBack; }
+    if (s == 11) { g_screen = SC_HELP; return; }
+    if (IN.back || s == 12) { g_settings.save(); g_screen = g_optBack; }
 }
 
 static void screenHelp() {
@@ -3891,7 +3964,7 @@ void appFrame(float dt) {
         if ((int)g_screen != markScreen) { crashMark("écran %d", (int)g_screen); markScreen = (int)g_screen; }
     }
     g_noBackBtn = g_screen == SC_MAIN || g_screen == SC_JOBS || g_screen == SC_SPLASH;
-    audioMusic(g_screen != SC_MATCH && g_screen != SC_HALFTIME && g_screen != SC_TVINTRO && g_screen != SC_SETUP && g_screen != SC_STUDIO);
+    audioMusic(g_screen != SC_MATCH && g_screen != SC_HALFTIME && g_screen != SC_LOCKER && g_screen != SC_TVINTRO && g_screen != SC_SETUP && g_screen != SC_STUDIO);
     switch (g_screen) {
     case SC_SPLASH: screenSplash(dt); break;
     case SC_LIFENEW: screenLifeNew(); break;
@@ -3925,6 +3998,7 @@ void appFrame(float dt) {
     case SC_SPORTING:screenSporting();break;
     case SC_SUPPORTERS:screenSupporters();break;
     case SC_SUPPORTPARTY:screenSupporterParty(dt);break;
+    case SC_LOCKER: screenLocker(); break;
     case SC_HELP: screenHelp(); break;
     case SC_FICHE: screenFiche(dt); break;
     case SC_EDITMENU: screenEditMenu(); break;
@@ -4062,11 +4136,11 @@ void appTestStart(const char* mode) {
         if (m == "reds") { M.giveCard(3, 2); M.giveCard(4, 2); M.giveCard(14, 2); M.state = MS_PLAY; }
         return;
     }
-    if (m == "match" || m == "match2" || m == "board" || m == "subtest" || m == "goaltest" || m == "cardtest" || m == "photo" || m == "toss" || m == "trophy" || m == "trophy2") {
+    if (m == "match" || m == "match2" || m == "board" || m == "subtest" || m == "goaltest" || m == "cardtest" || m == "photo" || m == "toss" || m == "trophy" || m == "trophy2" || m == "motm" || m == "locker") {
         int a = g_world.nationIndex("FRA"), b = g_world.nationIndex("ARG");
         startSetup(a, b, false, -1, -1);
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;
-        if (m == "match2") g_setup.side[IN_KB1] = 0;
+        if (m == "match2" || m == "locker") g_setup.side[IN_KB1] = 0;
         g_setup.pitch = 1;
         if (getenv("FOOT_TURF")) g_setup.turf = atoi(getenv("FOOT_TURF"));
         if (getenv("FOOT_METEO")) { g_setup.meteo = atoi(getenv("FOOT_METEO")); meteoApply(g_setup, false, g_setup.turf); }
@@ -4080,7 +4154,16 @@ void appTestStart(const char* mode) {
             M.finishMatch(); g_trophyChecked = true;
             if (m == "trophy") M.startTrophy(1, 0, 0, "Coupe de France"); else M.startTrophy(0, 1, 2, "Ligue 1");
         }
-        if (m == "board") { g_match->ceremony = false; g_match->startPeriod(0); g_match->clock = 43.7f; }
+        if (m == "locker") {   // FOOT_LOCKER=1 FOOT_LOCKER_PHASE=0/1/2 FOOT_SCORE=ab
+            Match& M = *g_match; M.ceremony = false; const char* sc = getenv("FOOT_SCORE"); if (sc && strlen(sc) >= 2) { M.score[0] = sc[0] - '0'; M.score[1] = sc[1] - '0'; }
+            int ph = getenv("FOOT_LOCKER_PHASE") ? atoi(getenv("FOOT_LOCKER_PHASE")) : 0; g_screen = SC_MATCH; openLocker(ph);
+        }
+        if (m == "motm") {   // fin d'un match télévisé : homme du match
+            Match& M = *g_match; M.ceremony = false; M.S.tv = true; M.S.channel = "FRANCE SPORT"; M.startPeriod(1); M.state = MS_PLAY;
+            for (int k = 0; k < 2400 && M.clock < 89.5f; k++) { M.update(1.f / 60); M.sfxN = 0; }
+            M.clock = 90; M.finishMatch(); g_trophyChecked = true;
+        }
+        if (m == "board") { g_match->ceremony = false; g_match->startPeriod(0); g_match->clock = getenv("FOOT_CLOCK") ? (float)atof(getenv("FOOT_CLOCK")) : 43.7f; }
         if (m == "subtest" || m == "goaltest" || m == "cardtest") {
             Match& M = *g_match; M.ceremony = false; M.startPeriod(0);
             M.state = MS_PLAY; M.clock = 20;

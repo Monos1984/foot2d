@@ -12,6 +12,7 @@ Color hexc(unsigned rgb, unsigned char a = 255);
 void renderInit();
 void renderShutdown();
 void renderMatch(const Match& m, bool radar);
+float crowdWavePhase(const Match& m);   // la ola : -1 si inactive, sinon position (0..1) du tour du stade
 void drawTextPx(const std::string& s, int x, int y, int size, Color c);
 void drawTextShadow(const std::string& s, int x, int y, int size, Color c);
 void drawTextCentered(const std::string& s, int cx, int y, int size, Color c, bool shadow = true);

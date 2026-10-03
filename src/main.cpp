@@ -11,7 +11,27 @@ void appTestStart(const char* mode);
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <string>
 extern bool g_quit;
+
+// capture d'écran (F12 ou Impr. écran) : image du jeu agrandie x2, enregistrée en PNG dans « captures » à côté de l'exécutable
+static float g_shotMsgT = 0; static std::string g_shotMsg;
+static void saveScreenshot(const RenderTexture2D& target) {
+    std::string dir = std::string(GetApplicationDirectory()) + "captures";
+    if (!DirectoryExists(dir.c_str())) MakeDirectory(dir.c_str());
+    Image img = LoadImageFromTexture(target.texture);
+    ImageFlipVertical(&img);
+    ImageResizeNN(&img, VW * 2, VH * 2);
+    time_t now = time(nullptr); struct tm* lt = localtime(&now);
+    char name[64]; strftime(name, sizeof name, "capture_%Y%m%d_%H%M%S", lt);
+    std::string path = dir + "/" + name + ".png";
+    for (int k = 2; FileExists(path.c_str()) && k < 100; k++) path = dir + "/" + name + "_" + std::to_string(k) + ".png";
+    bool ok = ExportImage(img, path.c_str());
+    UnloadImage(img);
+    g_shotMsg = ok ? std::string("Capture enregistrée : captures/") + GetFileName(path.c_str()) : std::string("Échec de la capture d'écran");
+    g_shotMsgT = 2.5f;
+}
 
 int main(int argc, char** argv) {
     if (argc > 1 && !strcmp(argv[1], "--validate-france")) {
@@ -54,9 +74,18 @@ int main(int argc, char** argv) {
         BeginTextureMode(target);
         appFrame(dt);
         EndTextureMode();
+        if (IsKeyPressed(KEY_F12) || IsKeyPressed(KEY_PRINT_SCREEN)) saveScreenshot(target);
         BeginDrawing();
         ClearBackground(BLACK);
         DrawTexturePro(target.texture, Rectangle{ 0, 0, (float)VW, -(float)VH }, Rectangle{ g_viewX, g_viewY, VW * sc, VH * sc }, Vector2{ 0, 0 }, 0, WHITE);
+        if (g_shotMsgT > 0) {
+            g_shotMsgT -= dt;
+            int fs = std::max(10, (int)(10 * sc));
+            int w = MeasureText(g_shotMsg.c_str(), fs);
+            unsigned char a = (unsigned char)(255 * std::min(1.f, g_shotMsgT * 2.f));
+            DrawRectangle((int)g_viewX + 8, (int)g_viewY + 8, w + 16, fs + 10, Color{ 0, 0, 0, (unsigned char)(a * 0.7f) });
+            DrawText(g_shotMsg.c_str(), (int)g_viewX + 16, (int)g_viewY + 13, fs, Color{ 255, 225, 90, a });
+        }
         EndDrawing();
         frame++;
         if (test) {

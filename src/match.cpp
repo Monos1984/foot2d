@@ -176,7 +176,7 @@ void Match::aiTactics() {
 
 void Match::init(const MatchSetup& setup) {
     S = setup;
-    for(int t=0;t<2;t++){shots[t]=onTarget[t]=passes[t]=completedPasses[t]=saves[t]=blockedShots[t]=woodwork[t]=throws[t]=freeKicks[t]=goalKicks[t]=penalties[t]=corners[t]=fouls[t]=offsides[t]=0;possTime[t]=0;}pendingPass=pendingShot=-1;kickingPass=shotHitWoodwork=false;
+    for(int t=0;t<2;t++)pst[t].clear();for(int t=0;t<2;t++){shots[t]=onTarget[t]=passes[t]=completedPasses[t]=saves[t]=blockedShots[t]=woodwork[t]=throws[t]=freeKicks[t]=goalKicks[t]=penalties[t]=corners[t]=fouls[t]=offsides[t]=0;possTime[t]=0;}pendingPass=pendingShot=-1;kickingPass=shotHitWoodwork=false;
     positionMinutes.clear();
     R = Rng(g_rng.next());
     int ids[2] = { S.home, S.away };
@@ -911,7 +911,7 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     playSfx(SFX_KICK);
     // tir cadré ?
     V2 g = goalCenter(p.team);
-    if (!shootout&&!kickingPass&&(g - ball.pos).len() < 40 && dir.dot((g - ball.pos).norm()) > 0.70f && speed > 16) { shots[p.team]++;pendingShot=i; lastShooter = i; lastShotAge = 0; }
+    if (!shootout&&!kickingPass&&(g - ball.pos).len() < 40 && dir.dot((g - ball.pos).norm()) > 0.70f && speed > 16) { shots[p.team]++;pendingShot=i; ps(i).shot++; lastShooter = i; lastShotAge = 0; }
     else if(!shootout&&(kickingPass||deliberate&&speed<23)){passes[p.team]++;pendingPass=i;}
 }
 
@@ -1024,6 +1024,7 @@ void Match::updateBall(float dt) {
                 if (o.human >= 0 && S.difficulty == 2) chance *= 1.35f;
                 if (o.human >= 0 && S.difficulty == 0) chance *= 0.7f;
                 if (R.chance(chance)) {
+                    if (!shootout) ps(j).tackle++;
                     b.owner = -1;
                     V2 kd = (b.pos - q.pos).norm();
                     b.vel = kd * 3.5f + q.vel * 0.7f;
@@ -1231,7 +1232,7 @@ void Match::updateBall(float dt) {
             b.vel = d * 8.5f + V2(R.frange(-1.5f, 1.5f), R.frange(-1.5f, 1.5f));
             b.vz = 0.5f;
             b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
-            p.touchedBallInSlide = true;
+            p.touchedBallInSlide = true; if (!shootout) ps(best).tackle++;
             armOffside(best);
             playSfx(SFX_KICK);
             return;
@@ -1263,6 +1264,7 @@ void Match::updateBall(float dt) {
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 p.cool = 0.5f;
                 playSfx(SFX_CROWD_OOH);        // une parade du gardien ne remet pas en jeu un attaquant hors-jeu
+                if (p.team == 0 && !S.neutral) playSfx(SFX_CLAPS);   // le public applaudit son gardien
             }
             return;
         }
@@ -1343,12 +1345,57 @@ void Match::checkOut() {
 
 void Match::statsTouch(int i){
  if(i<0||i>=22||shootout)return;
- if(pendingPass>=0&&i!=pendingPass){if(pl[i].team==pl[pendingPass].team)completedPasses[pl[i].team]++;pendingPass=-1;}
+ ps(i).touch++;
+ if(pendingPass>=0&&i!=pendingPass){if(pl[i].team==pl[pendingPass].team){completedPasses[pl[i].team]++;ps(pendingPass).passOk++;}else ps(i).inter++;pendingPass=-1;}
  if(pendingShot>=0&&i!=pendingShot){int t=pl[pendingShot].team;if(pl[i].team!=t){
    if(pl[i].gk){V2 g=goalCenter(t);float dt=std::fabs(ball.vel.y)>.01f?(g.y-ball.pos.y)/ball.vel.y:-1;float xx=ball.pos.x+ball.vel.x*dt,zz=ball.z+ball.vz*dt-4.905f*dt*dt;
-    if(dt>=0&&std::fabs(xx-PITCH_W/2)<GOAL_W/2&&zz<GOAL_H){onTarget[t]++;saves[pl[i].team]++;}}
-   else blockedShots[t]++;
+    if(dt>=0&&std::fabs(xx-PITCH_W/2)<GOAL_W/2&&zz<GOAL_H){onTarget[t]++;saves[pl[i].team]++;ps(i).save++;}}
+   else {blockedShots[t]++;ps(i).block++;}
  }pendingShot=-1;}
+}
+// note sur 10 : buts, passes décisives, jeu (passes, récupérations, arrêts), résultat et discipline
+float Match::playerRating(int t, int sq) const {
+    const Team& T = team(t);
+    int id = sq >= 0 && sq < (int)T.squad.size() ? T.squad[sq].id : -1;
+    float r = 6.0f;
+    for (auto& e : events) {
+        if (e.pid == id && id >= 0) {
+            if (e.type == 0 && e.team == t) r += e.pen ? 0.8f : 1.1f;
+            else if (e.type == 3) r -= 0.9f;
+            else if (e.type == 1 && e.team == t) r -= 0.3f;
+            else if (e.type == 2 && e.team == t) r -= 1.6f;
+        }
+        if (e.aid == id && id >= 0 && e.type == 0 && e.team == t) r += 0.7f;
+    }
+    auto it = pst[t].find(sq);
+    bool gk = false, def = false;
+    if (it != pst[t].end()) {
+        const PStat& s = it->second;
+        gk = s.gk; def = s.def;
+        r += std::min(1.0f, s.passOk * 0.035f) + s.tackle * 0.15f + s.inter * 0.1f + s.block * 0.25f + s.save * 0.35f + std::min(0.4f, s.touch * 0.006f) + s.shot * 0.05f;
+    }
+    int gf = score[t], ga = score[1 - t];
+    r += gf > ga ? 0.4f : gf < ga ? -0.3f : 0.f;
+    if (ga == 0 && gk) r += 0.8f; else if (ga == 0 && def) r += 0.4f;
+    if (gk) r -= 0.25f * ga;
+    // petite variation propre au joueur (forme du jour), stable pour un même match
+    uint32_t h = (uint32_t)(id * 2654435761u) ^ (uint32_t)(S.home * 40503u + S.away * 97u);
+    h ^= h >> 15; h *= 0x2c1b3c6d; h ^= h >> 12;
+    r += ((h % 1000) / 1000.f - 0.5f) * 0.5f;
+    return clampf(r, 3.f, 10.f);
+}
+int Match::manOfMatch(int& bestTeam) const {
+    int best = -1; float br = -1; bestTeam = -1;
+    for (int t = 0; t < 2; t++) {
+        std::vector<int> cand;
+        for (auto& kv : pst[t]) cand.push_back(kv.first);
+        for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch || pl[i].sentOff) cand.push_back(pl[i].squad);
+        for (int sq : cand) {
+            float r = playerRating(t, sq) + (score[t] > score[1 - t] ? 0.05f : 0.f);   // à note égale, le vainqueur
+            if (r > br) { br = r; best = sq; bestTeam = t; }
+        }
+    }
+    return best;
 }
 void Match::statsGoal(int t){if(!shootout&&pendingShot>=0&&pl[pendingShot].team==t)onTarget[t]++;pendingShot=pendingPass=-1;}
 void Match::statsWoodwork(){if(!shootout&&pendingShot>=0&&!shotHitWoodwork){woodwork[pl[pendingShot].team]++;shotHitWoodwork=true;}}
@@ -1583,6 +1630,7 @@ void Match::doSub(int t, int slot, int incoming, bool anim) {
         Walker w; w.pos = p.pos; w.target = V2(-1.8f, PITCH_L / 2 + (t ? 2.5f : -2.5f)); w.team = t; w.gk = p.gk; w.gkShirt = gkShirt[t]; w.anim = 0;
         w.skin = outSq >= 0 && outSq < (int)T.squad.size() ? T.squad[outSq].skin : 0; w.hair = outSq >= 0 && outSq < (int)T.squad.size() ? T.squad[outSq].hair : 0;
         walkers.push_back(w);
+        if (!S.training) playSfx(SFX_CLAPS);       // le joueur qui sort est applaudi
         subBoardT = 3.4f; subBoardTeam = t;
         subBoardOut = outSq >= 0 && outSq < (int)T.squad.size() ? T.squad[outSq].num : 0; subBoardIn = T.squad[incoming].num;
         subBoardOutName = outSq >= 0 && outSq < (int)T.squad.size() ? T.squad[outSq].name : ""; subBoardInName = T.squad[incoming].name;

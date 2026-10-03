@@ -253,6 +253,12 @@ struct Match {
     int onTarget[2]={},passes[2]={},completedPasses[2]={},saves[2]={},blockedShots[2]={},woodwork[2]={},throws[2]={},freeKicks[2]={},goalKicks[2]={},penalties[2]={};
     int pendingPass=-1,pendingShot=-1;bool kickingPass=false,shotHitWoodwork=false;
     void statsTouch(int player);void statsGoal(int team);void statsWoodwork();
+    // statistiques individuelles (par joueur de l'effectif) : homme du match
+    struct PStat { int touch = 0, passOk = 0, save = 0, block = 0, inter = 0, tackle = 0, shot = 0; bool gk = false, def = false; };
+    std::map<int, PStat> pst[2];
+    PStat& ps(int i) { PStat& s = pst[pl[i].team][pl[i].squad]; s.gk = pl[i].gk; s.def = pl[i].role == 1; return s; }
+    float playerRating(int team, int squad) const;
+    int manOfMatch(int& team) const;          // index dans l'effectif (-1 si aucun)
     int corners[2] = { 0, 0 }, fouls[2] = { 0, 0 }, offsides[2] = { 0, 0 };
     float flashT = 0, thunderT = 20; V2 wind; bool coolBreak[2] = { false, false };   // météo : éclairs, vent d'orage, pauses fraîcheur
     int medicFor = -1; int medicPhase = 0; float medicT = 0; V2 medicPos[2]; bool medicDone[22] = {};   // soigneurs (blessure)
@@ -420,7 +426,7 @@ struct Match {
     int shootBtn(int human, bool pressedOnly) const;
 };
 
-enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER, SFX_FANS_WHISTLE, SFX_CLAPS, NUM_SFX };
+enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER, SFX_FANS_WHISTLE, SFX_CLAPS, SFX_OLA, NUM_SFX };
 extern const char* METEO_NAMES[6];
 int meteoForMonth(int month, int climate, uint64_t seed);   // month 0 août ... 10 juin ; climate 0 tempéré, 1 chaud, 2 hémisphère sud, 3 nordique
 void meteoApply(MatchSetup& s, bool heated, int turf);       // terrain et affichage selon la météo
