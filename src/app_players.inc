@@ -104,20 +104,48 @@ static void screenPlayer() {
     } else {
         // carrière : discussion individuelle avec un joueur de son effectif (une fois par mois)
         if (careerRules() && g_plTeam == g_career.userTeam && !g_career.life.isPlayer && g_career.kind == CK_CLUB) {
-            static std::map<int, int> talked;     // joueur -> mois de la dernière discussion
+            auto& talked = g_career.monthly.talked;    // joueur -> mois de la dernière discussion (sauvegardé avec la carrière)
             int month = (int)(g_career.season.now / 4.345) + g_career.year * 12;
-            bool can = talked.count(p.id) == 0 || talked[p.id] != month;
+            auto tk = std::find_if(talked.begin(), talked.end(), [&](const Career::KeyVal& e) { return e.k == p.id; });
+            bool can = tk == talked.end() || tk->v != month;
             static const char* TALK[3] = { "Féliciter", "Encourager", "Recadrer" };
             for (int k = 0; k < 3; k++) if (button(VW - 330 + k * 106, VH - 34, 100, 14, TALK[k], false, can)) {
-                int d = 0; std::string r;
+                int d = 0, rel = 0; std::string r;
                 bool inForm = p.goals + p.assists >= std::max(2, p.apps / 3) || p.morale >= 75;
-                if (k == 0) { d = inForm ? 6 : 1; r = inForm ? p.name + " apprécie vos félicitations, il est gonflé à bloc." : p.name + " est surpris : il sait qu'il peut mieux faire."; }
-                else if (k == 1) { d = p.morale < 50 ? 7 : 2; r = p.morale < 50 ? p.name + " reprend confiance grâce à votre soutien." : p.name + " vous remercie, il était déjà serein."; }
-                else { bool lazy = p.morale >= 70 && !inForm; d = lazy ? 1 : -7; r = lazy ? p.name + " a compris le message et redouble d'efforts." : p.name + " le prend mal, son moral baisse."; }
+                // personnalité : susceptibilité, professionnalisme, loyauté, leadership, sang-froid, relation avec l'entraîneur
+                bool pers = g_career.personalityEnabled();
+                PlayerPersonality Q; int mgrRel = 60;
+                PlayerClubRelation* R = nullptr;
+                if (pers) { auto& PP = g_career.personalityPlayer(p, g_plTeam); Q = PP.traits; R = &g_career.personalityRelation(PP, g_plTeam); mgrRel = R->managerRelationship; }
+                if (k == 0) {
+                    d = inForm ? 6 : 1; rel = inForm ? 2 : 0;
+                    if (pers && !inForm && Q.professionalism >= 70) { d = 0; r = p.name + " reste lucide : il sait qu'il doit faire plus."; }
+                    else r = inForm ? p.name + " apprécie vos félicitations, il est gonflé à bloc." : p.name + " est surpris : il sait qu'il peut mieux faire.";
+                    if (pers && inForm && Q.ambition >= 75) r += " Il en veut encore plus.";
+                } else if (k == 1) {
+                    d = p.morale < 50 ? 7 : 2; rel = p.morale < 50 ? 2 : 1;
+                    if (pers && Q.sensitivity >= 70 && p.morale < 50) d += 1;              // les joueurs sensibles ont besoin de soutien
+                    if (pers && Q.leadership >= 75 && p.morale >= 50) d = 1;
+                    r = p.morale < 50 ? p.name + " reprend confiance grâce à votre soutien." : p.name + " vous remercie, il était déjà serein.";
+                } else {
+                    bool lazy = p.morale >= 70 && !inForm;
+                    // un recadrage passe mieux chez un joueur professionnel, peu susceptible, leader ou proche de l'entraîneur
+                    int accept = pers ? Q.professionalism / 2 + (100 - Q.sensitivity) / 2 + Q.leadership / 5 + Q.composure / 6 + (mgrRel - 50) / 2 + (lazy ? 25 : 0) : (lazy ? 100 : 0);
+                    bool ok = accept >= 85;
+                    if (ok) { d = lazy ? 2 : 1; rel = -1; r = p.name + (pers && Q.professionalism >= 70 ? " accepte la critique en professionnel et redouble d'efforts." : " a compris le message et redouble d'efforts."); }
+                    else {
+                        d = -7; rel = -4;
+                        if (pers) { if (Q.leadership >= 70 || Q.composure >= 70) d = -4; if (mgrRel >= 70) { d += 2; rel = -2; } if (Q.sensitivity >= 80) { d -= 2; rel -= 2; } if (Q.loyalty >= 75) rel += 1; }
+                        r = p.name + (pers && Q.sensitivity >= 80 ? " le vit très mal et se ferme." : " le prend mal, son moral baisse.");
+                    }
+                }
                 p.morale = (uint8_t)std::max(10, std::min(100, p.morale + d));
-                talked[p.id] = month;
+                if (R) R->managerRelationship = std::max(0, std::min(100, R->managerRelationship + rel));
+                if (tk == talked.end()) talked.push_back({ p.id, month }); else tk->v = month;
+                talked.erase(std::remove_if(talked.begin(), talked.end(), [&](const Career::KeyVal& e) { return e.v < month; }), talked.end());
                 toast(r + fmt(" (moral %+d)", d));
                 g_career.season.news.push_back("Vestiaire : " + r);
+                break;
             }
         }
         drawFooter(careerRules()?"Tab : postes puis personnalité   Retour":"Retour");

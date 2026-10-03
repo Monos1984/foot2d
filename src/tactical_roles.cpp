@@ -49,15 +49,15 @@ SlotTactic defaultSlotTactic(int p,int model,int slot){SlotTactic t;t.duty=p==DP
  return t;}
 RoleEffects roleEffects(int p,const SlotTactic& t){RoleEffects e;e.advance=t.duty==DUTY_ATTACK?.07f:t.duty==DUTY_DEFENSE?-.05f:0;
  int r=t.role%tacticalRoleCount(p);
- if(p==DP_DC){if(r==1){e.press=1.4f;e.advance+=.035f;}if(r==2){e.press=.7f;e.advance-=.055f;}if(r>=3)e.risk=1.2f;}
- if(p==DP_DD||p==DP_DG){e.advance+=(r==0?-.05f:r==2?.09f:0);if(r==3)e.width=.45f;}
+ if(p==DP_DC){if(r==1){e.press=1.4f;e.advance+=.035f;e.behave=RB_STOPPER;}if(r==2){e.press=.7f;e.advance-=.055f;e.behave=RB_COVER;}if(r>=3)e.risk=1.2f;if(r==4){e.behave=RB_LIBERO;e.dribble=1.3f;}}
+ if(p==DP_DD||p==DP_DG){e.advance+=(r==0?-.05f:r==2?.09f:0);if(r==2)e.behave=RB_ATT_FB;if(r==3){e.width=.45f;e.behave=RB_INV_FB;}}
  if(p==DP_PIS_D||p==DP_PIS_G)e.advance+=.06f+(r-1)*.04f;
  if(p==DP_MDC){if(r==0)e.advance-=.055f;if(r==1)e.press=1.4f;if(r==2)e.risk=1.25f;if(r==3)e.halfback=true;}
- if(p==DP_MC){if(r==1){e.advance+=.04f;e.press=1.25f;}if(r==2)e.press=1.4f;if(r==3)e.risk=1.3f;if(r==4)e.width=1.4f;}
+ if(p==DP_MC){if(r==1){e.advance+=.04f;e.press=1.25f;}if(r==2)e.press=1.4f;if(r==3)e.risk=1.3f;if(r==4){e.width=1.4f;e.behave=RB_MEZZALA;}}
  if(p==DP_MOC){e.risk=1.3f;if(r==1)e.shot=1.2f;if(r==2)e.advance+=.05f;if(r==3){e.press=.7f;e.dribble=1.25f;}}
- if(p==DP_AD||p==DP_AG){e.width=1.15f;if(r==2){e.width=.45f;e.shot=1.4f;}if(r==3){e.risk=1.3f;e.drop=true;}}
+ if(p==DP_AD||p==DP_AG){e.width=1.15f;if(r==2){e.width=.45f;e.shot=1.4f;e.behave=RB_INSIDE_FWD;}if(r==3){e.risk=1.3f;e.drop=true;}}
  if(p==DP_MD||p==DP_MG){e.width=1.15f;if(r==2)e.risk=1.3f;}
- if(p==DP_BU){if(r==1){e.shot=1.4f;e.advance+=.04f;}if(r==2){e.hold=2;e.dribble=.7f;}if(r==3){e.risk=1.15f;e.dribble=1.15f;}if(r==4)e.advance+=.08f;if(r==5){e.drop=true;e.advance-=.12f;e.risk=1.3f;}if(r==6)e.press=1.5f;}
+ if(p==DP_BU){if(r==1){e.shot=1.4f;e.advance+=.04f;}if(r==2){e.hold=2;e.dribble=.7f;}if(r==3){e.risk=1.15f;e.dribble=1.15f;}if(r==4)e.advance+=.08f;if(r==5){e.drop=true;e.advance-=.12f;e.risk=1.3f;e.behave=RB_FALSE9;}if(r==6)e.press=1.5f;}
  if(p==DP_SA){e.drop=true;e.risk=1.2f;if(r==1){e.dribble=1.3f;e.width=1.25f;}if(r==2){e.advance+=.05f;e.shot=1.25f;}}
  if(p==DP_GB){if(r==1)e.risk=1.25f;if(r==2)e.advance=.035f;}
  auto has=[&](int i){return (t.instructions&(1u<<i))!=0;};

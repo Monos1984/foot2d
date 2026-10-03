@@ -1143,6 +1143,31 @@ static void simulateRest(Match& m) {
 }
 
 // remise du trophée : finale de coupe (ou supercoupe) gagnée, ou titre de champion acquis lors de la dernière journée
+// niveau de la cérémonie selon la compétition (et le style du trophée)
+static int trophyTierFor(const Competition& C, int team, int& style) {
+    switch (C.kind) {
+    case 3: style = 1; return 4;
+    case 7: case 8: case 9: case 14: style = 5; return 4;
+    case 4: case 16: case 17: case 26: case 27: style = 4; return 1;
+    case 5: case 18: style = 3; return 0;
+    default: break;
+    }
+    if (C.format == FMT_LEAGUE) {
+        int p, q, g;
+        if (g_career.tierOfTeam(team, &p, &q, &g) >= 0) {
+            const Pyramid& P = g_career.pyramids[p];
+            int tier = P.pools[q].tier;
+            int sc = tier >= 0 && tier < (int)P.tiers.size() ? P.tiers[tier].scope : SC_NATIONAL;
+            if (sc == SC_DEPT) { style = 3; return 0; }
+            if (sc == SC_REGION) { style = 4; return 1; }
+        }
+        style = 2; return 3;
+    }
+    if (C.name.find("istrict") != std::string::npos) { style = 3; return 0; }
+    if (C.name.find("égional") != std::string::npos) { style = 4; return 1; }
+    return 2;
+}
+static int g_trophyTier = 2;
 static bool trophyCheck(const Match& m, int& side, int& kind, int& style, std::string& title) {
     if (!g_mctx.career || g_mctx.comp < 0 || m.S.training) return false;
     Season& S = g_career.season;
@@ -1160,6 +1185,7 @@ static bool trophyCheck(const Match& m, int& side, int& kind, int& style, std::s
         else if (m.shootout) side = m.pens[0] > m.pens[1] ? 0 : 1;
         else return false;
         kind = 0; style = C.kind == 3 ? 1 : 0;
+        g_trophyTier = trophyTierFor(C, side ? m.S.away : m.S.home, style);
         title = C.name;
         return true;
     }
@@ -1178,6 +1204,7 @@ static bool trophyCheck(const Match& m, int& side, int& kind, int& style, std::s
     int champ = tb[0].team;
     if (champ == m.S.home) side = 0; else if (champ == m.S.away) side = 1; else return false;
     kind = 1; style = 2; title = C.name;
+    g_trophyTier = trophyTierFor(C, champ, style);
     return true;
 }
 
@@ -1400,7 +1427,7 @@ static void screenMatch(float dt) {
         g_trophyChecked = true;
         if (g_mctx.career && g_mctx.comp >= 0) g_career.season.finishRoundOthers(g_mctx.comp, g_mctx.match);   // matchs simultanés de la journée
         int side = -1, kind = 0, style = 0; std::string title;
-        if (trophyCheck(m, side, kind, style, title)) { m.startTrophy(side, kind, style, title); g_trophyShown = true; }
+        if (trophyCheck(m, side, kind, style, title)) { m.trophyTier = g_trophyTier; m.startTrophy(side, kind, style, title); g_trophyShown = true; }
         else if (!m.abandoned && qualifyCheck(m, side)) m.startLap(side);     // qualification en coupe : tour d'honneur
         else if (!m.abandoned && invasionCheck(m)) m.startInvasion(0);        // montée : envahissement de terrain (aléatoire)
     }
@@ -4397,7 +4424,12 @@ void appTestStart(const char* mode) {
             Match& M = *g_match; M.ceremony = false; M.startPeriod(1); M.clock = 90; M.score[0] = 2; M.score[1] = 1;
             for (int i = 0; i < 22; i++) M.pl[i].pos = V2(10.f + (i * 7) % 50, 30.f + (i * 13) % 50);
             M.finishMatch(); g_trophyChecked = true;
-            if (m == "trophy") M.startTrophy(1, 0, 0, "Coupe de France"); else M.startTrophy(0, 1, 2, "Ligue 1");
+            static const char* TN[5] = { "District 1", "Régional 1", "Coupe de France", "Ligue 1", "Ligue des champions" };
+            static const int TS[5] = { 3, 4, 0, 2, 1 };
+            int tier = getenv("FOOT_TROPHY_TIER") ? std::max(0, std::min(4, atoi(getenv("FOOT_TROPHY_TIER")))) : (m == "trophy" ? 2 : 3);
+            M.trophyTier = tier;
+            bool cup = tier == 2 || tier == 4;
+            M.startTrophy(cup ? 1 : 0, cup ? 0 : 1, TS[tier], TN[tier]);
         }
         if (m == "invasion") { Match& M = *g_match; M.ceremony = false; M.startPeriod(1); M.clock = 90; M.score[0] = 3; M.score[1] = 1; for (int i = 0; i < 22; i++) { V2 o; M.formationTarget(i, o); M.pl[i].pos = o; } M.finishMatch(); g_trophyChecked = true; M.startInvasion(0); }
         if (m == "locker") {   // FOOT_LOCKER=1 FOOT_LOCKER_PHASE=0/1/2 FOOT_SCORE=ab
@@ -4433,7 +4465,7 @@ void appTestStart(const char* mode) {
             g_career.ballonTick(); for (auto& e : g_career.ballonEditions) e.presented = 1; g_needAdvance = true;
         }
         openHub();
-        if (getenv("FOOT_PRESS")) { g_pending = g_career.season.advance(false); g_needAdvance = false; if (g_pending.comp >= 0) openPress(g_pending.comp, g_pending.match); }
+        if (getenv("FOOT_PRESS")) { g_pending = g_career.season.advance(false); g_needAdvance = false; if (g_pending.comp >= 0) { openPress(g_pending.comp, g_pending.match); if (getenv("FOOT_PRESS_Q")) g_pressQ = std::max(0, std::min(9, atoi(getenv("FOOT_PRESS_Q")))); if (getenv("FOOT_PRESS_A")) { g_pressA = std::max(0, std::min(2, atoi(getenv("FOOT_PRESS_A")))); pressApply(g_pressA); } } }
     } else if (m == "coach" || m == "callup" || m == "hosts" || m == "coachlog" || m == "coachend") {
         g_career.newCoachCareer(g_world.nationIndex("FRA")); g_careerActive = true; g_needAdvance = true;
         if (m == "coach") { openHub(); return; }
@@ -4653,7 +4685,7 @@ void appTestStart(const char* mode) {
         g_careerActive=true;g_needAdvance=false;openMuseum(g_career.userTeam,SC_MAIN);
         if(getenv("FOOT_MUSEUM_PAGE"))g_muPage=std::clamp(atoi(getenv("FOOT_MUSEUM_PAGE")),0,11);
         if(m=="museum-detail")g_muDetail=0;
-        if(getenv("FOOT_MUSEUM_DEMO")){auto& H=g_career.clubHistories[g_career.userTeam];const char* N[]={"Ligue 1","Coupe de France","Ligue des champions","Trophée des champions","Ligue 1","Coupe de France"};int K[]={0,1,3,1,0,1};bool F[]={false,true,true,true,false,true};for(int i=0;i<6;i++){MuseumTrophy tr;tr.year=2027+i;tr.kind=K[i];tr.finalMatch.final=F[i];snprintf(tr.name,sizeof tr.name,"%s",N[i]);H.trophies.push_back(tr);}}
+        if(getenv("FOOT_MUSEUM_DEMO")){auto& H=g_career.clubHistories[g_career.userTeam];const char* N[]={"Ligue 1","Coupe de France","Ligue des champions","Trophée des champions","Ligue 1","Coupe de France","Ligue Europa","Coupe régionale - Grand Est","District 1 - Marne"};int K[]={0,1,3,1,0,1,8,4,0};bool F[]={false,true,true,true,false,true,true,true,false};for(int i=0;i<9;i++){MuseumTrophy tr;tr.year=2027+i;tr.kind=K[i];tr.finalMatch.final=F[i];snprintf(tr.name,sizeof tr.name,"%s",N[i]);H.trophies.push_back(tr);}}
         if(m=="museum-filter"){g_muPage=10;g_muYear=2028;g_muCategory=MH_TROPHY;g_muComp=1;}
         if(m=="museum-switch"){int old=g_career.userTeam,next=-1;for(auto& pair:g_career.clubHistories)if(pair.first!=old){next=pair.first;break;}if(next>=0){g_career.museumLeave(old);g_career.userTeam=next;g_career.museumState(next);openMuseum(next,SC_MAIN);IN.click=true;IN.mouse=Vector2{40,40};screenMuseum();IN.click=false;g_muPage=8;}}
         return;

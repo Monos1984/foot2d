@@ -800,6 +800,21 @@ static void drawTrophy(int x, int y, int style, int s) {
     } else if (style == 2) {
         R(-2, -3, 4, 1, silv2); R(-1, -10, 3, 7, gold); R(1, -10, 1, 7, gold2); R(-2, -11, 5, 1, silv); R(-1, -13, 3, 2, silv);
         R(-3, -8, 1, 3, silv); R(3, -8, 1, 3, silv);
+    } else if (style == 3) {         // district : petite coupe argentée sur un socle en bois
+        Color wood{ 120, 76, 40, 255 }, wood2{ 84, 50, 26, 255 };
+        R(-3, -4, 6, 2, wood); R(-3, -3, 6, 1, wood2); R(-1, -5, 2, 1, silv2);
+        R(-2, -8, 4, 3, silv); R(1, -8, 1, 3, silv2); R(-2, -9, 4, 1, Color{ 250, 252, 255, 255 }); R(-3, -8, 1, 2, silv2); R(2, -8, 1, 2, silv2);
+        R(-1, -3, 2, 1, gold);       // plaque gravée
+    } else if (style == 4) {         // régional : coupe argentée à anses, socle noir
+        R(-3, -4, 6, 2, Color{ 30, 30, 34, 255 }); R(-1, -6, 2, 2, silv2);
+        R(-2, -10, 5, 4, silv); R(1, -10, 2, 4, silv2); R(-2, -11, 5, 1, Color{ 250, 252, 255, 255 });
+        R(-4, -10, 1, 3, silv); R(-3, -8, 1, 1, silv); R(4, -10, 1, 3, silv2); R(3, -8, 1, 1, silv2);
+        R(-1, -12, 3, 1, silv); R(0, -13, 1, 1, gold);
+    } else if (style == 5) {         // coupe d'Europe : haute coupe argentée à couvercle
+        R(-3, -3, 6, 1, silv2); R(-2, -4, 4, 1, silv); R(-1, -6, 2, 2, silv2);
+        R(-2, -12, 4, 6, silv); R(1, -12, 1, 6, silv2); R(-3, -11, 1, 4, silv); R(2, -11, 1, 4, silv2);
+        R(-2, -13, 4, 1, Color{ 250, 252, 255, 255 }); R(-1, -14, 2, 1, silv); R(0, -15, 1, 1, Color{ 120, 170, 255, 255 });
+        R(-1, -9, 2, 1, Color{ 80, 120, 220, 255 });
     } else {
         R(-1, -4, 2, 2, gold2); R(-3, -8, 6, 4, gold); R(1, -8, 2, 4, gold2); R(-3, -9, 6, 1, Color{ 255, 240, 150, 255 });
         R(-4, -8, 1, 3, gold); R(3, -8, 1, 3, gold);
@@ -1440,38 +1455,97 @@ void renderMatch(const Match& m, bool radar) {
             DrawRectangle(x1 - 2, y0, 2, y1 - y0, Color{ 200, 200, 210, 255 });
         }
     }
-    // podium de la remise du trophée
+    // podium de la remise du trophée : décor différent selon le niveau (district, régional, coupe nationale, championnat, Europe)
     if (!replay && m.trophyActive) {
         float c = m.trPod.y;
-        int x0 = SX(6.0f), x1 = SX(11.2f), y0 = SY(c - 8.4f), y1 = SY(c + 8.4f);
-        DrawRectangle(x0 + 2, y0 + 2, x1 - x0, y1 - y0 + 3, Color{ 0, 0, 0, 70 });
-        DrawRectangle(x0, y0 - 3, x1 - x0, y1 - y0, Color{ 30, 40, 110, 255 });            // plateau
-        DrawRectangle(x0, y1 - 3, x1 - x0, 3, Color{ 20, 24, 70, 255 });                    // face avant
-        DrawRectangleLines(x0, y0 - 3, x1 - x0, y1 - y0, Color{ 240, 200, 70, 255 });
-        for (int k = 0; k < 2; k++) {                                                        // marches
-            int sy0 = k == 0 ? SY(c - 9.6f) : SY(c + 8.4f) - 3;
-            DrawRectangle(SX(8.4f), sy0, SX(10.6f) - SX(8.4f), 5, Color{ 60, 70, 140, 255 });
-            DrawRectangle(SX(8.4f), sy0 + 2, SX(10.6f) - SX(8.4f), 1, Color{ 40, 48, 110, 255 });
-        }
-        // panneau de fond
-        DrawRectangle(SX(4.8f), y0 - 8, SX(6.0f) - SX(4.8f), y1 - y0 + 5, Color{ 15, 20, 60, 255 });
-        for (int yy = y0 - 6; yy < y1 - 4; yy += 6) DrawRectangle(SX(4.8f) + 2, yy, 2, 2, Color{ 255, 210, 70, 255 });
-        // officiels (costume) et table du trophée
-        Kit suit; suit.shirt = 0x252A40; suit.shirt2 = 0xF0F0F0; suit.shorts = 0x252A40; suit.socks = 0x151515;
-        for (int k = 0; k < 2; k++) drawPlayerSprite(SX(7.6f), SY(c - 0.9f + k * 1.8f) - 3, suit, k * 2, k + 1, 2, 0, PS_NORMAL, false, 0, 1);
-        int tx = SX(7.4f), ty = SY(c - 3.4f) - 3;
-        DrawRectangle(tx - 4, ty - 4, 9, 5, Color{ 240, 240, 245, 255 });
-        DrawRectangle(tx - 4, ty + 1, 9, 2, Color{ 170, 170, 185, 255 });
-        if (m.trOnTable) drawTrophy(tx, ty - 3, m.trophyStyle, 1);
-        // projecteurs qui balayent le podium et colonnes de flammes au moment du sacre
+        int tier = std::max(0, std::min(4, m.trophyTier));
         float tt = (float)GetTime();
-        for (int k = 0; k < 3; k++) DrawEllipse(SX(8.6f + std::sin(tt * 0.8f + k * 2.1f) * 3.f), SY(c + std::cos(tt * 0.6f + k * 2.f) * 7.f), 16, 9, Color{ 255, 250, 210, 34 });
-        if (m.trLift) for (int f = 0; f < 4; f++) {
-            int fx = f < 2 ? x0 - 3 : x1 + 2, fy = f % 2 ? y1 + 2 : y0 - 4;
-            int hgt = 8 + (int)(std::fabs(std::sin(tt * 9.f + f)) * 9.f);
-            DrawRectangle(fx - 2, fy - hgt, 4, hgt, Color{ 255, 120, 30, 200 });
-            DrawRectangle(fx - 1, fy - hgt + 2, 2, hgt - 2, Color{ 255, 230, 120, 230 });
-            DrawCircle(fx, fy - hgt / 2, 6, Color{ 255, 150, 40, 50 });
+        int x0 = SX(6.0f), x1 = SX(11.2f), y0 = SY(c - 8.4f), y1 = SY(c + 8.4f);
+        // éclairage : grand soir (championnat, Europe), le stade s'assombrit autour du podium
+        if (tier >= 3) {
+            DrawRectangle(0, 0, MW, MH, Color{ 4, 6, 20, (unsigned char)(tier == 4 ? 92 : 58) });
+            DrawEllipse((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) * 1.6f, (y1 - y0) * 0.8f, Color{ 255, 245, 210, 26 });
+        }
+        Kit suit; suit.shirt = 0x252A40; suit.shirt2 = 0xF0F0F0; suit.shorts = 0x252A40; suit.socks = 0x151515;
+        int tx = SX(7.4f), ty = SY(c - 3.4f) - 3;
+        if (tier == 0) {
+            // district : une simple table pliante au bord du terrain, un délégué en survêtement et quelques bénévoles
+            DrawRectangle(x0 + 2, SY(c - 4.2f), SX(8.0f) - x0, SY(c + 4.2f) - SY(c - 4.2f), Color{ 0, 0, 0, 50 });
+            DrawRectangle(x0, SY(c - 4.2f) - 2, SX(8.0f) - x0, SY(c + 4.2f) - SY(c - 4.2f), Color{ 214, 214, 206, 255 });
+            DrawRectangle(x0, SY(c + 4.2f) - 2, SX(8.0f) - x0, 2, Color{ 150, 150, 140, 255 });
+            for (int k = 0; k < 3; k++) DrawRectangle(x0 + 2 + k * 5, SY(c - 3.f + k * 2.4f) - 1, 3, 2, k == 1 ? Color{ 240, 200, 60, 255 } : Color{ 200, 210, 230, 255 });   // médailles en boîte
+            Kit dlg; dlg.shirt = 0x1E5AA8; dlg.shirt2 = 0xFFFFFF; dlg.shorts = 0x1E5AA8; dlg.socks = 0x111111;
+            drawPlayerSprite(SX(7.6f), SY(c - 0.9f) - 3, dlg, 0, 1, 2, 0, PS_NORMAL, false, 0, 1);
+            Kit vol; vol.shirt = 0xE0E0E0; vol.shirt2 = 0x2A8A3A; vol.shorts = 0x333333; vol.socks = 0x222222;
+            drawPlayerSprite(SX(5.2f), SY(c + 3.0f) - 3, vol, 1, 2, 2, 0, PS_NORMAL, false, 0, 1);
+            // drapeau du club planté à côté
+            Color fc = hexc(m.kit[m.trophyTeam].shirt);
+            DrawRectangle(SX(5.0f), SY(c - 6.f) - 16, 1, 16, Color{ 200, 200, 200, 255 });
+            float wv = std::sin(tt * 4) * 1.5f;
+            Vector2 fa{ (float)SX(5.0f) + 1, (float)SY(c - 6.f) - 16 }, fb{ (float)SX(5.0f) + 1, (float)SY(c - 6.f) - 9 }, fcp{ SX(5.0f) + 9 + wv, (float)SY(c - 6.f) - 13 };
+            DrawTriangle(fa, fb, fcp, fc); DrawTriangle(fa, fcp, fb, fc);
+            ty = SY(c - 3.0f) - 3;
+            if (m.trOnTable) drawTrophy(tx, ty - 1, m.trophyStyle, 1);
+        } else {
+            // estrade : bois (régional), tricolore (coupe nationale), marine et or (championnat), bleu nuit étoilé (Europe)
+            Color top = tier == 1 ? Color{ 138, 92, 52, 255 } : tier == 2 ? Color{ 20, 50, 140, 255 } : tier == 3 ? Color{ 24, 30, 90, 255 } : Color{ 8, 16, 60, 255 };
+            Color face = tier == 1 ? Color{ 96, 60, 32, 255 } : tier == 2 ? Color{ 220, 30, 40, 255 } : tier == 3 ? Color{ 16, 20, 64, 255 } : Color{ 4, 8, 36, 255 };
+            Color trim = tier == 1 ? Color{ 210, 210, 220, 255 } : tier == 4 ? Color{ 200, 220, 255, 255 } : Color{ 240, 200, 70, 255 };
+            int lift = tier == 1 ? 1 : tier == 4 ? 4 : 3;      // hauteur de l'estrade
+            DrawRectangle(x0 + 2, y0 + 2, x1 - x0, y1 - y0 + lift, Color{ 0, 0, 0, 70 });
+            DrawRectangle(x0, y0 - lift, x1 - x0, y1 - y0, top);
+            if (tier == 1) for (int yy = y0 - lift + 3; yy < y1 - lift; yy += 4) DrawRectangle(x0, yy, x1 - x0, 1, Color{ 110, 70, 38, 255 });     // lattes
+            if (tier == 2) { int w3 = (x1 - x0) / 3; DrawRectangle(x0, y1 - lift, w3, lift, Color{ 0, 60, 170, 255 }); DrawRectangle(x0 + w3, y1 - lift, w3, lift, WHITE); DrawRectangle(x0 + 2 * w3, y1 - lift, x1 - x0 - 2 * w3, lift, face); }
+            else DrawRectangle(x0, y1 - lift, x1 - x0, lift, face);
+            DrawRectangleLines(x0, y0 - lift, x1 - x0, y1 - y0, trim);
+            if (tier == 4) for (int k = 0; k < 9; k++) {      // étoiles sur l'estrade
+                int sx = x0 + 3 + (k * 37) % std::max(1, x1 - x0 - 6), sy = y0 - lift + 3 + (k * 23) % std::max(1, y1 - y0 - 6);
+                Color st{ 230, 240, 255, (unsigned char)(150 + 100 * std::fabs(std::sin(tt * 2 + k))) };
+                DrawRectangle(sx, sy - 1, 1, 3, st); DrawRectangle(sx - 1, sy, 3, 1, st);
+            }
+            for (int k = 0; k < 2; k++) {                                                        // marches
+                int sy0 = k == 0 ? SY(c - 9.6f) : SY(c + 8.4f) - lift;
+                DrawRectangle(SX(8.4f), sy0, SX(10.6f) - SX(8.4f), 2 + lift, tier == 1 ? Color{ 120, 80, 44, 255 } : Color{ 60, 70, 140, 255 });
+                DrawRectangle(SX(8.4f), sy0 + 2, SX(10.6f) - SX(8.4f), 1, tier == 1 ? Color{ 90, 56, 30, 255 } : Color{ 40, 48, 110, 255 });
+            }
+            // panneau de fond : partenaires (régional), arche (coupe), mur doré (championnat), mur étoilé (Europe)
+            int bx = SX(4.8f), bw = SX(6.0f) - SX(4.8f);
+            Color back = tier == 1 ? Color{ 30, 110, 60, 255 } : tier == 2 ? Color{ 15, 28, 90, 255 } : tier == 3 ? Color{ 15, 20, 60, 255 } : Color{ 4, 10, 40, 255 };
+            DrawRectangle(bx, y0 - 8, bw, y1 - y0 + 5, back);
+            for (int yy = y0 - 6; yy < y1 - 4; yy += 6) {
+                if (tier == 1) DrawRectangle(bx + 1, yy, bw - 2, 3, (yy / 6) % 2 ? WHITE : Color{ 240, 220, 80, 255 });
+                else if (tier == 2) DrawRectangle(bx + 1, yy, bw - 2, 2, (yy / 6) % 3 == 0 ? Color{ 0, 70, 180, 255 } : (yy / 6) % 3 == 1 ? WHITE : Color{ 230, 40, 50, 255 });
+                else if (tier == 3) DrawRectangle(bx + 2, yy, 2, 2, Color{ 255, 210, 70, 255 });
+                else { Color st{ 220, 230, 255, (unsigned char)(120 + 120 * std::fabs(std::sin(tt * 3 + yy))) }; DrawRectangle(bx + 1 + (yy / 6) % 2, yy, 1, 1, st); DrawRectangle(bx + 3 - (yy / 6) % 2, yy + 3, 1, 1, st); }
+            }
+            if (tier >= 2) {      // arche au-dessus de l'estrade
+                Color ac = tier == 4 ? Color{ 160, 190, 255, 255 } : Color{ 240, 200, 70, 255 };
+                DrawRectangle(bx - 1, y0 - 12, 2, y1 - y0 + 9, ac);
+                DrawRectangle(bx - 1, y0 - 12, x1 - bx + 2, 2, ac);
+                DrawRectangle(bx - 1, y1 - 5, x1 - bx + 2, 1, Color{ ac.r, ac.g, ac.b, 120 });
+            }
+            // officiels (costume) et table du trophée
+            int nOff = tier == 1 ? 1 : 2;
+            for (int k = 0; k < nOff; k++) drawPlayerSprite(SX(7.6f), SY(c - 0.9f + k * 1.8f) - 3, suit, k * 2, k + 1, 2, 0, PS_NORMAL, false, 0, 1);
+            Color cloth = tier == 1 ? Color{ 40, 120, 70, 255 } : tier == 2 ? Color{ 240, 240, 245, 255 } : tier == 3 ? Color{ 250, 245, 225, 255 } : Color{ 20, 30, 90, 255 };
+            DrawRectangle(tx - 4, ty - 4, 9, 5, cloth);
+            DrawRectangle(tx - 4, ty + 1, 9, 2, Color{ (unsigned char)(cloth.r * 0.7f), (unsigned char)(cloth.g * 0.7f), (unsigned char)(cloth.b * 0.7f), 255 });
+            if (m.trOnTable) {
+                if (tier >= 3) DrawCircle(tx, ty - 8, 7, Color{ 255, 250, 220, (unsigned char)(40 + 20 * std::sin(tt * 3)) });     // halo sur le trophée
+                drawTrophy(tx, ty - 3, m.trophyStyle, 1);
+            }
+            // projecteurs qui balayent le podium
+            int nBeam = tier == 1 ? 1 : tier == 4 ? 5 : 3;
+            for (int k = 0; k < nBeam; k++) DrawEllipse(SX(8.6f + std::sin(tt * 0.8f + k * 2.1f) * 3.f), SY(c + std::cos(tt * 0.6f + k * 2.f) * 7.f), 16, 9, tier == 4 ? Color{ 190, 215, 255, 40 } : Color{ 255, 250, 210, 34 });
+            // colonnes de flammes au moment du sacre (coupe nationale et plus)
+            if (m.trLift && tier >= 2) for (int f = 0; f < (tier == 4 ? 6 : 4); f++) {
+                int fx = f < 2 ? x0 - 3 : f < 4 ? x1 + 2 : (x0 + x1) / 2 + (f == 4 ? -14 : 14), fy = f >= 4 ? y0 - 10 : f % 2 ? y1 + 2 : y0 - 4;
+                int hgt = 8 + (int)(std::fabs(std::sin(tt * 9.f + f)) * (tier == 4 ? 13.f : 9.f));
+                Color fl = tier == 4 ? Color{ 120, 170, 255, 200 } : Color{ 255, 120, 30, 200 }, fc2 = tier == 4 ? Color{ 230, 240, 255, 230 } : Color{ 255, 230, 120, 230 };
+                DrawRectangle(fx - 2, fy - hgt, 4, hgt, fl);
+                DrawRectangle(fx - 1, fy - hgt + 2, 2, hgt - 2, fc2);
+                DrawCircle(fx, fy - hgt / 2, 6, Color{ fl.r, fl.g, fl.b, 50 });
+            }
         }
     }
     drawGoal(0, true, ox, oy);
@@ -1853,14 +1927,38 @@ void renderMatch(const Match& m, bool radar) {
     if (!replay && m.trophyActive && m.trLift) {
         float tt = (float)GetTime();
         Color cc[5] = { hexc(m.kit[m.trophyTeam].shirt), hexc(m.kit[m.trophyTeam].shirt2), Color{ 255, 215, 60, 255 }, Color{ 255, 255, 255, 255 }, hexc(m.kit[m.trophyTeam].shorts) };
+        int tier = std::max(0, std::min(4, m.trophyTier));
+        if (tier == 2) { cc[2] = Color{ 0, 70, 190, 255 }; cc[4] = Color{ 230, 40, 50, 255 }; }                                  // Coupe de France : tricolore
+        if (tier == 4) { cc[0] = Color{ 200, 210, 230, 255 }; cc[2] = Color{ 120, 170, 255, 255 }; cc[4] = Color{ 240, 245, 255, 255 }; }   // Europe : argent et bleu
         Rng cr(4242);
-        for (int k = 0; k < 170; k++) {
+        int nConf = tier == 0 ? 36 : tier == 1 ? 80 : tier == 4 ? 230 : 170;
+        // grand soir : feux d'artifice au-dessus du stade
+        if (tier >= 3) for (int b = 0; b < (tier == 4 ? 4 : 2); b++) {
+            float per = 2.4f + b * 0.37f, a = std::fmod(tt + b * 0.83f, per) / per;
+            if (a > 0.75f) continue;
+            float k01 = a / 0.75f;
+            int bx = (int)(MW * (0.18f + 0.64f * std::fmod(b * 0.379f + std::floor((tt + b * 0.83f) / per) * 0.61f, 1.f))), by = 18 + (b * 13) % 30;
+            Color bc = (b + (int)((tt + b) / per)) % 3 == 0 ? Color{ 255, 220, 90, 255 } : (b % 2 ? cc[0] : Color{ 160, 200, 255, 255 });
+            for (int r = 0; r < 16; r++) {
+                float ang = r * 0.3927f, rad = 4 + k01 * 22;
+                int px = bx + (int)(std::cos(ang) * rad), py = by + (int)(std::sin(ang) * rad + k01 * k01 * 8);
+                DrawRectangle(px, py, 1, 1, Color{ bc.r, bc.g, bc.b, (unsigned char)(255 * (1 - k01)) });
+            }
+        }
+        // rubans (ticker tape) : longues bandes pour les coupes nationales et européennes
+        if (tier == 2 || tier == 4) for (int k = 0; k < 26; k++) {
+            float bx = cr.f() * MW, sp = 10 + cr.f() * 12, ph = cr.f() * 6.28f;
+            float y = std::fmod(cr.f() * MH + tt * sp, (float)MH + 14) - 7, x = std::fmod(bx + std::sin(tt * 1.3f + ph) * 9 + MW, (float)MW);
+            int len = 4 + k % 4;
+            for (int q = 0; q < len; q++) DrawRectangle((int)(x + std::sin(tt * 4 + q * 0.9f + ph) * 1.5f), (int)y + q, 1, 1, cc[(k + 1) % 5]);
+        }
+        for (int k = 0; k < nConf; k++) {
             float bx = cr.f() * MW, sp = 14 + cr.f() * 22, ph = cr.f() * 6.28f;
             float y = std::fmod(cr.f() * MH + tt * sp, (float)MH + 10) - 5, x = std::fmod(bx + std::sin(tt * 1.7f + ph) * 7 + MW, (float)MW);
             int w = ((int)(tt * 6 + k) % 3 == 0) ? 1 : 2;
             DrawRectangle((int)x, (int)y, w, 1, cc[k % 5]);
         }
-        if (m.trPhase == 3 || (m.trPhase == 4 && m.trT < 3.f)) {
+        if (tier >= 2 && (m.trPhase == 3 || (m.trPhase == 4 && m.trT < 3.f))) {
             float c = m.trPod.y;
             for (int f = 0; f < 4; f++) {
                 int fx = SX(f < 2 ? 5.4f : 11.8f), fy = SY(c + (f % 2 ? 8.8f : -8.8f));
@@ -2044,11 +2142,16 @@ void renderMatch(const Match& m, bool radar) {
         std::string sub = m.trPhase == 3 ? (m.trophyKind == 1 ? WT.name + " champion !" : WT.name + " remporte le trophée !") : PH[std::max(0, std::min(5, m.trPhase))];
         std::string ttl = m.trophyTitle;
         if (m.trPhase == 3 && m.trLift) {
-            std::string l1 = m.trophyKind == 1 ? "CHAMPION" : "VAINQUEUR", l2 = fitText(WT.name, MW - 90, 20);
+            int tier = std::max(0, std::min(4, m.trophyTier));
+            std::string l1 = tier == 0 ? (m.trophyKind == 1 ? "CHAMPION ET PROMU" : "VAINQUEUR") : tier == 1 ? (m.trophyKind == 1 ? "CHAMPION RÉGIONAL" : "VAINQUEUR") : tier == 4 ? "VAINQUEUR EUROPÉEN" : m.trophyKind == 1 ? "CHAMPION" : "VAINQUEUR", l2 = fitText(WT.name, MW - 90, 20);
             int pw = std::max(std::max(textWidth(l2, 20), textWidth(ttl, 10)), textWidth(l1, 10)) + 50, ph = 46, px = std::max(MW / 2 - pw / 2, MW - pw - 8), py = 22;
             float a = std::min(1.f, (m.trT - 1.4f) * 3.f);
-            DrawRectangle(px, py, pw, ph, Color{ 10, 14, 40, (unsigned char)(215 * a) });
-            DrawRectangle(px, py, pw, 2, Color{ 255, 205, 60, 255 }); DrawRectangle(px, py + ph - 2, pw, 2, Color{ 255, 205, 60, 255 });
+            Color bg = tier == 0 ? Color{ 14, 60, 30, 255 } : tier == 1 ? Color{ 20, 50, 60, 255 } : tier == 4 ? Color{ 6, 12, 50, 255 } : Color{ 10, 14, 40, 255 };
+            Color edge = tier <= 1 ? Color{ 220, 225, 235, 255 } : tier == 4 ? Color{ 160, 195, 255, 255 } : Color{ 255, 205, 60, 255 };
+            DrawRectangle(px, py, pw, ph, Color{ bg.r, bg.g, bg.b, (unsigned char)(215 * a) });
+            DrawRectangle(px, py, pw, 2, edge); DrawRectangle(px, py + ph - 2, pw, 2, edge);
+            if (tier == 2) { int w3 = pw / 3; DrawRectangle(px, py + ph - 2, w3, 2, Color{ 0, 70, 190, 255 }); DrawRectangle(px + w3, py + ph - 2, w3, 2, WHITE); DrawRectangle(px + 2 * w3, py + ph - 2, pw - 2 * w3, 2, Color{ 230, 40, 50, 255 }); }
+            if (tier == 4) for (int k = 0; k < 4; k++) { int sx = px + 7, sy = py + 7 + k * 9; Color st{ 220, 230, 255, (unsigned char)(140 + 110 * std::fabs(std::sin(GetTime() * 2 + k))) }; DrawRectangle(sx, sy - 1, 1, 3, st); DrawRectangle(sx - 1, sy, 3, 1, st); }
             DrawRectangle(px, py, 3, ph, hexc(m.kit[m.trophyTeam].shirt));
             drawTrophy(px + 20, py + ph - 8, m.trophyStyle, 2);
             drawTextPx(l1, px + 40, py + 4, 10, Color{ 255, 215, 90, 255 });

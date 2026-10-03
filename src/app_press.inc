@@ -34,7 +34,18 @@ static void drawForm(const std::string& f, int x, int y) {
 // conférence de presse : une question selon le contexte, trois tons de réponse, des effets annoncés
 static int g_pressQ = 0, g_pressA = -1, g_pressComp = -1, g_pressMatch = -1;
 static float g_pressT = 0;
-static std::string g_pressEffect;
+static std::string g_pressEffect, g_pressEffect2;
+// rivalité connue des supporters entre deux clubs (type RV_*), sinon -1 ; repli sur la même ville sans le système de supporters
+static int pressRivalry(int u, int o) {
+    if (g_career.supportersEnabled()) {
+        auto& P = g_career.supportersProfile(u);
+        int best = -1, bi = 0;
+        for (auto& R : P.rivalries) if (R.clubId == o && R.intensity >= 20 && R.intensity > bi) { bi = R.intensity; best = R.type; }
+        if (best >= 0) return best;
+    }
+    if (g_world.teams[u].town == g_world.teams[o].town && !g_world.teams[u].town.empty()) return RV_LOCAL;
+    return -1;
+}
 static int pressQuestion(int comp, int match) {
     const Season& S = g_career.season;
     const Competition& C = S.comps[comp];
@@ -42,7 +53,11 @@ static int pressQuestion(int comp, int match) {
     int u = g_career.userTeam, o = m.home == u ? m.away : m.home;
     std::string f = teamForm(u, 3);
     if (C.format != FMT_LEAGUE) return 5;                                                   // coupe
-    if (g_world.teams[u].town == g_world.teams[o].town && !g_world.teams[u].town.empty()) return 0;   // derby
+    int rv = pressRivalry(u, o);
+    if (rv == RV_LOCAL) return 0;                                                            // derby local
+    if (rv == RV_HISTORICAL) return 7;                                                       // rivalité historique
+    if (rv == RV_SPORTING) return 8;                                                         // rivalité sportive
+    if (rv == RV_RECENT) return 9;                                                           // rivalité récente
     if (f.size() == 3 && f == "DDD") return 1;
     if (f.size() == 3 && f.find('D') == std::string::npos && f.find('N') == std::string::npos) return 2;
     if (g_world.teams[o].rating > g_world.teams[u].rating + 6) return 3;
@@ -52,13 +67,14 @@ static int pressQuestion(int comp, int match) {
 static bool pressWanted(int comp, int match) {
     if (g_career.kind != CK_CLUB || g_career.life.isPlayer || g_career.sportingMode()) return false;
     if (getenv("FOOT_TEST") && !getenv("FOOT_PRESS")) return false;
-    if (g_pressComp == comp && g_pressMatch == match) return false;           // déjà faite pour ce match
+    auto& MS = g_career.monthly;
+    if (MS.pressYear == g_career.year && MS.pressComp == comp && MS.pressMatch == match) return false;   // déjà faite pour ce match (sauvegardé)
     int q = pressQuestion(comp, match);
-    if (q == 0 || q == 1 || q == 5) return true;                                // derby, crise, coupe : toujours
+    if (q == 0 || q == 1 || q == 5 || q == 7) return true;                      // derby, crise, coupe, rivalité historique : toujours
     return ((comp * 7919 + match * 104729) >> 3) % 3 == 0 || getenv("FOOT_PRESS");   // sinon environ un match sur trois
 }
 static void openPress(int comp, int match) {
-    g_pressComp = comp; g_pressMatch = match; g_pressQ = pressQuestion(comp, match); g_pressA = -1; g_pressT = 0; g_pressEffect.clear();
+    g_pressComp = comp; g_pressMatch = match; g_career.monthly.pressYear = g_career.year; g_career.monthly.pressComp = comp; g_career.monthly.pressMatch = match; g_pressQ = pressQuestion(comp, match); g_pressA = -1; g_pressT = 0; g_pressEffect.clear();
     g_screen = SC_PRESS;
 }
 static void pressApply(int a) {
@@ -71,13 +87,32 @@ static void pressApply(int a) {
     case 9: morale = 1; break;                case 10: morale = 3; fans = 2; break;     case 11: morale = 2; fans = 3; conf = -1; break;  // outsider
     case 12: morale = 2; conf = 1; break;     case 13: morale = 2; break;               case 14: morale = -1; fans = 1; conf = -2; break; // favori
     case 15: morale = 1; conf = 1; break;     case 16: morale = 3; fans = 3; break;     case 17: morale = 2; fans = 4; conf = -1; break;  // coupe
+    case 21: morale = 1; fans = 2; break;     case 22: morale = 3; fans = 4; break;     case 23: morale = 4; fans = 6; conf = -2; break;  // rivalité historique
+    case 24: morale = 2; break;               case 25: morale = 3; fans = 2; break;     case 26: morale = 3; fans = 3; conf = -1; break;  // rivalité sportive
+    case 27: morale = 2; conf = 1; break;     case 28: morale = 2; fans = 2; break;     case 29: morale = 2; fans = 3; conf = -2; break;  // rivalité récente
     default: morale = a == 0 ? 1 : a == 1 ? 2 : 2; fans = a == 2 ? 2 : 0; conf = a == 2 ? -1 : 0; break;
     }
-    for (auto& p : U.squad) p.morale = (uint8_t)std::max(10, std::min(100, p.morale + morale));
+    // réaction individuelle légèrement modulée par la personnalité (susceptibilité, leadership, sang-froid, grands matchs)
+    bool big = g_pressQ == 0 || g_pressQ == 5 || g_pressQ >= 7;
+    int hyped = 0, tense = 0;
+    for (auto& p : U.squad) {
+        int d = morale;
+        if (g_career.personalityEnabled()) {
+            auto Q = personalityTraits(g_career, p);
+            if (a == 2) { if (Q.sensitivity >= 75 && Q.composure < 45) { d -= 2; tense++; } else if (big && Q.bigMatchTemperament >= 78) { d += 1; hyped++; } }
+            if (a == 0 && Q.leadership >= 70) d += 1;                    // les cadres apprécient le discours mesuré
+            if (morale < 0 && (Q.leadership >= 75 || Q.composure >= 75)) d = std::min(0, d + 1);
+            d = std::max(morale - 2, std::min(morale + 2, d));
+        }
+        p.morale = (uint8_t)std::max(10, std::min(100, p.morale + d));
+    }
     g_career.mgr.confidence = std::max(0, std::min(100, g_career.mgr.confidence + conf));
     if (fans && g_career.supportersEnabled()) { auto& P = g_career.supportersProfile(g_career.userTeam); P.managerTrust = std::max(0, std::min(100, P.managerTrust + fans)); }
     auto sg = [](int v) { return v > 0 ? fmt("+%d", v) : fmt("%d", v); };
     g_pressEffect = "Moral du groupe " + sg(morale) + "   Confiance du président " + sg(conf) + (g_career.supportersEnabled() ? "   Supporters " + sg(fans) : std::string());
+    g_pressEffect2.clear();
+    if (hyped) g_pressEffect2 = fmt("%d joueur%s habitué%s aux grands rendez-vous s'en nourri%s.", hyped, hyped > 1 ? "s" : "", hyped > 1 ? "s" : "", hyped > 1 ? "ssent" : "t");
+    if (tense) g_pressEffect2 += std::string(g_pressEffect2.empty() ? "" : "  ") + fmt("%d joueur%s plus susceptible%s se crispe%s.", tense, tense > 1 ? "s" : "", tense > 1 ? "s" : "", tense > 1 ? "nt" : "");
 }
 static void screenPress() {
     const Season& S = g_career.season;
@@ -111,22 +146,28 @@ static void screenPress() {
         if (((int)(t * 4) + k * 3) % 11 == 0) { DrawCircle(x + 6, y - 12, 9, Color{ 255, 255, 255, 170 }); DrawRectangle(x + 2, y - 14, 8, 5, Color{ 20, 20, 20, 255 }); }
     }
     // question, puis réponse
-    static const char* Q[7] = {
+    static const char* Q[10] = {
         "C'est un derby : comment abordez-vous ce match face à %s ?",
         "Trois défaites de suite. Votre place est-elle menacée avant d'affronter %s ?",
         "Votre équipe est en grande forme. Jusqu'où peut-elle aller, en commençant par %s ?",
         "Face à %s, sur le papier plus fort que vous, quelles sont vos chances ?",
         "Vous êtes favoris contre %s. La pression est-elle sur vos épaules ?",
         "En coupe tout est possible. Allez-vous faire tourner face à %s ?",
-        "Quel est votre objectif pour le match contre %s ?" };
-    static const char* A[7][3] = {
+        "Quel est votre objectif pour le match contre %s ?",
+        "Une rivalité historique : que représente ce match face à %s pour le club ?",
+        "%s est devenu votre grand rival sportif ces dernières saisons. Qui a l'ascendant ?",
+        "Le dernier match contre %s a laissé des traces. Comment gérer la tension ?" };
+    static const char* A[10][3] = {
         { "Un match comme un autre, on reste concentrés.", "C'est NOTRE ville, on va le prouver sur le terrain.", "Ils vont souffrir. Ce soir, on va les écraser." },
         { "Je fais confiance au groupe, on va travailler.", "On va s'en sortir, j'en suis convaincu.", "Ce sont les joueurs qui doivent se regarder dans la glace." },
         { "On prend match après match, sans s'enflammer.", "Pourquoi pas viser plus haut ? On a les moyens.", "Personne ne peut nous arrêter cette saison." },
         { "Ils sont favoris, nous jouerons sans pression.", "On a nos chances, on y croit.", "Les étiquettes ne gagnent pas les matchs. On va les surprendre." },
         { "Il n'y a pas de petit adversaire.", "Oui, et c'est normal : on veut gagner.", "On doit les balayer, rien d'autre." },
         { "On respecte cette compétition, l'équipe sera solide.", "On joue chaque match de coupe pour aller au bout.", "On veut ce trophée, et on ira le chercher." },
-        { "Les trois points, en jouant juste.", "Gagner et faire plaisir à nos supporters.", "Montrer qui commande dans ce championnat." } };
+        { "Les trois points, en jouant juste.", "Gagner et faire plaisir à nos supporters.", "Montrer qui commande dans ce championnat." },
+        { "On respecte l'histoire, mais seul le terrain compte.", "Nos supporters attendent ce match toute l'année, on sera prêts.", "Notre histoire est plus belle que la leur, et on va le rappeler." },
+        { "Chaque saison repart de zéro.", "On a progressé, on peut prendre le dessus.", "Ils courent derrière nous depuis des années." },
+        { "On tourne la page, on reste calmes.", "On a retenu les leçons, on sera prêts.", "S'ils veulent la bagarre, ils l'auront... sur le terrain." } };
     static const char* TONE[3] = { "Prudent", "Confiant", "Provocateur" };
     DrawRectangle(20, 222, VW - 40, 30, Color{ 250, 250, 245, 245 }); DrawRectangleLines(20, 222, VW - 40, 30, Color{ 40, 40, 50, 255 });
     drawTextPx("Journaliste :", 28, 225, 10, Color{ 120, 30, 30, 255 });
@@ -147,7 +188,8 @@ static void screenPress() {
     }
     DrawRectangle(20, 258, VW - 40, 44, Color{ 6, 12, 28, 230 });
     drawTextPx(fitText(std::string("Vous : « ") + A[g_pressQ][std::min(2, g_pressA)] + " »", VW - 60, 10), 30, 264, 10, C_HI);
-    drawTextPx(g_pressEffect, 30, 282, 10, C_GOOD);
+    drawTextPx(g_pressEffect, 30, 278, 10, C_GOOD);
+    if (!g_pressEffect2.empty()) drawTextPx(fitText(g_pressEffect2, VW - 60, 10), 30, 290, 10, C_DIM);
     bool go = button(VW / 2 - 100, 310, 200, 16, "Aller à l'avant-match");
     drawFooter("OK : continuer");
     if (go || ((IN.ok || IN.start) && g_pressT > 0.3f)) startSetup(m.home, m.away, true, g_pressComp, g_pressMatch);
@@ -159,8 +201,11 @@ static void monthlyAwards() {
     Season& S = g_career.season;
     if (S.now < 0) return;
     int month = (int)(S.now / 4.345);
-    static int lastMonth = -1, lastYear = -1, lastTeam = -1;
-    static std::map<int, int> goals0; static std::map<int, int> pts0;
+    auto& MS = g_career.monthly;           // état sauvegardé avec la carrière
+    int& lastMonth = MS.awMonth; int& lastYear = MS.awYear; int& lastTeam = MS.awTeam;
+    std::map<int, int> goals0, pts0;
+    for (auto& kv : MS.awGoals) goals0[kv.k] = kv.v;
+    for (auto& kv : MS.awPts) pts0[kv.k] = kv.v;
     int p, q, g;
     if (g_career.tierOfTeam(g_career.userTeam, &p, &q, &g) < 0) return;
     int ci = g_career.pyramids[p].pools[q].comps[g];
@@ -168,6 +213,9 @@ static void monthlyAwards() {
     auto snapshot = [&]() {
         goals0.clear(); pts0.clear();
         for (auto& r : C.table(0, 0)) { pts0[r.team] = r.pts; for (auto& pl : g_world.teams[r.team].squad) goals0[pl.id] = pl.goals; }
+        MS.awGoals.clear(); MS.awPts.clear();
+        for (auto& kv : goals0) MS.awGoals.push_back({ kv.first, kv.second });
+        for (auto& kv : pts0) MS.awPts.push_back({ kv.first, kv.second });
     };
     if (lastYear != g_career.year || lastTeam != g_career.userTeam || lastMonth < 0) { lastYear = g_career.year; lastTeam = g_career.userTeam; lastMonth = month; snapshot(); return; }
     if (month == lastMonth) return;

@@ -51,7 +51,8 @@ enum TacticalInstruction { TI_STAY,TI_ADVANCE,TI_PRESS,TI_NO_PRESS,TI_DROP,TI_DE
 struct PositionKnowledge { uint8_t initialized=0,primary=DP_MC,foot=0,target=255; uint8_t familiarity[DP_COUNT]={}; uint16_t practice[DP_COUNT]={}; uint8_t developmentRole=255; };
 struct SlotTactic { uint8_t role=0,duty=DUTY_SUPPORT,position=255; uint32_t instructions=0; int32_t markPid=0; };
 struct TacticalPlan { uint8_t customized=0,model=0; SlotTactic slot[11]; };
-struct RoleEffects { float advance=0,width=1,press=1,shot=1,risk=1,dribble=1,crossAt=.8f,hold=0; bool drop=false,halfback=false; };
+enum RoleBehave { RB_NONE=0, RB_FALSE9, RB_INSIDE_FWD, RB_ATT_FB, RB_INV_FB, RB_MEZZALA, RB_STOPPER, RB_COVER, RB_LIBERO };
+struct RoleEffects { float advance=0,width=1,press=1,shot=1,risk=1,dribble=1,crossAt=.8f,hold=0; bool drop=false,halfback=false; int behave=RB_NONE; };
 bool careerRules();
 int positionFamily(int p);
 int slotPosition(int formation,int slot);
@@ -723,6 +724,10 @@ struct Career {
     SportingCareer sporting;
     SupporterState supporters;
     PersonalityState personalities;
+    // build 18 : états mensuels persistants (conférence de presse, discussions individuelles, trophées du mois)
+    struct KeyVal { int k = 0, v = 0; };
+    struct MonthlyState { int pressYear = -1, pressComp = -1, pressMatch = -1, awMonth = -1, awYear = -1, awTeam = -1; std::vector<KeyVal> awGoals, awPts, talked; };
+    MonthlyState monthly;
     bool personalityEnabled() const;
     PersonalityPlayer& personalityPlayer(const Player& p,int club);
     PlayerClubRelation& personalityRelation(PersonalityPlayer& p,int club);

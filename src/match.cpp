@@ -787,6 +787,14 @@ int Match::nearestToBall(int t, int exclude) const {
 void Match::formationTarget(int i, V2& out) const {
     const MPlayer& p = pl[i];
     int t = p.team;
+    if (p.gk || p.slot <= 0 || p.slot > 10) {
+        // gardien (slot 0) : hors des tableaux de formation (indexés slot - 1), devant sa ligne dans l'axe ballon-but
+        V2 gg = ownGoal(t);
+        V2 d = ball.pos - gg; float l = d.len();
+        out = gg + (l > 0.01f ? d * (std::min(2.2f, 0.6f + l * 0.04f) / l) : V2(0, gg.y == 0 ? 1.0f : -1.0f));
+        out.x = clampf(out.x, PITCH_W / 2 - 4.f, PITCH_W / 2 + 4.f);
+        return;
+    }
     const Formation& F = FORMATIONS[formation[t]];
     float u0 = F.y[p.slot - 1], v0 = F.x[p.slot - 1];
     float bu = progress(t, ball.pos);
@@ -828,6 +836,65 @@ void Match::formationTarget(int i, V2& out) const {
     v = clampf(v, 0.04f, 0.96f);
     if(S.rules==RULESET_CAREER){const auto& e=p.effects;u+=e.advance*(attacking?1.f:.4f);if(e.drop&&attacking)u=std::min(u,bu+.08f);if(e.halfback&&attacking)u=.25f+.12f*bu;v=.5f+(v-.5f)*e.width;
       if(!attacking&&(p.tactic.instructions&(1u<<TI_MARK))){for(int j=(1-t)*11+1;j<(1-t)*11+11;j++){if(pl[j].onPitch&&team(1-t).squad[pl[j].squad].id==p.tactic.markPid){out=pl[j].pos+(ownGoal(t)-pl[j].pos).norm()*1.6f;return;}}}}
+    // rôles tactiques détaillés (mode Carrière) : déplacements propres à chaque rôle
+    if (S.rules == RULESET_CAREER && p.effects.behave != RB_NONE) {
+        int bh = p.effects.behave;
+        float side = v0 < 0.5f ? -1.f : 1.f;                                             // côté du joueur dans le repère de l'équipe
+        float ph = std::fmod(clock * 0.5f + i * 0.137f, 1.f);                             // cycle d'appels (~2 minutes de jeu)
+        bool ballSide = (bv - 0.5f) * side > 0.08f;                                       // ballon de son côté
+        switch (bh) {
+        case RB_FALSE9:
+            // décroche entre les lignes, libère l'axe pour les ailiers, puis attaque la profondeur de temps en temps
+            if (attacking) { u = ph < 0.18f && bu > 0.5f ? u + 0.2f : std::min(u, std::max(0.42f, bu + 0.02f)); v = v * 0.5f + (0.5f + (bv - 0.5f) * 0.2f) * 0.5f; }
+            else u = std::max(u, std::min(0.62f, bu + 0.12f));                             // reste entre les lignes adverses pour la contre-attaque
+            break;
+        case RB_INSIDE_FWD:
+            // appels vers l'axe et dans la surface, laisse le couloir au latéral
+            if (attacking) { v = 0.5f + side * (bu > 0.62f ? 0.12f : 0.2f); if (bu > 0.6f && (ballSide || ph < 0.3f)) u += 0.12f; }
+            break;
+        case RB_ATT_FB:
+            // dépassement côté ballon, appels extérieurs ; repli rapide à la perte
+            if (attacking) { if (ballSide && bu > 0.4f) { u = std::max(u, bu + 0.07f); v = 0.5f + side * 0.45f; } else v = 0.5f + side * std::max(std::fabs(v - 0.5f), 0.4f); }
+            else u = std::min(u, std::max(0.06f, bu - 0.06f));
+            break;
+        case RB_INV_FB:
+            // rentre dans le milieu à la relance pour former un double pivot, ressort sur son côté sans le ballon
+            if (attacking) { v = 0.5f + side * 0.16f; u = clampf(std::max(u, bu * 0.4f + 0.2f), 0.3f, 0.55f); }
+            else v = v0 * 0.8f + v * 0.2f;
+            break;
+        case RB_MEZZALA:
+            // occupe le demi-espace et part en diagonale vers la surface
+            if (attacking) { v = 0.5f + side * 0.22f; u += bu > 0.5f ? 0.06f : 0.02f; if (ph < 0.2f && bu > 0.5f) { u += 0.12f; v = 0.5f + side * 0.15f; } }
+            break;
+        case RB_STOPPER:
+            // sort au contact de l'attaquant qui décroche devant lui
+            if (!attacking) {
+                int ot = 1 - t, best = -1; float bd = 11.f;
+                V2 here = fromTeamFrame(t, clampf(u, .04f, .95f), clampf(v, .04f, .96f));
+                for (int j = ot * 11 + 1; j < ot * 11 + 11; j++) {
+                    if (!pl[j].onPitch) continue;
+                    float pr = progress(t, pl[j].pos), d = (pl[j].pos - here).len();
+                    if (pr > u + 0.02f && pr < u + 0.2f && d < bd) { bd = d; best = j; }
+                }
+                if (best >= 0 && bu > 0.25f) { out = pl[best].pos + (ownGoal(t) - pl[best].pos).norm() * 1.3f; return; }
+            }
+            break;
+        case RB_COVER: case RB_LIBERO: {
+            // couverture : légèrement derrière la ligne, du côté du ballon ; libéro : dernier homme puis sortie de balle
+            float minU = 1.f;
+            for (int j = t * 11 + 1; j < t * 11 + 11; j++) if (j != i && pl[j].onPitch && pl[j].role == 1) minU = std::min(minU, progress(t, pl[j].pos));
+            if (!attacking) { u = std::min(u - (bh == RB_LIBERO ? 0.04f : 0.02f), std::max(0.04f, minU - (bh == RB_LIBERO ? 0.05f : 0.03f))); v = v * 0.7f + bv * 0.3f; }
+            else if (bh == RB_LIBERO && bu < 0.55f) { u = std::min(0.5f, std::max(u + 0.05f, bu + 0.08f)); v = 0.5f; }     // projection contrôlée dans le milieu
+            break;
+        }
+        default: break;
+        }
+        u = clampf(u, 0.04f, 0.95f); v = clampf(v, 0.04f, 0.96f);
+    }
+    // l'ailier profite de l'espace libéré par le faux neuf
+    if (S.rules == RULESET_CAREER && attacking && (p.detailedPosition == DP_AD || p.detailedPosition == DP_AG)) {
+        for (int j = t * 11 + 1; j < t * 11 + 11; j++) if (j != i && pl[j].onPitch && pl[j].effects.behave == RB_FALSE9) { u = clampf(u + 0.04f, 0.04f, 0.95f); break; }
+    }
     // ne pas se mettre hors-jeu (attaquants)
     if (attacking) {
         float line = 0.5f; // avant-dernier défenseur
@@ -853,6 +920,7 @@ void Match::takePossession(int i) {
     ball.lastTouch = i; ball.lastTeam = pl[i].team;
     ball.vel = V2(); ball.vz = 0; ball.z = 0; ball.spin = 0; ball.aftertouch = 0;
     ball.backpass = false;
+    if (possTeam >= 0 && possTeam != pl[i].team) lostT[possTeam] = 0;
     possTeam = pl[i].team;
 }
 
@@ -2799,6 +2867,15 @@ void Match::aiControl(int i, float dt) {
             float d = (pl[owner].pos - p.pos).len();
             if (d < (p.role == 3 ? 12.f : 8.f)) { target = pl[owner].pos + (ownGoal(t) - pl[owner].pos).norm() * 1.6f; run = 0.95f; }
         }
+        // contre-pressing : juste après la perte du ballon, les deux joueurs les plus proches harcèlent le porteur
+        if (oppHas && lostT[t] < (S.tac[t][0] == 2 ? 3.0f : S.tac[t][0] == 0 ? 1.0f : 2.0f) && p.role >= 2 && progress(t, pl[owner].pos) > 0.35f) {
+            float d = (pl[owner].pos - p.pos).len();
+            if (d < 10.f) {
+                int closer = 0;
+                for (int j = t * 11 + 1; j < t * 11 + 11; j++) if (j != i && pl[j].onPitch && (pl[j].pos - pl[owner].pos).len() < d) closer++;
+                if (closer < 2) { target = pl[owner].pos + pl[owner].vel * 0.25f + (ownGoal(t) - pl[owner].pos).norm() * 1.2f; run = 1.0f; }
+            }
+        }
         // marquage de zone : se rapprocher de l'attaquant le plus proche en défense
         if (oppHas && p.role == 1) {
             int ot = 1 - t; int m = -1; float md = 9;
@@ -3283,6 +3360,7 @@ void Match::startReplay() {
 void Match::update(float dt) {
     if (trophyActive) { updateTrophy(dt); return; }
     if (lapActive) { updateLap(dt); return; }
+    lostT[0] += dt; lostT[1] += dt;
     if (finished) {
         if (invasion) { updateInvasion(dt); return; }
         if (!S.training) {
@@ -3630,7 +3708,10 @@ void Match::trBegin(int ph) {
             if (trophyKind == 0) set(wl[k], { { V2(30.f + (k % 4) * 2.1f, c + 6.5f + (k / 4) * 2.2f), 0 } }, 0, 4.f, V2(-1, 0));
             else set(wl[k], { { V2(12.4f + k * 1.3f, c + 9.4f), 0 } }, k * 0.1f, 3.f, V2(-1, 0));
         }
-        if (trophyKind == 0) say(fmt("Place à la remise des trophées au %s ! %s va recevoir %s.", S.stadium.c_str(), team(W).name.c_str(), trArticle(trophyTitle).c_str()), 5.f, true);
+        if (trophyTier == 0) say(fmt("Champion et promu ! Le délégué du district remet la coupe à %s, au bord du terrain, entre amis et bénévoles.", team(W).name.c_str()), 5.f, true);
+        else if (trophyTier == 1) say(fmt("%s est sacré au niveau régional ! La ligue a installé une petite estrade pour la remise de %s.", team(W).name.c_str(), trArticle(trophyTitle).c_str()), 5.f, true);
+        else if (trophyTier == 4) say(fmt("Nuit européenne au %s ! Les projecteurs s'éteignent, place à la cérémonie : %s va soulever %s !", S.stadium.c_str(), team(W).name.c_str(), trArticle(trophyTitle).c_str()), 5.f, true);
+        else if (trophyKind == 0) say(fmt("Place à la remise des trophées au %s ! %s va recevoir %s.", S.stadium.c_str(), team(W).name.c_str(), trArticle(trophyTitle).c_str()), 5.f, true);
         else say(fmt("C'est officiel, %s est champion ! Place à la remise du trophée de %s.", team(W).name.c_str(), trophyTitle.c_str()), 5.f, true);
         break;
     }

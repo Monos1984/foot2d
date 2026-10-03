@@ -3120,7 +3120,7 @@ void Career::update() {}
 #include "serial.h"
 
 static const unsigned SAVE_MAGIC = 0x46325344;
-static const unsigned SAVE_VERSION = 33;
+static const unsigned SAVE_VERSION = 34;
 
 static void wStage(Writer& w, const Stage& s) {
     w.pod(s.type); w.str(s.name); w.pod(s.legs); w.vvi(s.groups); w.vpod(s.ties);
@@ -3237,6 +3237,7 @@ bool Career::save(const char* path) const {
     sportingSave(w,*this); // version 31
     supportersSave(w,*this); // version 32
     personalitySave(w,*this); // version 33
+    w.pod(monthly.pressYear);w.pod(monthly.pressComp);w.pod(monthly.pressMatch);w.pod(monthly.awMonth);w.pod(monthly.awYear);w.pod(monthly.awTeam);w.vpod(monthly.awGoals);w.vpod(monthly.awPts);w.vpod(monthly.talked); // version 34
     fclose(f);
     return true;
 }
@@ -3351,6 +3352,8 @@ bool Career::load(const char* path) {
     director=DirectorState();if(ver>=30)directorLoad(r,*this);
     sporting=SportingCareer();if(ver>=31)sportingLoad(r,*this);
     supporters=SupporterState();personalities=PersonalityState();if(ver>=32)supportersLoad(r,*this);if(ver>=33)personalityLoad(r,*this);
+    monthly=MonthlyState();if(ver>=34&&r.ok){r.pod(monthly.pressYear);r.pod(monthly.pressComp);r.pod(monthly.pressMatch);r.pod(monthly.awMonth);r.pod(monthly.awYear);r.pod(monthly.awTeam);r.vpod(monthly.awGoals);r.vpod(monthly.awPts);r.vpod(monthly.talked);
+        if(!r.ok||monthly.awGoals.size()>400000||monthly.awPts.size()>2000||monthly.talked.size()>20000)r.ok=false;}
     for(const auto& e:ballonEditions) if(e.presented>1 || e.count[0]>3 || e.count[1]>3) r.ok=false;
     g_world.rebuildCountryClubs(pyramids);
     if (!hasDncg()) { mgr.dncg=0; mgr.bankrupt=0; mgr.wageCapK=0; }
@@ -3628,7 +3631,7 @@ void Career::resetV7() {
     intlFormat = 0; honourLog.clear(); honourVenue.clear(); uclFinalVenue.clear(); uefaFinalVenue.clear(); tdcVenue.clear(); intertoto = -1;
     managerName.clear(); managerNation = -1; managerSkin = 0; managerHair = 0; managerAge = 45; newsRead.clear(); retiring.clear(); mgr.boardRequests = 0;
     life = PlayerLife(); loans.clear(); compArch.clear(); compAllTime.clear(); ballonEditions.clear();
-    seasonAwards.clear();clubDebuts.clear();poleTeams.clear();poleRecruits.clear();poleCup=-1;clubHistories.clear();director=DirectorState();sporting=SportingCareer();supporters=SupporterState();personalities=PersonalityState();
+    seasonAwards.clear();clubDebuts.clear();poleTeams.clear();poleRecruits.clear();poleCup=-1;clubHistories.clear();director=DirectorState();sporting=SportingCareer();supporters=SupporterState();personalities=PersonalityState();monthly=MonthlyState();
 }
 
 // aperçu des qualifiés européens sans modifier la carrière (bilan de fin de saison)

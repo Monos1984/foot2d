@@ -14,6 +14,14 @@ static std::string museumMatchUI(const MuseumMatch& m){
  text+=m.exactLineup?"Composition enregistrée lors du match joué\n":"Composition indicative du match simulé\n";
  for(int side=0;side<2;side++){text+=std::string(side?m.awayName:m.homeName)+" | Capitaine : "+(m.captain[side][0]?m.captain[side]:"non renseigné")+"\n";for(int s=0;s<11;s++)if(m.lineupNames[side][s][0])text+=std::string(m.lineupNames[side][s])+"; ";text+="\n";}return text;
 }
+// personnalité visuelle des trophées : grandes oreilles, coupe d'Europe, championnat, coupe nationale, régional, district
+static int museumTrophyStyle(const MuseumTrophy& tr){
+ std::string n=tr.name;
+ switch(tr.kind){case 3:return 1;case 7:case 8:case 9:case 14:return 7;case 4:case 16:case 17:case 26:case 27:return 6;case 5:case 18:return 5;default:break;}
+ if(n.find("District")!=std::string::npos||n.find("Départemental")!=std::string::npos)return 5;
+ if(n.find("Régional")!=std::string::npos||n.find("égion")!=std::string::npos)return 6;
+ return tr.finalMatch.final?0:2;
+}
 static void screenMuseum(){
  if(g_muClub<0||g_muClub>=(int)g_world.teams.size()){g_screen=g_muBack;return;}
  auto it=g_career.clubHistories.find(g_muClub);if(it==g_career.clubHistories.end()){g_screen=g_muBack;return;}
@@ -54,35 +62,49 @@ static void screenMuseum(){
  const char* hall=level==0?"ARCHIVES DU CLUB":level==1?"SALLE DES TROPHÉES":"MUSÉE DU CLUB";
  DrawRectangle(318,88,170,15,Color{30,22,16,255});DrawRectangleLines(318,88,170,15,C_HI);drawTextCentered(hall,403,91,10,C_HI,false);
  struct Group{std::string name;int count=0,last=0,style=0;};std::vector<Group> groups;
- for(auto& tr:H.trophies){std::string nm=tr.name;auto g=std::find_if(groups.begin(),groups.end(),[&](const Group& x){return x.name==nm;});if(g==groups.end()){Group ng;ng.name=nm;ng.style=tr.kind==3?1:tr.finalMatch.final?0:2;groups.push_back(ng);g=groups.end()-1;}g->count++;g->last=std::max(g->last,tr.year);}
+ for(auto& tr:H.trophies){std::string nm=tr.name;auto g=std::find_if(groups.begin(),groups.end(),[&](const Group& x){return x.name==nm;});if(g==groups.end()){Group ng;ng.name=nm;ng.style=museumTrophyStyle(tr);groups.push_back(ng);g=groups.end()-1;}g->count++;g->last=std::max(g->last,tr.year);}
  std::stable_sort(groups.begin(),groups.end(),[](const Group& x,const Group& y){return x.count!=y.count?x.count>y.count:x.last>y.last;});
- // vitrine
- int cx0=190,cy0=108,cw=426,ch=150;
- DrawRectangle(cx0-4,cy0-4,cw+8,ch+8,Color{26,16,10,255});
- DrawRectangleGradientV(cx0,cy0,cw,ch,Color{24,30,46,255},Color{14,18,30,255});
- for(int k=0;k<4;k++){int sx=cx0+53+k*106;DrawTriangle(Vector2{(float)sx,(float)cy0},Vector2{(float)sx-28,(float)cy0+ch},Vector2{(float)sx+28,(float)cy0+ch},Color{255,240,200,18});DrawRectangle(sx-5,cy0,10,3,Color{230,230,240,255});}
+ // vitrine : cadre en noyer, montants en laiton, fond en velours aux couleurs du club, socles en marbre, spots et vitre
+ int cx0=190,cy0=106,cw=426,ch=162;
+ Color velvet=hexc(T.home.shirt);velvet=Color{(unsigned char)(velvet.r/5+14),(unsigned char)(velvet.g/5+10),(unsigned char)(velvet.b/5+16),255};
+ Color brass{214,174,92,255},brass2{140,104,46,255};
+ DrawRectangle(cx0-7,cy0-7,cw+14,ch+14,Color{38,22,12,255});DrawRectangle(cx0-5,cy0-5,cw+10,ch+10,Color{78,48,26,255});DrawRectangle(cx0-5,cy0-5,cw+10,2,Color{118,78,44,255});
+ DrawRectangleGradientV(cx0,cy0,cw,ch,Color{(unsigned char)(velvet.r+16),(unsigned char)(velvet.g+16),(unsigned char)(velvet.b+20),255},velvet);
+ for(int x=cx0+3;x<cx0+cw;x+=6)DrawRectangle(x,cy0,1,ch,Color{0,0,0,22});                               // plis du velours
+ for(int k=0;k<4;k++){int px=k&1?cx0+cw+1:cx0-7,py=k&2?cy0+ch+1:cy0-7;DrawRectangle(px,py,6,6,brass);DrawRectangle(px+1,py+1,4,1,Color{250,226,150,255});}   // coins en laiton
+ for(int k=1;k<4;k++){int mx=cx0+k*106;DrawRectangle(mx-1,cy0,2,ch,brass2);DrawRectangle(mx-1,cy0,1,ch,brass);}                       // montants
+ DrawRectangle(cx0,cy0,cw,6,Color{20,14,10,255});
+ for(int k=0;k<4;k++){int sx=cx0+53+k*106;DrawTriangle(Vector2{(float)sx,(float)cy0+5},Vector2{(float)sx-30,(float)cy0+ch},Vector2{(float)sx+30,(float)cy0+ch},Color{255,240,200,16});DrawTriangle(Vector2{(float)sx,(float)cy0+5},Vector2{(float)sx-14,(float)cy0+ch},Vector2{(float)sx+14,(float)cy0+ch},Color{255,244,214,16});DrawRectangle(sx-6,cy0+2,12,3,Color{230,230,240,255});DrawRectangle(sx-3,cy0+5,6,1,Color{255,250,200,255});
+  for(int d=0;d<4;d++){float a=std::fmod(t*0.08f+d*0.29f+k*0.13f,1.f);DrawRectangle(sx-12+(int)(std::sin(t*0.6f+d*2+k)*10)+d*6,cy0+8+(int)(a*(ch-14)),1,1,Color{255,250,220,(unsigned char)(90*(1-a))});}}   // poussière dans la lumière
+ auto mstyle=[](const Group& G){return G.style;};
  for(int shelf=0;shelf<2;shelf++){
-  int sy=cy0+70+shelf*75;
-  DrawRectangle(cx0,sy,cw,3,Color{180,200,220,160});DrawRectangle(cx0,sy+3,cw,2,Color{0,0,0,80});
+  int sy=cy0+62+shelf*76;
+  DrawRectangle(cx0,sy+5,cw,3,Color{200,220,235,150});DrawRectangle(cx0,sy+8,cw,2,Color{0,0,0,90});                    // étagère en verre
   for(int k=0;k<4;k++){
    int gi=shelf*4+k,x=cx0+53+k*106;
    if(gi<(int)groups.size()){
     const Group& G=groups[gi];
-    DrawEllipse(x,sy,18,3,Color{0,0,0,90});
-    fxBigTrophy(x,sy,G.style,2,t+gi*0.4f);
-    if(G.count>1){DrawCircle(x+28,sy-50,8,Color{190,30,40,255});drawTextCentered(fmt("x%d",G.count),x+28,sy-55,10,WHITE,false);}
-    DrawRectangle(x-46,sy+6,92,11,Color{200,170,90,255});DrawRectangleLines(x-46,sy+6,92,11,Color{120,90,40,255});
-    drawTextCentered(fitText(G.name,88,10),x,sy+7,10,Color{40,26,10,255},false);
+    // socle en marbre
+    DrawRectangle(x-17,sy-1,34,6,Color{214,210,204,255});DrawRectangle(x-17,sy-1,34,1,Color{246,244,240,255});DrawRectangle(x-17,sy+4,34,1,Color{150,146,140,255});
+    for(int v=0;v<3;v++)DrawLine(x-14+v*11,sy,x-9+v*11,sy+4,Color{170,168,164,150});
+    DrawEllipse(x,sy-1,14,2,Color{0,0,0,70});
+    DrawCircle(x,sy-26,20,Color{255,248,210,(unsigned char)(18+8*std::sin(t*1.5f+gi))});                                  // halo du spot
+    fxBigTrophy(x,sy-1,mstyle(G),2,t+gi*0.4f);
+    if(G.count>1){DrawRectangle(x+16,sy-60,22,11,Color{170,24,34,255});DrawTriangle(Vector2{(float)x+16,(float)sy-49},Vector2{(float)x+21,(float)sy-49},Vector2{(float)x+16,(float)sy-45},Color{120,14,24,255});drawTextCentered(fmt("x%d",G.count),x+27,sy-59,10,WHITE,false);}
+    // plaque en laiton gravée : compétition et dernière victoire
+    DrawRectangle(x-47,sy+8,94,11,brass);DrawRectangleLines(x-47,sy+8,94,11,brass2);DrawRectangle(x-46,sy+9,92,1,Color{250,226,150,255});
+    DrawRectangle(x-45,sy+13,1,1,brass2);DrawRectangle(x+44,sy+13,1,1,brass2);
+    drawTextCentered(fitText(G.name,86,10),x,sy+9,10,Color{48,30,10,255},false);
    }else{
-    DrawRectangleLines(x-14,sy-30,28,30,Color{70,80,100,120});
+    DrawRectangle(x-17,sy-1,34,6,Color{90,86,82,160});DrawRectangleLines(x-12,sy-30,24,29,Color{140,150,170,70});
     if(gi==0)drawTextCentered("En attente du premier trophée",x+150,sy-24,10,C_DIM,false);
    }
   }
  }
- // reflets sur la vitre
- for(int k=0;k<3;k++){int gx=cx0+60+k*150+(int)(std::sin(t*0.4f+k)*6);DrawLine(gx,cy0+4,gx+30,cy0+60,Color{255,255,255,40});DrawLine(gx+6,cy0+4,gx+36,cy0+60,Color{255,255,255,22});}
- if((int)groups.size()>8)drawTextCentered(fmt("+ %d autres compétitions remportées (rubrique Trophées)",(int)groups.size()-8),403,262,10,C_DIM,false);
- drawTextCentered(fmt("%d saisons  |  %d trophées  |  %d finales",(int)H.seasons.size(),(int)H.trophies.size(),(int)H.finals.size()),403,(int)groups.size()>8?274:266,12,C_TXT,false);
+ // vitre : reflets obliques et liseré
+ for(int k=0;k<3;k++){int gx=cx0+60+k*150+(int)(std::sin(t*0.4f+k)*6);DrawLine(gx,cy0+4,gx+30,cy0+60,Color{255,255,255,40});DrawLine(gx+6,cy0+4,gx+36,cy0+60,Color{255,255,255,22});DrawLine(gx+40,cy0+ch-50,gx+60,cy0+ch-6,Color{255,255,255,18});}
+ DrawRectangleLines(cx0,cy0,cw,ch,Color{220,235,255,60});
+ drawTextCentered(fmt("%d saisons  |  %d trophées  |  %d finales",(int)H.seasons.size(),(int)H.trophies.size(),(int)H.finals.size())+((int)groups.size()>8?fmt("  |  + %d autres (Trophées)",(int)groups.size()-8):std::string()),403,275,10,C_TXT,false);
  drawTextCentered(fitText(fmt("Archives depuis %d  |  %d souvenirs  |  ",H.firstYear,(int)H.timeline.size())+(T.founded?fmt("Fondation : %d | %s",T.founded,T.town.c_str()):std::string("Fondation non renseignée")),440,10),403,288,10,C_DIM,false);
  }else if(g_muDetail>=0&&g_muDetail<(int)filtered.size()){
  auto lines=wrapText(filtered[g_muDetail].detail,432);listRun(g_muText,(int)lines.size(),178,104,450,14,15,[&](int i,int x,int y,bool selected){drawTextPx(lines[i],x+5,y+2,10,selected?BLACK:C_TXT);});if(button(390,80,238,18,"Revenir à la liste")){g_muDetail=-1;g_muText=ListW();}

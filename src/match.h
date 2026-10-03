@@ -248,6 +248,7 @@ struct Match {
     float pitchFriction = 1.0f, pitchBounce = 0.5f;
     float turfBad = 0;              // 0 pelouse correcte ... 1 champ de patates : faux rebonds, ballon freiné
     int possTeam = -1;
+    float lostT[2] = { 99.f, 99.f };   // temps depuis la dernière perte du ballon (contre-pressing)
     float possTime[2] = { 0, 0 };
     int shots[2] = { 0, 0 };
     int onTarget[2]={},passes[2]={},completedPasses[2]={},saves[2]={},blockedShots[2]={},woodwork[2]={},throws[2]={},freeKicks[2]={},goalKicks[2]={},penalties[2]={};
@@ -284,6 +285,7 @@ struct Match {
     // cérémonie de remise du trophée (finale de coupe, titre de champion) : médailles, trophée, haie d'honneur, tour d'honneur
     struct TrStep { V2 p; int act; };
     bool trophyActive = false; int trophyTeam = -1, trophyKind = 0, trophyStyle = 0; std::string trophyTitle;
+    int trophyTier = 2;     // prestige de la cérémonie : 0 district (montée), 1 régional, 2 coupe nationale, 3 championnat national, 4 coupe d'Europe
     int trPhase = 0; float trT = 0, trTotal = 0; int trHolder = -1; bool trLift = false, trOnTable = true;
     bool medal[22] = {};
     std::vector<TrStep> trRoute[22]; float trDelay[22] = {}, trWait[22] = {}, trSpeed[22] = {}; V2 trFace[22];
