@@ -309,6 +309,16 @@ void Match::trainingNext() {
         beginSetPiece(SP_FREEKICK, 0, spot); msg = "COUP FRANC"; break;
     }
     case 3: beginSetPiece(SP_CORNER, 0, V2(R.chance(0.5f) ? 0.3f : PITCH_W - 0.3f, g.y == 0 ? 0.3f : PITCH_L - 0.3f)); msg = "CORNER"; break;
+    case 6: case 7: {
+        // face-à-face (6) : l'attaquant part seul de 25 m contre le gardien ; frappes de loin (7) : seul face au but, de 22 à 30 m
+        int shooter = 9;
+        for (int i = 0; i < 22; i++) if (i != shooter && i != 11) { pl[i].onPitch = false; pl[i].pos = V2(-20, -20); }
+        float dist = S.training == 6 ? R.frange(24.f, 28.f) : R.frange(22.f, 30.f), side = R.frange(-12.f, 12.f);
+        pl[shooter].onPitch = true; pl[shooter].state = PS_NORMAL; pl[shooter].pos = V2(PITCH_W / 2 + side, g.y + sg * dist); pl[shooter].vel = V2();
+        pl[11].onPitch = true; pl[11].pos = V2(PITCH_W / 2, g.y + sg * 1.f); pl[11].vel = V2(); pl[11].state = PS_NORMAL;
+        ball.pos = pl[shooter].pos; state = MS_PLAY; stateT = 0; takePossession(shooter);
+        msg = S.training == 6 ? "FACE-À-FACE" : "FRAPPE DE LOIN"; break;
+    }
     default: beginSetPiece(SP_INDIRECT, 0, V2(PITCH_W / 2 + R.frange(-12, 12), g.y + sg * R.frange(36.f, 48.f))); msg = "ATTAQUE"; break;
     }
     msg2 = fmt("Essai %d", trainTries); msgT = 1.2f;
@@ -320,7 +330,8 @@ bool Match::trainingUpdate(float dt) {
         trainT += dt;
         int att = S.training == 5 ? 1 : 0;
         bool over = false;
-        float limit = S.training == 1 || S.training == 5 ? 3.5f : S.training == 4 ? 25.f : 8.f;
+        float limit = S.training == 1 || S.training == 5 ? 3.5f : S.training == 4 ? 25.f : S.training == 6 ? 9.f : 8.f;
+        if (S.training == 7 && ball.owner == 9 && progress(0, pl[9].pos) > 0.83f) over = true;      // frappes de loin : tirer avant la surface
         if (trainT > limit) over = true;
         if (ball.owner >= 0 && pl[ball.owner].team != att && trainT > 0.3f) over = true;   // défense ou gardien récupère
         if ((S.training == 1 || S.training == 5) && ball.owner < 0 && ball.vel.len() < 0.6f && trainT > 1.0f) over = true;
@@ -601,11 +612,20 @@ void Match::updateReferee(float dt) {
     if (refCardT > 0 && refCardFor >= 0) target = pl[refCardFor].pos + V2(1.2f, 0.8f);
     else if (pendCardOff >= 0 && state != MS_PLAY && pl[pendCardOff].onPitch) target = pl[pendCardOff].pos + V2(1.2f, 0.8f);
     else if (fightT > 0 && fightA >= 0) target = pl[fightA].pos + V2(1.5f, 1.5f);
-    else {
-        // se place en diagonale, à distance du ballon, côté opposé
-        V2 b = ball.pos;
+    else if (state == MS_STOP && (nextSp == SP_FREEKICK || nextSp == SP_INDIRECT) && stateT < 3.f) {
+        // coup franc : l'arbitre se rend sur place et recule de 9,15 m pour placer le mur
+        V2 g = goalCenter(nextSpTeam);
+        target = nextSpPos + (g - nextSpPos).norm() * 6.5f + V2(nextSpPos.x < PITCH_W / 2 ? 2.f : -2.f, 0);
+    } else if (state == MS_STOP && nextSp == SP_PENALTY) {
+        target = nextSpPos + V2(nextSpPos.x < PITCH_W / 2 ? 3.f : -3.f, nextSpPos.y < PITCH_L / 2 ? 4.f : -4.f);   // désigne le point puis se place à l'entrée de la surface
+    } else {
+        // se place en diagonale, à distance du ballon, côté opposé ; anticipe la trajectoire du ballon et du jeu
+        V2 b = ball.pos + (ball.owner < 0 ? ball.vel * 0.5f : pl[ball.owner].vel * 0.6f);
         float side = b.x < PITCH_W / 2 ? 1.f : -1.f;
-        target = V2(b.x + side * 9.f, b.y + (b.y < PITCH_L / 2 ? 7.f : -7.f));
+        float ahead = possTeam >= 0 ? (attackDir[possTeam] < 0 ? -3.f : 3.f) : 0.f;     // en avance sur le jeu, vers le but attaqué
+        target = V2(b.x + side * 9.f, b.y + (b.y < PITCH_L / 2 ? 7.f : -7.f) + ahead);
+        // ne pas rester sur la trajectoire d'une passe
+        if (ball.owner < 0 && ball.vel.len() > 6.f) { V2 bd = ball.vel.norm(); V2 rp = refPos - ball.pos; float u = rp.dot(bd); if (u > 0 && u < 20.f && (rp - bd * u).len() < 2.f) target = refPos + V2(-bd.y, bd.x) * 3.f; }
     }
     target.x = clampf(target.x, 2.f, PITCH_W - 2.f); target.y = clampf(target.y, 2.f, PITCH_L - 2.f);
     V2 d = target - refPos;
@@ -954,7 +974,7 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     playSfx(SFX_KICK);
     // tir cadré ?
     V2 g = goalCenter(p.team);
-    if (!shootout&&!kickingPass&&(g - ball.pos).len() < 40 && dir.dot((g - ball.pos).norm()) > 0.70f && speed > 16) { shots[p.team]++;pendingShot=i; ps(i).shot++; lastShooter = i; lastShotAge = 0; }
+    if (!shootout&&!kickingPass&&(g - ball.pos).len() < 40 && dir.dot((g - ball.pos).norm()) > 0.70f && speed > 16) { shots[p.team]++;pendingShot=i; ps(i).shot++; lastShooter = i; lastShotAge = 0; lastShotDist = (g - ball.pos).len(); }
     else if(!shootout&&(kickingPass||deliberate&&speed<23)){passes[p.team]++;pendingPass=i;}
 }
 
@@ -1088,7 +1108,7 @@ void Match::updateBall(float dt) {
             int oi = b.owner;
             float win = 0.5f + g.keep / 280.f - (o.dribble * 0.6f + o.speed * 0.4f) / 380.f;
             // face-à-face contre un joueur humain : le gardien de l'ordinateur ferme mieux l'angle et anticipe le crochet
-            if (o.human >= 0 && g.human < 0) win += S.difficulty == 0 ? 0.02f : S.difficulty == 2 ? 0.2f : 0.12f;
+            if (o.human >= 0 && g.human < 0) win += S.difficulty == 0 ? 0.f : S.difficulty == 2 ? 0.12f : 0.05f;
             if (o.human >= 0 && S.difficulty == 0) win -= 0.1f;
             if (o.human >= 0 && S.difficulty == 2) win += 0.08f;
             win = clampf(win, 0.25f, 0.9f);
@@ -1228,7 +1248,12 @@ void Match::updateBall(float dt) {
         float reach = p.state == PS_DIVE ? 1.25f + p.keep / 220.f : (p.gk ? 0.85f + p.keep / 400.f : 0.7f);   // allonge du gardien selon son niveau
         // gardien de l'ordinateur face à une frappe humaine rapprochée : réflexe et placement légèrement meilleurs
         if (p.gk && p.human < 0 && b.lastTeam != p.team && b.lastTouch >= 0 && pl[b.lastTouch].human >= 0 && i != penGk && (pl[b.lastTouch].pos - ownGoal(p.team)).len() < 18.f)
-            reach += S.difficulty == 0 ? 0.04f : S.difficulty == 2 ? 0.2f : 0.12f;
+            reach += S.difficulty == 0 ? 0.02f : S.difficulty == 2 ? 0.14f : 0.07f;
+        // frappe de loin (le ballon file, le gardien doit s'étirer) ou à bout portant (réflexe) : allonge réduite, le but reste possible
+        if (p.gk && i != penGk && b.lastTeam != p.team && lastShooter >= 0 && lastShotAge < 2.f && b.owner < 0) {
+            if (lastShotDist > 20.f) reach *= 0.86f + std::max(0.f, 30.f - lastShotDist) * 0.004f;
+            else if (lastShotDist < 9.f) reach *= 0.80f + lastShotDist * 0.012f;
+        }
         if (i == penGk && p.gk) reach = p.state == PS_DIVE ? 0.7f + p.keep / 330.f : 0.55f + p.keep / 500.f;    // penalty : réflexe à 11 m
         float zmax = gkCatch ? (p.state == PS_DIVE ? 2.2f : 2.6f) : 0.95f;
         if (p.state == PS_SLIDE) { reach = 1.0f; zmax = 0.6f; }
@@ -1336,6 +1361,7 @@ void Match::updateBall(float dt) {
             p.cool = 0.3f;
             return;
         }
+        if (p.gk && b.backpass && b.lastTeam == p.team && inOwnBox(p.team, p.pos) && comT <= 0) say("Passe en retrait : " + playerName(best) + " n'a pas le droit de la prendre à la main, il joue au pied.", 2.4f);
         takePossession(best);
     }
 }
@@ -2065,7 +2091,7 @@ void Match::updateSetPiece(float dt) {
         (void)t;
         if (sp == SP_THROWIN || sp == SP_CORNER || sp == SP_GOALKICK) offsideReset(OR_EXEMPT_RESTART);   // réception directe : pas de hors-jeu
         p.cool = sp == SP_THROWIN ? 0.8f : 0.35f;
-        ball.backpass = false;
+        ball.backpass = !p.gk && sp != SP_PENALTY;     // touche ou coup de pied arrêté vers son gardien : pas de prise à la main
         state = MS_PLAY; stateT = 0;
     };
     auto doShot = [&](V2 aim, float power) {
@@ -2277,7 +2303,7 @@ void Match::updateSetPiece(float dt) {
             V2 d = zone - spPos; float dist = std::min(d.len(), 24.f);
             float vz = 4.2f, T2 = 2 * vz / GRAV;
             kickBall(k, d, clampf(dist / T2, 8.f, 19.f), vz, false, false);
-            p.state = PS_NORMAL; p.cool = 0.8f; ball.backpass = false; offsideReset(OR_EXEMPT_RESTART); state = MS_PLAY; stateT = 0;
+            p.state = PS_NORMAL; p.cool = 0.8f; ball.backpass = true; offsideReset(OR_EXEMPT_RESTART); state = MS_PLAY; stateT = 0;
             say("Longue touche dans la surface !", 2.f);
             break;
         }

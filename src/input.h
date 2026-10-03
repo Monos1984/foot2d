@@ -30,7 +30,8 @@ struct Settings {
     int musicTrack = 0;          // 0 enchaînement des thèmes, 1..N thème fixe
     float deadzone = 0.35f;
     bool vibration = true;       // vibrations des manettes (but, poteau, barre)
-    bool lockerRoom = true;      // scènes de vestiaire avant le match, à la mi-temps et après le match
+    bool lockerRoom = true;
+    int refKit = 0;              // tenue des arbitres : 0 noire, 1 jaune, 2 verte, 3 rouge, 4 bleue      // scènes de vestiaire avant le match, à la mi-temps et après le match
     Settings();
     void resetControls();
     void load();

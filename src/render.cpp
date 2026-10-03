@@ -653,16 +653,35 @@ static void drawShootUI(const Match& m) {
     drawTextPx(h, MW / 2 - textWidth(h, 10) / 2, MH - 11, 10, WHITE);
 }
 
+static Kit refereeKit(const Match& m);
 static void drawTossUI(const Match& m) {
     if ((!m.ceremony && m.tossKind == 0) || m.tossUI <= 0) return;
     float t = (float)GetTime();
-    int pw = 236, ph = 118, px = MW / 2 - pw / 2, py = 30;
+    int pw = 236, ph = 140, px = MW / 2 - pw / 2, py = 22;
     int caller = 1, win = m.tossWinner;
     Color kc[2] = { hexc(m.kit[0].shirt), hexc(m.kit[1].shirt) };
+    // panneau : fond dégradé, rayures, ornements dorés aux coins, onglets aux couleurs des deux équipes
     DrawRectangle(px + 3, py + 3, pw, ph, Color{ 0, 0, 0, 120 });
-    DrawRectangle(px, py, pw, ph, Color{ 14, 22, 48, 235 });
+    DrawRectangleGradientV(px, py, pw, ph, Color{ 20, 32, 70, 240 }, Color{ 8, 12, 30, 245 });
+    for (int k = -ph; k < pw; k += 10) DrawLine(px + std::max(0, k), py + std::max(0, -k), px + std::min(pw, k + ph), py + std::min(ph, ph - (k + ph - std::min(pw, k + ph))), Color{ 255, 255, 255, 6 });
+    DrawEllipse(px + pw / 2, py + ph - 20, pw * 0.42f, 18, Color{ 255, 240, 190, 14 });     // projecteur sur le rond central
     DrawRectangleLines(px, py, pw, ph, Color{ 240, 200, 60, 255 });
-    DrawRectangle(px, py, pw, 13, Color{ 240, 200, 60, 255 });
+    DrawRectangleLines(px + 2, py + 2, pw - 4, ph - 4, Color{ 240, 200, 60, 70 });
+    for (int c = 0; c < 4; c++) { int cx2 = c & 1 ? px + pw - 6 : px + 1, cy2 = c & 2 ? py + ph - 6 : py + 14; DrawRectangle(cx2, cy2, 5, 1, Color{ 255, 225, 110, 255 }); DrawRectangle(cx2 + (c & 1 ? 4 : 0), cy2 - (c & 2 ? 4 : 0), 1, 5, Color{ 255, 225, 110, 255 }); }
+    DrawRectangleGradientH(px, py, pw, 13, Color{ 255, 214, 90, 255 }, Color{ 220, 160, 40, 255 });
+    DrawRectangle(px, py, 10, 13, kc[0]); DrawRectangle(px + pw - 10, py, 10, 13, kc[1]);
+    DrawRectangle(px, py + 12, pw, 1, Color{ 120, 80, 20, 255 });
+    // capitaines face à face et arbitre (pile ou face, lancer)
+    if (m.tossUI == 1 || m.tossUI == 2) {
+        for (int tm = 0; tm < 2; tm++) {
+            int ci = m.trCaptain(tm); int skin = 0, hair = 0;
+            if (ci >= 0 && m.pl[ci].squad >= 0 && m.pl[ci].squad < (int)m.team(tm).squad.size()) { skin = m.team(tm).squad[m.pl[ci].squad].skin; hair = m.team(tm).squad[m.pl[ci].squad].hair; }
+            int sx = tm ? px + pw - 16 : px + 16, sy = py + ph - 4;
+            drawPlayerSprite(sx, sy, m.kit[tm], skin, hair, tm ? 3 : 2, 0, PS_NORMAL, false, 0, 2);
+            DrawRectangle(sx + (tm ? 2 : -4), sy - 18, 3, 2, Color{ 255, 220, 40, 255 });    // brassard
+        }
+        if (m.tossUI == 2) { Kit rk = refereeKit(m); drawPlayerSprite(px + pw / 2 + 30, py + ph - 4, rk, 1, 0, 0, 0, m.cerT < 0.35f ? PS_THROW : PS_NORMAL, false, 0, 2); }
+    }
     auto title = [&](const std::string& s) { int w = textWidth(s, 10); drawTextPx(s, px + pw / 2 - w / 2, py + 1, 10, BLACK); };
     auto card = [&](int i, int sel, const std::string& l1, const std::string& l2) {
         int cw = 100, ch = 86, cx = px + 12 + i * (cw + 12), cy = py + 18;
@@ -715,6 +734,10 @@ static void drawTossUI(const Match& m) {
             std::string r = m.tossResult == 0 ? "PILE !" : "FACE !";
             drawTextPx(r, cx + 35, py + 69, 20, BLACK);
             drawTextPx(r, cx + 34, py + 68, 20, Color{ 255, 225, 90, 255 });
+            if (m.cerT < FLIP + 1.4f) {    // paillettes aux couleurs du vainqueur
+                float e = (m.cerT - FLIP) / 1.4f;
+                for (int k = 0; k < 24; k++) { float a = k * 0.2618f + k * 0.37f; float r = 8 + e * (30 + (k % 5) * 6); int qx = cx + (int)(std::cos(a) * r), qy = cy + (int)(std::sin(a) * r * 0.7f + e * e * 20); DrawRectangle(qx, qy, 2, 1, k % 3 == 0 ? Color{ 255, 230, 120, 255 } : (win >= 0 ? kc[win] : WHITE)); }
+            }
             if (win >= 0) {
                 std::string g = m.team(win).name + " gagne le tirage";
                 int gw = std::min(pw - 20, textWidth(g, 10)), gx = px + pw / 2 - gw / 2 + 4;
@@ -787,6 +810,21 @@ static void drawTossUI(const Match& m) {
 }
 
 
+// ballon sorti : touche, corner ou six mètres en attente ou en cours (pour le signal des arbitres assistants)
+static bool assistantSignal(const Match& m, int& kind, V2& spot, int& team) {
+    if (m.S.training || m.ceremony || m.finished) return false;
+    if (m.state == MS_STOP && (m.nextSp == SP_THROWIN || m.nextSp == SP_CORNER || m.nextSp == SP_GOALKICK) && m.stateT < 2.5f) { kind = m.nextSp; spot = m.nextSpPos; team = m.nextSpTeam; return true; }
+    if (m.state == MS_SETPIECE && (m.sp == SP_THROWIN || m.sp == SP_CORNER) && m.spT < 1.6f) { kind = m.sp; spot = m.spPos; team = m.spTeam; return true; }
+    return false;
+}
+// tenue des arbitres (choisie avant le match) : noire, jaune, verte, rouge ou bleue, short noir
+static Kit refereeKit(const Match& m) {
+    static const unsigned SH[5] = { 0x151515, 0xF2D21B, 0x2FA84F, 0xC8202A, 0x2457B8 };
+    Kit k; int c = std::max(0, std::min(4, m.S.refKit));
+    k.shirt = SH[c]; k.shirt2 = c ? 0x151515 : 0x151515; k.shorts = 0x101010; k.socks = c ? 0x151515 : 0x101010;
+    if (c) k.pattern = KP_SHOULDERS;
+    return k;
+}
 // trophée (x,y = pied du socle) : 0 coupe, 1 « grandes oreilles », 2 trophée de championnat
 static void drawTrophy(int x, int y, int style, int s) {
     Color gold{ 255, 205, 60, 255 }, gold2{ 200, 140, 30, 255 }, silv{ 225, 230, 240, 255 }, silv2{ 150, 158, 175, 255 }, base{ 50, 40, 36, 255 };
@@ -1300,7 +1338,7 @@ static void drawSceneInset(const Match& m, int kind, float t, int x, int y, int 
 static void drawMatchScenes(const Match& m) {
     static const Match* sm = nullptr; static float st = -1, wait = 0, lastClock = -100; static int kind = 0;
     if (sm != &m) { sm = &m; st = -1; wait = 0; lastClock = -100; }
-    bool stop = !m.S.training && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.pendCardOff < 0 &&
+    bool stop = !m.S.training && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.boardT <= 0 && m.pendCardOff < 0 &&
                 (m.state == MS_STOP || (m.state == MS_SETPIECE && !m.spReady && m.sp != SP_KICKOFF));
     float dt = GetFrameTime();
     if (getenv("FOOT_SCENE")) { kind = atoi(getenv("FOOT_SCENE")) % 9; st = 1.f; stop = true; dt = 0; }
@@ -1588,6 +1626,8 @@ void renderMatch(const Match& m, bool radar) {
         // les deux assistants restent à hauteur du ballon ; dans leur moitié, ils se calent sur l'avant-dernier défenseur s'il est plus près du but
         float t0 = bpos.y > PITCH_L / 2 ? std::max(bpos.y, hi) : bpos.y, t1 = bpos.y < PITCH_L / 2 ? std::min(bpos.y, lo) : bpos.y;
         t0 = std::min(t0, PITCH_L - 0.5f); t1 = std::max(t1, 0.5f);
+        // touche, corner ou six mètres : l'assistant de la ligne concernée rejoint le point de reprise et signale de son drapeau
+        if (!replay) { int sk; V2 sp; int st; if (assistantSignal(m, sk, sp, st)) { int line = sp.x < PITCH_W / 2 ? 0 : 1; if (sk == SP_THROWIN || sk == SP_CORNER) { if (line == 0) t0 = std::clamp(sp.y, 0.5f, PITCH_L - 0.5f); else t1 = std::clamp(sp.y, 0.5f, PITCH_L - 0.5f); } } }
         float k = std::min(1.f, GetFrameTime() * 4.f);
         float o0 = asY[0], o1 = asY[1];
         // course le long de la ligne : vitesse limitée (pas de glissade), foulées selon la distance parcourue
@@ -1656,7 +1696,7 @@ void renderMatch(const Match& m, bool radar) {
             continue;
         }
         if (it.kind == 4) {
-            Kit rk; rk.shirt = 0x151515; rk.shirt2 = 0x151515; rk.shorts = 0x101010; rk.socks = 0x101010;
+            Kit rk = refereeKit(m);
             V2 a = assist[it.idx];
             int ax = SX(a.x), ay = SY(a.y);
             bool line = it.idx < 2;
@@ -1669,7 +1709,15 @@ void renderMatch(const Match& m, bool radar) {
             // drapeau levé : hors-jeu signalé (délai humain avant le coup de sifflet), par l'assistant responsable de la moitié
             bool offs = line && !replay && ((m.offFlagT > 0 && m.offFlagAR == it.idx) || (m.msgT > 0 && m.msg == "HORS-JEU" && m.offFlagAR < 0 && (it.idx == 0) == (bpos.y > PITCH_L / 2)));
             drawPlayerSprite(ax, ay, rk, (it.idx * 3 + 1) % 4, (it.idx * 5 + 2) % 7, offs ? (it.idx == 0 ? 2 : 3) : dir, offs ? 0 : afr, offs ? PS_CELEB : PS_NORMAL, false, 0, 1);
-            if (line) {     // drapeau (rouge et jaune), levé en cas de hors-jeu
+            int sk; V2 spp; int sTeam;
+            bool sig = line && !offs && !replay && assistantSignal(m, sk, spp, sTeam) && ((spp.x < PITCH_W / 2) == (it.idx == 0));
+            if (sig) {      // signal : drapeau tendu vers le camp de l'équipe qui bénéficie de la touche, vers le coin (corner) ou le but (six mètres)
+                float dirY = sk == SP_THROWIN ? (m.goalCenter(sTeam).y > PITCH_L / 2 ? 1.f : -1.f) : (spp.y > PITCH_L / 2 ? 1.f : -1.f);
+                int sx = ax + (it.idx == 0 ? 2 : -2), sy = ay - 10;
+                int ex = sx + (sk == SP_GOALKICK ? (it.idx == 0 ? 6 : -6) : (it.idx == 0 ? 3 : -3)), ey = sy + (sk == SP_GOALKICK ? 0 : (int)(dirY * 7)) - (sk == SP_CORNER ? 3 : 0);
+                DrawLine(sx, sy, ex, ey, Color{ 220, 220, 220, 255 });
+                DrawRectangle(ex - 1, ey - 1, 3, 2, Color{ 230, 40, 40, 255 }); DrawRectangle(ex - 1, ey + 1, 3, 1, Color{ 250, 220, 40, 255 });
+            } else if (line) {     // drapeau (rouge et jaune), levé en cas de hors-jeu
                 int fx = ax + (it.idx == 0 ? 3 : -5), fy = ay - (offs ? 16 : 8);
                 DrawRectangle(fx + 1, fy, 1, offs ? 7 : 5, Color{ 220, 220, 220, 255 });
                 DrawRectangle(fx + (it.idx == 0 ? 2 : -2), fy, 3, 2, Color{ 230, 40, 40, 255 });
@@ -1679,7 +1727,7 @@ void renderMatch(const Match& m, bool radar) {
         }
         if (it.kind == 2) {
             // arbitre (tenue noire)
-            Kit rk; rk.shirt = 0x151515; rk.shirt2 = 0x151515; rk.shorts = 0x101010; rk.socks = 0x101010;
+            Kit rk = refereeKit(m);
             int rx = SX(m.refPos.x), ry = SY(m.refPos.y);
             int rframe = m.refVel.len() > 0.4f ? (int)(m.refAnim * 1.8f) : 0;     // foulées au rythme de la course
             bool showCard = m.refCardT > 0 && m.refCardT < 1.8f;
@@ -1694,6 +1742,18 @@ void renderMatch(const Match& m, bool radar) {
                 Color cc = m.refCardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
                 DrawRectangle(rx + 3, ry - 18, 3, 4, cc);
                 DrawRectangleLines(rx + 2, ry - 19, 5, 6, Color{ 0, 0, 0, 120 });
+            } else if (!replay && m.state == MS_STOP && m.stateT < 2.2f && (m.nextSp == SP_FREEKICK || m.nextSp == SP_INDIRECT || m.nextSp == SP_PENALTY || m.nextSp == SP_CORNER)) {
+                // geste de l'arbitre : bras tendu vers le but de l'équipe qui bénéficie de la faute, bras levé pour un coup franc indirect,
+                // désigne le point de penalty
+                Color arm = hexc(rk.shirt);
+                if (m.nextSp == SP_INDIRECT) { DrawRectangle(rx - 1, ry - 18, 2, 7, arm); DrawRectangle(rx - 1, ry - 19, 2, 2, Color{ 230, 190, 150, 255 }); }
+                else {
+                    V2 tgt = m.nextSp == SP_PENALTY ? m.nextSpPos : m.goalCenter(m.nextSpTeam);
+                    V2 d = (tgt - m.refPos).norm();
+                    int ex = rx + (int)(d.x * 7), ey = ry - 10 + (int)(d.y * 4);
+                    DrawLine(rx, ry - 10, ex, ey, arm); DrawLine(rx, ry - 9, ex, ey + 1, arm);
+                    DrawRectangle(ex - 1, ey - 1, 2, 2, Color{ 230, 190, 150, 255 });
+                }
             }
             continue;
         }
@@ -1887,7 +1947,7 @@ void renderMatch(const Match& m, bool radar) {
     }
     // 4e arbitre et panneau de remplacement le long de la touche
     if (!replay && m.subBoardT > 0) {
-        Kit ok; ok.shirt = 0x151515; ok.shirt2 = 0x151515; ok.shorts = 0x101010; ok.socks = 0x101010;
+        Kit ok = refereeKit(m);
         int x = SX(-1.4f), y = SY(PITCH_L / 2);
         drawPlayerSprite(x, y, ok, 1, 0, 2, 0, PS_THROW, false, 0, 1);
         DrawRectangle(x - 5, y - 20, 11, 7, Color{ 20, 20, 20, 255 });
@@ -2024,9 +2084,9 @@ void renderMatch(const Match& m, bool radar) {
     if (m.period == 0 && m.clock <= 0.f) clk = "0'";          // avant le coup d'envoi (entrée des équipes, hymnes)
     if (m.shootout) clk = "TAB";
     if (m.S.training) {
-        static const char* TN[] = { "", "PENALTIES", "COUPS FRANCS", "CORNERS", "ATTAQUE - DÉFENSE", "GARDIEN : PENALTIES" };
+        static const char* TN[] = { "", "PENALTIES", "COUPS FRANCS", "CORNERS", "ATTAQUE - DÉFENSE", "GARDIEN : PENALTIES", "FACE-À-FACE", "FRAPPES DE LOIN" };
         int done = std::max(0, m.trainTries - 1);
-        std::string t1 = std::string("ENTRAÎNEMENT - ") + TN[std::max(0, std::min(5, m.S.training))];
+        std::string t1 = std::string("ENTRAÎNEMENT - ") + TN[std::max(0, std::min(7, m.S.training))] + fmt("  -  essai %d / 10", std::min(10, m.trainTries));
         std::string t2 = m.S.training == 5 ? fmt("Arrêts : %d / %d", m.trainGoals, done) : fmt("Buts : %d / %d", m.trainGoals, done);
         if (done > 0) t2 += fmt("  (%d%%)", m.trainGoals * 100 / done);
         int w = std::max(textWidth(t1, 10), textWidth(t2, 10)) + 10;
@@ -2077,22 +2137,36 @@ void renderMatch(const Match& m, bool radar) {
         DrawRectangle(bx - 4, by - 4, 3, 56, hexc(m.kit[m.subBoardTeam].shirt));
         (void)T;
     }
-    // panneau du 4e arbitre (animation)
+    // temps additionnel : incrustation façon scénette TV (gros plan sur le 4e arbitre et son panneau lumineux) + bandeau
     if (m.boardT > 0 && !replay) {
-        float t = 5.f - m.boardT;
-        float up = std::min(1.f, t * 2.5f) * std::min(1.f, m.boardT * 2.5f);
+        float t = 5.f - m.boardT, tt = (float)GetTime();
+        float up = std::min(1.f, t * 3.f) * std::min(1.f, m.boardT * 3.f);
         bool left = SX(m.ball.pos.x) > MW / 2;              // du côté opposé à l'action
-        int bx = left ? 10 : MW - 80, by = MH / 2 - 30 - (int)((1.f - up) * 60);
-        DrawRectangle(bx - 6, by - 6, 72, 52, Color{ 0, 0, 0, (unsigned char)(120 * up) });
-        Kit ok; ok.shirt = 0x151515; ok.shirt2 = 0x151515; ok.shorts = 0x101010; ok.socks = 0x101010;
-        drawPlayerSprite(bx + 12, by + 40, ok, 1, 0, 0, 0, PS_THROW, false, 0, 2);
-        // panneau lumineux tenu à bout de bras
-        DrawRectangle(bx + 24, by - 2, 36, 22, Color{ 20, 20, 20, 255 });
-        DrawRectangleLines(bx + 24, by - 2, 36, 22, Color{ 200, 200, 200, 255 });
-        DrawRectangle(bx + 38, by + 20, 3, 10, Color{ 90, 90, 90, 255 });
-        bool blink = ((int)(t * 4)) % 2 == 0;
+        int w = 84, h = 54, x = left ? 6 - (int)((1.f - up) * 110) : MW - w - 6 + (int)((1.f - up) * 110), y = 24;
+        DrawRectangle(x + 2, y + 2, w + 4, h + 16, Color{ 0, 0, 0, 120 });
+        DrawRectangle(x - 2, y - 2, w + 4, h + 4, Color{ 230, 230, 240, 255 });
+        // décor : tribune floue, banc de touche, bord du terrain
+        DrawRectangleGradientV(x, y, w, h, Color{ 40, 46, 70, 255 }, Color{ 20, 24, 40, 255 });
+        fxCrowd(x, y + 2, w, 22, hexc(m.kit[0].shirt), hexc(m.kit[1].shirt), tt, 0.2f, 9, 3);
+        DrawRectangle(x, y + 24, w, 6, Color{ 60, 64, 76, 255 });
+        DrawRectangle(x, y + 30, w, h - 30, Color{ 46, 128, 56, 255 });
+        DrawRectangle(x, y + 30, w, 1, Color{ 230, 240, 230, 255 });
+        // 4e arbitre en gros plan, bras levés, panneau au-dessus de la tête
+        Kit ok = refereeKit(m);
+        drawPlayerSprite(x + w / 2, y + h - 2, ok, 1, 0, 0, 0, PS_THROW, false, 0, 3);
+        int bw = 46, bh = 22, bx = x + w / 2 - bw / 2, by = y + 2 + (int)(std::sin(tt * 3.f) * 1.f);
+        DrawRectangle(bx + 1, by + 1, bw, bh, Color{ 0, 0, 0, 120 });
+        DrawRectangle(bx, by, bw, bh, Color{ 14, 14, 18, 255 });
+        DrawRectangleLines(bx, by, bw, bh, Color{ 200, 200, 210, 255 });
+        for (int k = 0; k < bw - 4; k += 2) DrawRectangle(bx + 2 + k, by + 2, 1, bh - 4, Color{ 30, 30, 36, 255 });   // grille de LED
+        bool blink = ((int)(t * 3)) % 2 == 0;
         std::string n = fmt("+%d", m.boardN);
-        drawTextPx(n, bx + 42 - textWidth(n, 10) / 2, by + 4, 10, blink ? Color{ 80, 255, 90, 255 } : Color{ 255, 70, 60, 255 });
+        drawTextPx(n, bx + bw / 2 - textWidth(n, 20) / 2, by + 1, 20, blink ? Color{ 80, 255, 90, 255 } : Color{ 255, 70, 60, 255 });
+        // bandeau de la chaîne
+        DrawRectangle(x - 2, y + h + 2, w + 4, 12, Color{ 190, 30, 40, 255 });
+        std::string lab = fmt("TEMPS ADDITIONNEL : %d MIN", m.boardN);
+        drawTextPx(fitText(lab, w + 2, 5), x, y + h + 4, 5, WHITE);
+        if (((int)(tt * 2)) % 2) DrawCircle(x + w - 3, y + h + 8, 2, WHITE);
     }
     if (m.S.hasFirstLeg) {
         std::string ag = fmt("Cumul %d-%d", m.score[0] + m.S.aggHome, m.score[1] + m.S.aggAway);

@@ -9,7 +9,7 @@
 
 static Sound g_sfx[NUM_SFX];
 static Sound g_crowd;
-static const int NUM_CHANTS = 9;
+static const int NUM_CHANTS = 12;
 static Sound g_fanVoice[NUM_CHANTS];
 static Sound g_music;
 static bool g_musicOk = false, g_musicOn = true;
@@ -135,7 +135,7 @@ static void normalize(std::vector<float>& v, float peak, float fade) {
 }
 // chants complets (boucles) : 0 « Allez ! », 1 sifflets, 2 contestation, 3 encouragements rythmés, 4 « Olé ! »
 static std::vector<float> renderChant(int kind) {
-    float len = kind == 1 ? 5.f : kind == 5 ? 12.f : 6.4f;
+    float len = kind == 1 ? 5.f : kind == 5 ? 12.f : kind == 9 ? 9.6f : kind == 10 ? 8.f : 6.4f;
     std::vector<float> v((size_t)(len * SR), 0.f);
     const float b = 60.f / 132.f;                    // une noire à 132 bpm
     std::vector<Syll> song;
@@ -234,6 +234,43 @@ static std::vector<float> renderChant(int kind) {
         for (int r = 0; r < 2; r++) for (int k = 0; k < 9; k++) { float t0 = r * b * 6.f + T[k] * b; song.push_back({ t0, (k == 8 ? 1.4f : 0.42f) * b, N[k], k % 2 ? &V_E : &V_A, k == 8 ? 1.f : 0.85f }); addClap(v, t0, 0.6f); }
         addChoir(v, song, 220.f, 28, 1.25f, 59);
         addMurmur(v, 0.18f, 0.07f);
+        break;
+    }
+    case 9: {   // « AUX ARMES ! » : un virage lance, l'autre répond, puis « Nous sommes les... et nous allons gagner ! »
+        for (int r = 0; r < 2; r++) {
+            float t0 = 0.1f + r * b * 2.2f;
+            std::vector<Syll> call = { { t0, b * 0.42f, 0, &V_O, 1.f }, { t0 + b * 0.5f, b * 0.42f, 0, &V_A, 1.f }, { t0 + b, b * 0.9f, -2, &V_E, 1.f } };
+            addChoir(v, call, r ? 150.f : 165.f, r ? 22 : 18, r ? 1.35f : 1.1f, 61 + r);   // réponse plus forte
+            addDrum(v, t0, 0.6f); addDrum(v, t0 + b, 0.6f);
+        }
+        static const float T[10] = { 0, 0.5f, 1.f, 1.5f, 2.f, 2.5f, 3.5f, 4.f, 4.5f, 5.f };
+        static const int N[10] = { 0, 0, 2, 4, 4, 2, 4, 5, 7, 7 };
+        float s0 = 0.1f + b * 4.6f;
+        for (int k = 0; k < 10; k++) song.push_back({ s0 + T[k] * b, (k == 9 ? 1.4f : 0.45f) * b, N[k], k % 3 == 0 ? &V_O : k % 3 == 1 ? &V_A : &V_E, k == 9 ? 1.f : 0.9f });
+        addChoir(v, song, 175.f, 30, 1.3f, 67);
+        for (float t = s0; t < len - 0.2f; t += b) addDrum(v, t, (int)((t - s0) / b + 0.5f) % 2 ? 0.25f : 0.5f);
+        addMurmur(v, 0.15f, 0.07f);
+        break;
+    }
+    case 10: {  // « Oh oh oh oh oh oh ohhh » : le riff repris par tout le stade
+        static const float T[7] = { 0, 1.5f, 2.f, 2.75f, 3.5f, 4.f, 6.f };
+        static const int N[7] = { 0, 0, 3, 0, -2, -4, -5 };
+        static const float L[7] = { 1.4f, 0.45f, 0.7f, 0.7f, 0.45f, 1.9f, 1.9f };
+        for (int r = 0; r < 2; r++) for (int k = 0; k < 7; k++) song.push_back({ 0.1f + r * b * 8.f + T[k] * b, L[k] * b, N[k], &V_O, k == 0 ? 1.f : 0.9f });
+        addChoir(v, song, 165.f, 32, 1.35f, 71);
+        for (float t = 0.1f; t < len; t += b) addDrum(v, t, 0.4f);
+        addMurmur(v, 0.15f, 0.07f);
+        break;
+    }
+    case 11: {  // « Qui ne saute pas... » : chant sauté, piétinement des tribunes
+        for (int r = 0; r < 4; r++) {
+            float t0 = 0.1f + r * b * 3.f;
+            static const int N[6] = { 7, 7, 5, 7, 9, 7 };
+            for (int k = 0; k < 6; k++) song.push_back({ t0 + k * b * 0.5f, b * 0.38f, N[k], k % 2 ? &V_I : &V_A, k == 5 ? 1.f : 0.85f });
+            for (int k = 0; k < 6; k++) addDrum(v, t0 + k * b * 0.5f, 0.35f);       // les tribunes tremblent
+        }
+        addChoir(v, song, 196.f, 28, 1.25f, 73);
+        addMurmur(v, 0.22f, 0.08f);
         break;
     }
     }
@@ -804,10 +841,13 @@ void audioStopAnthem() {
     if (g_anthemOn) { StopSound(g_anthemCur); g_anthemOn = false; }
     if (g_anthemMusOn) { StopMusicStream(g_anthemMus); UnloadMusicStream(g_anthemMus); g_anthemMusOn = false; }
 }
+void audioWalkoutStop();
 void audioAnthemCode(const std::string& code) {
     if (!g_ok) return;
     audioStopAnthem();
     if (g_musicOk && IsSoundPlaying(g_music)) StopSound(g_music);
+    for (auto& jg : g_jingles) if (IsSoundPlaying(jg)) StopSound(jg);
+    audioWalkoutStop();
     std::string file = audioAnthemFile(code);
     if (!file.empty() && FileExists(file.c_str())) {
         g_anthemMus = LoadMusicStream(file.c_str());
@@ -840,6 +880,9 @@ static Music g_walkMus; static bool g_walkOn = false; static float g_walkFade = 
 void audioWalkoutPlay(const std::string& path) {
     audioWalkoutStop();
     if (!g_ok || path.empty() || !FileExists(path.c_str())) return;
+    if (g_musicOk && IsSoundPlaying(g_music)) StopSound(g_music);
+    for (auto& jg : g_jingles) if (IsSoundPlaying(jg)) StopSound(jg);
+    audioStopAnthem();
     g_walkMus = LoadMusicStream(path.c_str());
     if (!IsMusicValid(g_walkMus)) return;
     g_walkMus.looping = false; SetMusicVolume(g_walkMus, 0.75f); PlayMusicStream(g_walkMus); g_walkOn = true; g_walkFade = -1;
@@ -858,7 +901,10 @@ void audioUpdate() {
 
 void audioJingle(int j) {
     if (!g_ok || !g_musicOn || j < 0 || j > 8) return;
+    // une nouvelle musique coupe la précédente (menu, autre jingle, musique d'entrée)
     if (g_musicOk && IsSoundPlaying(g_music)) StopSound(g_music);
+    for (int k = 0; k < 9; k++) if (k != j && IsSoundPlaying(g_jingles[k])) StopSound(g_jingles[k]);
+    audioWalkoutStop();
     SetSoundVolume(g_jingles[j], 0.6f);
     PlaySound(g_jingles[j]);
 }
@@ -869,13 +915,13 @@ void audioSupporters(int state, float strength) {
     static float rest = 0; static int last = -1, playing = -1, rot = 0;
     int mood = state == CH_WHISTLES ? 1 : state == CH_PROTEST ? 2 : state == CH_ENCOURAGE ? 3 : state == CH_CELEBRATE ? 4 : 0;
     // chaque humeur a son répertoire : les chants s'enchaînent sans se répéter
-    static const int REP[5][3] = { { 0, 5, 7 }, { 1, 1, 1 }, { 2, 2, 2 }, { 3, 6, 3 }, { 4, 8, 4 } };
+    static const int REP[5][5] = { { 0, 9, 5, 10, 7 }, { 1, 1, 1, 1, 1 }, { 2, 2, 2, 2, 2 }, { 3, 9, 6, 11, 3 }, { 4, 10, 8, 11, 9 } };
     if (state == CH_TENSE || strength <= 0) { for (auto& sound : g_fanVoice) StopSound(sound); last = playing = -1; return; }
     if (mood != last) { for (auto& sound : g_fanVoice) StopSound(sound); playing = -1; rest = 0; }
     float volume = std::clamp(strength, 0.f, 1.f) * (state == CH_NORMAL ? .16f : state == CH_LOUD ? .3f : state == CH_ENCOURAGE ? .3f : state == CH_WHISTLES ? .34f : .42f);
     if (playing >= 0 && IsSoundPlaying(g_fanVoice[playing])) { SetSoundVolume(g_fanVoice[playing], volume); rest = (state == CH_NORMAL ? 2.5f : 0.6f); last = mood; return; }
     if (last == mood && rest > 0) { rest -= GetFrameTime(); return; }
-    playing = REP[mood][rot++ % 3];
+    playing = REP[mood][rot++ % 5];
     SetSoundVolume(g_fanVoice[playing], volume);
     PlaySound(g_fanVoice[playing]); last = mood;
 }

@@ -150,9 +150,10 @@ static void screenDraw(float dt) {
             // affiches : le(s) match(s) du club + les chocs entre les équipes les mieux cotées
             std::vector<int> feat = myTies;
             std::vector<int> byRate = ord;
-            std::stable_sort(byRate.begin(), byRate.end(), [&](int x, int y) {
-                auto val = [&](int k) { const Tie& T = st.ties[k]; return g_world.teams[T.a].rating + (T.b >= 0 ? g_world.teams[T.b].rating : 0.f) + rr.frange(0, 10); };
-                return val(x) > val(y); });
+            // valeur de chaque affiche tirée une seule fois : un comparateur qui change d'avis à chaque appel fait planter le tri
+            std::vector<float> val(n);
+            for (int k = 0; k < n; k++) { const Tie& T = st.ties[k]; val[k] = (T.a >= 0 ? g_world.teams[T.a].rating : 0.f) + (T.b >= 0 ? g_world.teams[T.b].rating : 0.f) + rr.frange(0, 10); }
+            std::stable_sort(byRate.begin(), byRate.end(), [&](int x, int y) { return val[x] > val[y]; });
             for (int k : byRate) if ((int)feat.size() < F && std::find(feat.begin(), feat.end(), k) == feat.end()) feat.push_back(k);
             rr.shuffle(feat);
             F = (int)feat.size();

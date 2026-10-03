@@ -4,7 +4,7 @@
 #include <memory>
 int main(int argc, char** argv) {
     g_world.build();
-    int n = argc > 1 ? atoi(argv[1]) : 60, goals = 0, rounded = 0;
+    int n = argc > 1 ? atoi(argv[1]) : 60, goals = 0, rounded = 0, held = 0, smother = 0, wide = 0, other = 0;
     for (int k = 0; k < n; k++) {
         auto m = std::make_unique<Match>(); MatchSetup s; s.home = g_world.nationIndex("FRA"); s.away = g_world.nationIndex("ITA");
         for (int i = 0; i < NUM_INPUTS; i++) s.side[i] = -1; s.side[IN_KB1] = 0;
@@ -28,7 +28,10 @@ int main(int argc, char** argv) {
             M.ctl[IN_KB1] = ct; M.update(1.f / 60); M.sfxN = 0;
             if (cut && M.ball.owner == att && std::fabs(p.pos.x - M.pl[gk].pos.x) > 2.5f && sg * (p.pos.y - M.pl[gk].pos.y) > -1.f) { rounded++; cut = false; side = 0; }
             if (M.state == MS_GOAL) { goals++; break; }
+            if (M.ball.owner == gk) { if (M.pl[gk].state == PS_GKHOLD && M.lastShooter == att && M.lastShotAge < 3.f) held++; else smother++; break; }
+            if (M.state != MS_PLAY) { wide++; break; }
+            if (f == 60 * 8 - 1) other++;
         }
     }
-    printf("1v1 human: goals %d/%d (%.0f%%), keeper rounded %d\n", goals, n, 100.f * goals / n, rounded);
+    printf("1v1 human: goals %d/%d (%.0f%%), keeper rounded %d | saves %d, smother/claim %d, out %d, timeout %d\n", goals, n, 100.f * goals / n, rounded, held, smother, wide, other);
 }

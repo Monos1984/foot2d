@@ -122,10 +122,66 @@ static void drawClubSeason(int y, bool results) {
     }
 }
 
+// petit pictogramme de compétition : championnat (classement), coupe (trophée), Europe (étoiles)
+static void drawCompGlyph(int x, int y, const std::string& comp, const std::string& info) {
+    bool league = info == "championnat";
+    bool euro = comp.find("champions") != std::string::npos || comp.find("Europa") != std::string::npos || comp.find("Conférence") != std::string::npos || comp.find("UEFA") != std::string::npos;
+    if (league) { for (int k = 0; k < 3; k++) { DrawRectangle(x, y + 1 + k * 3, 9, 2, k == 0 ? Color{ 240, 200, 60, 255 } : Color{ 150, 170, 210, 255 }); } return; }
+    if (euro) { for (int k = 0; k < 3; k++) { int sx = x + 1 + k * 3, sy = y + 2 + (k == 1 ? -1 : 1); DrawRectangle(sx, sy, 1, 3, WHITE); DrawRectangle(sx - 1, sy + 1, 3, 1, WHITE); } DrawCircleLines(x + 4, y + 4, 5, Color{ 120, 160, 255, 255 }); return; }
+    DrawRectangle(x + 1, y, 7, 4, Color{ 240, 200, 60, 255 }); DrawRectangle(x + 3, y + 4, 3, 2, Color{ 200, 150, 40, 255 }); DrawRectangle(x + 2, y + 6, 5, 2, Color{ 120, 90, 50, 255 });
+    DrawRectangle(x, y + 1, 1, 2, Color{ 240, 200, 60, 255 }); DrawRectangle(x + 8, y + 1, 1, 2, Color{ 240, 200, 60, 255 });
+}
 static void screenSeasonStart() {
     drawBackground(fmt("Saison %d-%02d : engagements du club", g_career.year, (g_career.year + 1) % 100));
-    drawTextCentered("Compétitions de chaque équipe du club : division, coupes et tour d'entrée", VW / 2, 32, 10, C_DIM);
-    drawClubSeason(46, false);
+    int club = g_career.userTeam;
+    const Team& U = g_world.teams[club];
+    float t = (float)GetTime();
+    // bandeau du club : couleurs, nom, stade, objectif
+    Color c1 = hexc(U.home.shirt), c2 = hexc(U.home.shirt2 != U.home.shirt ? U.home.shirt2 : U.home.shorts);
+    DrawRectangleGradientH(10, 30, VW - 20, 40, Color{ (unsigned char)(c1.r / 2), (unsigned char)(c1.g / 2), (unsigned char)(c1.b / 2), 255 }, Color{ 10, 16, 34, 255 });
+    DrawRectangle(10, 30, 4, 40, c2); DrawRectangle(10, 69, VW - 20, 1, c2);
+    for (int k = 0; k < 6; k++) DrawRectangle(VW - 150 + k * 22 + (int)(std::sin(t + k) * 2), 30, 10, 40, Color{ 255, 255, 255, 8 });
+    drawKitIcon(U.home, 22, 36, 3);
+    drawTextPx(fitText(U.name, 330, 20), 64, 34, 20, WHITE);
+    drawTextPx(fitText((U.stadium.empty() ? std::string() : U.stadium + "  -  ") + g_career.teamLevelName(club), 400, 10), 64, 56, 10, Color{ 220, 225, 240, 255 });
+    drawTextPx(fmt("SAISON %d-%02d", g_career.year, (g_career.year + 1) % 100), VW - 110, 36, 10, Color{ 255, 220, 120, 255 });
+    // cartes : une par équipe du club (équipe première en pleine largeur, puis réserves et jeunes sur deux colonnes)
+    auto fam = clubFamily(club);
+    std::vector<std::pair<int, std::vector<SeasonLine>>> all;
+    for (int tm : fam) { auto lines = seasonEntries(tm); if (lines.empty() && tm != club) continue; all.push_back({ tm, lines }); }
+    int y = 76, col = 0, colY[2] = { 0, 0 };
+    for (size_t i = 0; i < all.size(); i++) {
+        int tm = all[i].first; auto& lines = all[i].second;
+        bool first = i == 0;
+        int w = first ? VW - 20 : (VW - 26) / 2, x = first ? 10 : 10 + col * (w + 6);
+        int h = 16 + 12 * (int)lines.size() + 4;
+        int cy = first ? y : y + colY[col];
+        if (cy + h > VH - 22) { if (!first && col == 0) { col = 1; x = 10 + w + 6; cy = y + colY[1]; } if (cy + h > VH - 22) continue; }
+        const Team& T = g_world.teams[tm];
+        DrawRectangle(x + 2, cy + 2, w, h, Color{ 0, 0, 0, 70 });
+        DrawRectangle(x, cy, w, h, Color{ 16, 26, 52, 235 });
+        DrawRectangle(x, cy, w, 14, first ? Color{ 40, 60, 110, 255 } : Color{ 30, 44, 84, 255 });
+        DrawRectangle(x, cy, 3, h, hexc(T.home.shirt));
+        drawKitIcon(T.home, x + 6, cy + 2, 1);
+        drawTextPx(fitText(sectionName(tm, club), w / 2, 10), x + 20, cy + 2, 10, C_HI);
+        std::string lv = fitText(g_career.teamLevelName(tm), w / 2 - 20, 10);
+        drawTextPx(lv, x + w - 6 - textWidth(lv, 10), cy + 2, 10, C_DIM);
+        int ly = cy + 16;
+        for (auto& l : lines) {
+            DrawRectangle(x + 4, ly - 1, w - 8, 11, (int)(&l - &lines[0]) % 2 ? Color{ 255, 255, 255, 6 } : Color{ 255, 255, 255, 14 });
+            drawCompGlyph(x + 7, ly, l.comp, l.info);
+            int infoW = first ? 300 : w / 2 - 10;
+            drawTextPx(fitText(l.comp, w - infoW - 30, 10), x + 20, ly, 10, C_TXT);
+            std::string inf = fitText(l.info, infoW, 10);
+            bool champ = l.info == "championnat";
+            int iw = textWidth(inf, 10) + 8;
+            DrawRectangle(x + w - 8 - iw, ly - 1, iw, 11, champ ? Color{ 90, 74, 20, 255 } : Color{ 30, 60, 100, 255 });
+            drawTextPx(inf, x + w - 4 - iw, ly, 10, champ ? Color{ 255, 220, 120, 255 } : l.c);
+            ly += 12;
+        }
+        if (lines.empty()) drawTextPx("Aucune compétition officielle", x + 20, ly, 10, C_DIM);
+        if (first) y += h + 6; else { colY[col] += h + 6; col = colY[0] <= colY[1] ? 0 : 1; }
+    }
     drawFooter("OK / Retour : continuer");
     if (IN.back || IN.ok || IN.start) openHub();
 }

@@ -288,7 +288,7 @@ static void screenTactics() {
         { "Passes", PASS[T.passStyle % 3], "Style de passe préféré (courtes, mixtes ou longues vers les attaquants)." },
         { "Adjoint : entraînement", g_career.mgr.delegTrain ? "délégué à l'adjoint" : "géré par vous", "L'adjoint choisit chaque mois le thème et l'intensité selon l'état de l'effectif." },
         { "Adjoint : remplacements", g_career.mgr.delegSubs ? "délégués à l'adjoint" : "gérés par vous", "Pendant vos matchs, l'adjoint effectue les changements (fatigue, blessures, score)." },
-        { "Mode Full Manager", g_career.mgr.fullManager ? "activé (temps forts)" : "désactivé", "Vous ne jouez plus les matchs : vous regardez les temps forts et donnez vos consignes." },
+        { "Mode Full Manager", g_career.mgr.fullManager ? "activé (match complet)" : "désactivé", "Vous ne jouez plus les matchs : vous les regardez en entier (durée au choix) et donnez vos consignes." },
     };
     if(!careerRules()){rows.resize(7);rows.erase(rows.begin()+5);rows.erase(rows.begin()+3);}
     int n = (int)rows.size();g_tacRow%=n;

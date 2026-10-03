@@ -415,6 +415,21 @@ static void screenTraining() {
 
 // ---------------- mode entraînement (menu principal)
 static ListW g_tmLW;
+// séries de 10 essais : bilan et records par exercice (entrainement.txt à côté du jeu)
+static int g_trainBest[8] = {}; static bool g_trainBestLoaded = false;
+static int g_trainLastDrill = 0, g_trainLastScore = -1; static float g_trainLastT = 0;
+static void trainBestLoad() {
+    if (g_trainBestLoaded) return; g_trainBestLoaded = true;
+    FILE* f = fopen("entrainement.txt", "r"); if (!f) return;
+    int d, v; while (fscanf(f, "%d=%d", &d, &v) == 2) if (d >= 0 && d < 8) g_trainBest[d] = std::max(0, std::min(10, v));
+    fclose(f);
+}
+static void trainBestSave() { FILE* f = fopen("entrainement.txt", "w"); if (!f) return; for (int d = 1; d < 8; d++) fprintf(f, "%d=%d\n", d, g_trainBest[d]); fclose(f); }
+static void trainSeriesDone(int drill, int score) {
+    trainBestLoad();
+    g_trainLastDrill = drill; g_trainLastScore = score; g_trainLastT = 0;
+    if (drill > 0 && drill < 8 && score > g_trainBest[drill]) { g_trainBest[drill] = score; trainBestSave(); }
+}
 static int g_trainCtl = -1;      // contrôleur utilisé à l'entraînement (-1 : automatique, manette en priorité)
 static void screenTrainMode() {
     drawBackground("Entraînement");
@@ -424,28 +439,44 @@ static void screenTrainMode() {
     drawTextPx(T.name, 44, 36, 10, C_HI);
     std::vector<int> devs; for (int d = 0; d < NUM_INPUTS; d++) if (inputAvailable(d)) devs.push_back(d);
     if (g_trainCtl < 0 || !inputAvailable(g_trainCtl)) g_trainCtl = IsGamepadAvailable(0) ? IN_PAD1 : IN_KB1;
-    std::vector<std::string> items = { "Penalties : tirer face au gardien", "Coups francs directs (18 à 30 m)", "Corners : centres et reprises",
-                                       "Attaque contre défense", "Gardien : arrêter des penalties", std::string("Commande : < ") + inputName(g_trainCtl) + " >", "Changer d'équipe", "Retour" };
+    trainBestLoad();
+    static const char* DRN[7] = { "Penalties : tirer face au gardien", "Coups francs directs (18 à 30 m)", "Corners : centres et reprises", "Attaque contre défense", "Gardien : arrêter des penalties", "Face-à-face avec le gardien", "Frappes de loin (22 à 30 m)" };
+    std::vector<std::string> items;
+    for (int k = 0; k < 7; k++) items.push_back(std::string(DRN[k]) + (g_trainBest[k + 1] ? fmt("   record %d/10", g_trainBest[k + 1]) : std::string()));
+    items.push_back(std::string("Commande : < ") + inputName(g_trainCtl) + " >"); items.push_back("Changer d'équipe"); items.push_back("Retour");
     static const char* DESC[] = { "Visez avec la direction, maintenez Tir pour la puissance, relâchez pour frapper.", "Visée avec la direction, Tir (appui long) pour frapper, Passe ou Lob pour jouer court/long.",
                                   "Centre au bouton lob, reprise de la tête ou de volée dans la surface.", "Construisez une action à 40 m du but contre toute la défense (25 s par essai).",
-                                  "Orientez le plongeon du gardien au moment de la frappe.", "Gauche/Droite ou OK : clavier ou manette utilisé pendant l'exercice.", "", "" };
+                                  "Orientez le plongeon du gardien au moment de la frappe.", "Seul face au gardien à 25 m : feinte, crochet ou frappe placée (9 s par essai).",
+                                  "Frappez avant d'entrer dans la surface : puissance, effet, précision.", "Gauche/Droite ou OK : clavier ou manette utilisé pendant l'exercice.", "", "" };
+    // bilan de la dernière série
+    if (g_trainLastScore >= 0 && g_trainLastDrill >= 1 && g_trainLastDrill <= 7) {
+        g_trainLastT += GetFrameTime();
+        int bx = VW - 214, by = 30;
+        DrawRectangle(bx, by, 204, 30, Color{ 10, 18, 40, 230 }); DrawRectangleLines(bx, by, 204, 30, C_HI);
+        drawTextPx(fitText(std::string("Série terminée : ") + DRN[g_trainLastDrill - 1], 196, 10), bx + 4, by + 2, 10, C_DIM);
+        int stars = g_trainLastScore >= 9 ? 3 : g_trainLastScore >= 7 ? 2 : g_trainLastScore >= 5 ? 1 : 0;
+        drawTextPx(fmt("%d / 10", g_trainLastScore), bx + 4, by + 14, 10, C_HI);
+        for (int k = 0; k < 3; k++) DrawPoly(Vector2{ (float)bx + 70 + k * 14, (float)by + 19 }, 5, 5.f, -90, k < stars ? Color{ 255, 215, 60, 255 } : Color{ 60, 70, 90, 255 });
+        if (g_trainLastScore >= g_trainBest[g_trainLastDrill] && g_trainLastScore > 0 && ((int)(g_trainLastT * 3)) % 2) drawTextPx("RECORD !", bx + 128, by + 14, 10, C_GOOD);
+    }
     int s = menuRun(g_tmLW, items, 64, 340);
-    int cur = std::max(0, std::min(7, g_tmLW.cur));
-    if (DESC[cur][0]) drawTextCentered(DESC[cur], VW / 2, 64 + 8 * 20 + 8, 10, C_DIM);
+    int cur = std::max(0, std::min(9, g_tmLW.cur));
+    if (DESC[cur][0]) drawTextCentered(DESC[cur], VW / 2, 64 + 10 * 20 + 8, 10, C_DIM);
     // rappel des touches du contrôleur choisi
     {
         std::string help = inputHelp(g_trainCtl);
-        drawTextCentered(fitText(help, VW - 20, 10), VW / 2, 64 + 8 * 20 + 20, 10, C_TXT);
+        drawTextCentered(fitText(help, VW - 20, 10), VW / 2, 64 + 10 * 20 + 20, 10, C_TXT);
     }
-    drawFooter("Le compteur de réussite s'affiche en haut à gauche   Pause : changer d'exercice");
-    if (cur == 5 && (IN.left || IN.right) && !devs.empty()) {
+    drawFooter("Séries de 10 essais : bilan et record   Pause : changer d'exercice");
+    if (cur == 7 && (IN.left || IN.right) && !devs.empty()) {
         int k = 0; for (int i = 0; i < (int)devs.size(); i++) if (devs[i] == g_trainCtl) k = i;
         k = (k + (IN.left ? -1 : 1) + (int)devs.size()) % (int)devs.size(); g_trainCtl = devs[k];
     }
-    if (IN.back || s == 7) { g_screen = SC_MAIN; return; }
-    if (s == 5) { int k = 0; for (int i = 0; i < (int)devs.size(); i++) if (devs[i] == g_trainCtl) k = i; g_trainCtl = devs[(k + 1) % devs.size()]; return; }
-    if (s == 6) { openPick(PM_TRAIN); return; }
+    if (IN.back || s == 9) { g_screen = SC_MAIN; return; }
+    if (s == 7) { int k = 0; for (int i = 0; i < (int)devs.size(); i++) if (devs[i] == g_trainCtl) k = i; g_trainCtl = devs[(k + 1) % devs.size()]; return; }
+    if (s == 8) { openPick(PM_TRAIN); return; }
     if (s < 0) return;
+    g_trainLastScore = -1;
     MatchSetup ms;
     ms.home = g_trainTeam; ms.away = g_trainTeam;
     for (int d = 0; d < NUM_INPUTS; d++) ms.side[d] = -1;

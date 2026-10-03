@@ -2,7 +2,7 @@
 static int g_newTeam = -1;
 static Screen g_newBack = SC_MAIN;
 static bool g_optNoSack = false;
-static int g_optMode = 2;           // 0 jeu (matchs seulement), 1 manager (temps forts), 2 manager + jeu
+static int g_optMode = 2;           // 0 jeu (matchs seulement), 1 manager (match regardé en entier), 2 manager + jeu
 static int g_optBudget = 1;          // 0 serré, 1 normal, 2 confortable
 static ListW g_coptLW;
 
@@ -37,7 +37,7 @@ static void screenCareerOpt() {
         "< Choisir un autre club",
         "> COMMENCER LA CARRIÈRE"};
     const std::string help[]={
-        "JEU : matchs sans gestion. MANAGER : gestion et temps forts. MANAGER + JEU : gestion et matchs jouables.",
+        "JEU : matchs sans gestion. MANAGER : gestion, matchs regardés en entier. MANAGER + JEU : gestion et matchs jouables.",
         "Activé : le président peut vous licencier si sa confiance devient trop faible.",
         "Serré : budget initial divisé par deux. Normal : budget du club. Confortable : budget doublé.",
         "Choisissez votre manager : identité, nationalité et apparence.",

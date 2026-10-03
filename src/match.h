@@ -121,6 +121,7 @@ struct MatchSetup {
     int yellowLimit = 3;
     bool snes = true;             // commandes Super Nintendo
     int referee = 0;
+    int refKit = 0;               // tenue des arbitres : 0 noire, 1 jaune, 2 verte, 3 rouge, 4 bleue
     bool night = false, tv = false;
     int weather = 0;              // 0 beau, 1 couvert, 2 pluie, 3 neige
     int meteo = 2;                // 0 canicule, 1 chaud, 2 normal, 3 pluie, 4 orage, 5 neige (effets sur le match)
@@ -297,7 +298,7 @@ struct Match {
     float flashT = 0, thunderT = 20; V2 wind; bool coolBreak[2] = { false, false };   // météo : éclairs, vent d'orage, pauses fraîcheur
     int medicFor = -1; int medicPhase = 0; float medicT = 0; V2 medicPos[2]; bool medicDone[22] = {};   // soigneurs (blessure)
     void updateMedics(float dt);
-    int lastShooter = -1; float lastShotAge = 99;   // dernier tir cadré (déviation / gardien : pas de csc)
+    int lastShooter = -1; float lastShotAge = 99; float lastShotDist = 20;   // dernier tir cadré (déviation / gardien : pas de csc)
     float stopReason = 0;
     int nextSp = -1, nextSpTeam = 0; V2 nextSpPos; // après un arrêt (faute...)
     float goalFreeze = 0;

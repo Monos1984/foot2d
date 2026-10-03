@@ -258,6 +258,13 @@ static std::string tierShort(const Pyramid& P, int tier) {
     }
     return P.country + fmt(" %d", tier + 1);
 }
+// titres en capitales sans accent (COMPETITIONS, PALMARES...) : plus lisibles avec la police pixel
+static std::string stripUpperAccents(const std::string& in) {
+    static const char* MAP[][2] = { { "É", "E" }, { "È", "E" }, { "Ê", "E" }, { "À", "A" }, { "Â", "A" }, { "Î", "I" }, { "Ô", "O" }, { "Û", "U" }, { "Ù", "U" }, { "Ç", "C" } };
+    std::string s = in;
+    for (auto& m : MAP) { size_t p; while ((p = s.find(m[0])) != std::string::npos) s.replace(p, strlen(m[0]), m[1]); }
+    return s;
+}
 static const std::string& shortLevel(int team) {
     static const std::string empty;
     if (team < 0) return empty;
@@ -711,7 +718,7 @@ static void startSetup(int home, int away, bool career, int comp, int match) {
         devs.push_back(IN_KB1); devs.push_back(IN_KB2);
         int k = 0;
         bool fm = g_career.kind == CK_CLUB && g_career.mgr.fullManager && (home == g_career.userTeam || away == g_career.userTeam);
-        if (fm) { g_setup.managed = home == g_career.userTeam ? 0 : 1; g_setup.highlights = true; }
+        if (fm) { g_setup.managed = home == g_career.userTeam ? 0 : 1; g_setup.highlights = false; }   // match joué en entier (durée choisie par le joueur), plus de temps forts
         else {
             if (hc) g_setup.side[devs[k++]] = 0;
             if (ac) g_setup.side[devs[k++]] = 1;
@@ -801,6 +808,7 @@ static void launchMatch() {
     if(g_mctx.career&&g_career.sportingMode()){g_career.sportingPrepare(s.home);g_career.sportingPrepare(s.away);for(auto& side:s.side)side=-1;s.managed=-1;s.delegSubs=true;s.highlights=false;}
     s.snes = g_settings.controlStyle == 1;
     s.commentary = g_settings.commentary;
+    s.refKit = g_settings.refKit;
     if (s.pitch == 5) { s.meteo = g_rng.range(0, 5); meteoApply(s, false, s.turf); }
     s.halfSeconds = HALF_MINUTES[g_settings.halfIdx] * 60.f;
     s.halftimeScreen = true;
@@ -980,6 +988,9 @@ static void screenSetup() {
         rows.push_back(std::string("Météo : ") + METEO_NAMES[g_setup.meteo]);
         rows.push_back(g_frTv == 0 ? std::string("Retransmission : selon l'affiche (") + (g_setup.tv ? "télévisé)" : "sans TV)") : g_frTv == 5 ? std::string("Retransmission : match sans TV") : std::string("Retransmission : en direct sur ") + FR_CHANNELS[g_frTv - 1]);
     }
+    static const char* REFKN[5] = { "noire", "jaune", "verte", "rouge", "bleue" };
+    int refRow = (int)rows.size();
+    rows.push_back(std::string("Tenue des arbitres : ") + REFKN[std::max(0, std::min(4, g_settings.refKit))]);
     rows.push_back(">>> COUP D'ENVOI <<<");
     int nOpt = (int)rows.size();
     int nrows = 1 + nOpt;
@@ -1027,6 +1038,7 @@ static void screenSetup() {
     }
     int r = g_setupRow - 1;
     int dl = IN.left ? -1 : IN.right ? 1 : 0;
+    if (dl && r == refRow) { g_settings.refKit = (g_settings.refKit + dl + 5) % 5; g_setup.refKit = g_settings.refKit; g_settings.save(); dl = 0; }
     if (dl && r >= 0) {
         switch (r) {
         case 0: g_settings.halfIdx = (g_settings.halfIdx + dl + NUM_HALF) % NUM_HALF; break;
@@ -1108,6 +1120,7 @@ static ListW g_pauseLW, g_subLW;
 static int g_subTeam = 0, g_subOut = -1;
 static float g_acc = 0;
 static float g_hlHold = 0, g_hlCut = 0;     // mode temps forts
+static int g_fmSpeed = 1;                   // Full Manager : vitesse du match regardé (x1, x2, x4)
 
 static void finishMatchToResult();
 
@@ -1353,8 +1366,12 @@ static void drawManOfMatch(const Match& m) {
     for (auto& l : wrapText(st, w - 110)) { drawTextPx(l, tx, y + 62, 10, C_TXT); y += 12; }
 }
 
+static void trainSeriesDone(int drill, int score);
 static void screenMatch(float dt) {
     Match& m = *g_match;
+    if (m.S.training && m.trainTries > 10 && !getenv("FOOT_TEST")) {     // série de 10 essais terminée : bilan dans le menu d'entraînement
+        trainSeriesDone(m.S.training, m.trainGoals); audioCrowd(false, 0); g_screen = SC_TRAINMODE; return;
+    }
     if(g_mctx.career&&g_career.sportingMode()){for(auto& side:m.S.side)side=-1;m.S.managed=-1;m.S.delegSubs=true;}
     m.S.snes = g_settings.controlStyle == 1;     // style de commandes modifiable depuis la pause
     for (int i = 0; i < NUM_INPUTS; i++) m.ctl[i] = CTL[i];
@@ -1375,7 +1392,9 @@ static void screenMatch(float dt) {
             g_acc = 0;
         } else {
             if (g_hlHold > 0) g_hlHold -= dt;
-            g_acc += std::min(dt, 0.1f);
+            if (m.S.managed >= 0 && IsKeyPressed(KEY_TAB)) g_fmSpeed = g_fmSpeed >= 4 ? 1 : g_fmSpeed * 2;
+            bool calm = m.state == MS_PLAY && !m.hotPhase();
+            g_acc += std::min(dt, 0.1f) * (m.S.managed >= 0 && calm ? g_fmSpeed : 1);
             while (g_acc >= step) { m.update(step); g_acc -= step; }
         }
         for (int i = 0; i < m.sfxN; i++) {
@@ -1445,6 +1464,10 @@ static void screenMatch(float dt) {
     }
     if (m.trophyActive && m.trTotal > 2.5f && IN.start) m.endTrophy();          // Entrée uniquement (la touche de tir ne coupe plus la cérémonie)
     renderMatch(m, g_settings.radar);
+    if (m.S.managed >= 0 && !m.S.highlights && !m.trophyActive && !g_paused && !m.finished) {
+        DrawRectangle(VW - 170, VH - 20, 162, 14, Color{ 0, 0, 0, 150 });
+        drawTextPx(fmt("FULL MANAGER  x%d  (Tab : vitesse)", g_fmSpeed), VW - 166, VH - 18, 10, C_HI);
+    }
     if (m.S.highlights && !m.trophyActive && !g_paused) {
         DrawRectangle(VW - 150, VH - 20, 142, 14, Color{ 0, 0, 0, 150 });
         drawTextPx("FULL MANAGER : temps forts", VW - 146, VH - 18, 10, C_HI);
@@ -1658,6 +1681,17 @@ static void screenHalftime() {
         if (button(VW / 2 - 110, sy + 38, 220, 13, ml)) m.setMentality(ht, (m.mentality[ht] + 1) % 5, false);
         if (IN.left || IN.right) m.setMentality(ht, m.mentality[ht] + (IN.left ? -1 : 1), false);
         g_world.teams[ht == 0 ? m.S.home : m.S.away].mentality = m.mentality[ht];
+        // changement de maillot pour la seconde période
+        static const char* KN[3] = { "domicile", "extérieur", "troisième" };
+        const Team& T = ht == 0 ? H : A;
+        int cur = m.S.kitSel[ht] < 0 ? (m.kit[ht].shirt == T.home.shirt ? 0 : m.kit[ht].shirt == T.away.shirt ? 1 : 2) : m.S.kitSel[ht];
+        drawKitIcon(m.kit[ht], VW / 2 - 128, sy + 55, 1);
+        if (button(VW / 2 - 110, sy + 54, 220, 13, std::string("Maillot 2e période : < ") + KN[cur] + " >")) {
+            int nx = (cur + 1) % 3; m.S.kitSel[ht] = nx; m.kit[ht] = teamKit(T, nx);
+            auto cd = [](unsigned a, unsigned b) { float dr = (float)((a >> 16) & 255) - ((b >> 16) & 255), dg = (float)((a >> 8) & 255) - ((b >> 8) & 255), db = (float)(a & 255) - (b & 255); return std::sqrt(dr * dr * 2 + dg * dg * 4 + db * db * 3); };
+            if (cd(m.kit[ht].shirt, m.kit[1 - ht].shirt) < 120) toast("Attention : couleurs proches de l'adversaire");
+            else toast(std::string("Les joueurs enfileront le maillot ") + KN[nx] + " pour la seconde période");
+        }
     }
     drawFooter("Gauche/Droite : mentalité    OK : seconde période    (remplacements : menu pause)");
     if (IN.ok || IN.start) { g_screen = SC_MATCH; openLocker(1); }
@@ -2313,11 +2347,11 @@ static void screenHub() {
     if(IN.left||IN.right||IN.tab){g_hubCategory=(g_hubCategory+(IN.left?(int)secs.size()-1:1))%secs.size();g_hubMenu=ListW();}
     const int mw=230;
     for(int c=0;c<(int)secs.size();c++){
-        std::string title=secs[c].first=="PALMARÈS & RÉCOMPENSES"?"Palmarès":secs[c].first;
+        std::string title=secs[c].first=="PALMARÈS & RÉCOMPENSES"?"PALMARES":stripUpperAccents(secs[c].first);
         if(button(8+(c%2)*118,y+(c/2)*20,112,18,fitText(title,102,10),c==g_hubCategory)){g_hubCategory=c;g_hubMenu=ListW();}
     }
     int menuY=y+((int)secs.size()+1)/2*20+6;
-    drawSection(8,menuY,mw,fitText(secs[g_hubCategory].first,mw-12,10));menuY+=14;
+    drawSection(8,menuY,mw,fitText(stripUpperAccents(secs[g_hubCategory].first),mw-12,10));menuY+=14;
     int offset=0;for(int c=0;c<g_hubCategory;c++)offset+=(int)secs[c].second.size();
     auto& options=secs[g_hubCategory].second;
     int rows=std::max(1,(VH-24-menuY)/18);
@@ -2623,7 +2657,7 @@ static void screenSeasonEnd() {
             }
         } else {
             // actualités de la saison regroupées par catégorie (comme « Tout le club »)
-            static const char* CATN[10] = { "VOTRE CLUB", "COMPÉTITIONS", "RÉSERVES", "U19", "U17", "U15", "EFFECTIF & STAFF", "PRESSE", "VIE PRIVÉE", "AILLEURS" };
+            static const char* CATN[10] = { "VOTRE CLUB", "COMPETITIONS", "RESERVES", "U19", "U17", "U15", "EFFECTIF & STAFF", "PRESSE", "VIE PRIVEE", "AILLEURS" };
             static const int NCAT = 10;
             auto has = [](const std::string& s, const char* k) { return s.find(k) != std::string::npos; };
             std::vector<std::pair<int, std::string>> rows;   // (catégorie ou -1 = titre, texte)
@@ -3839,12 +3873,68 @@ static void screenOptions() {
         fmt("Son : %s", g_settings.sound ? "oui" : "non"),
         "Configurer le clavier et les manettes",
         std::string("Musique des menus : ") + (!g_settings.music ? "non" : g_settings.musicTrack == 0 ? "tous les thèmes" : audioTrackName(g_settings.musicTrack - 1)),
-        fmt("Commentaires pendant les matchs : %s", g_settings.commentary ? "oui" : "non"),
+        fmt("Commentaires : %s", g_settings.commentary ? "oui" : "non"),
         fmt("Vibrations des manettes : %s", g_settings.vibration ? "oui" : "non"),
         fmt("Scènes de vestiaire : %s", g_settings.lockerRoom ? "oui" : "non"),
-        "Aide des commandes  (F12 : capture d'écran)",
+        "Aide des commandes  (F12 = capture d'écran)",
         "Retour" };
-    int s = menuRun(g_optLW, items, 50, 340);
+    static const char* REFKN[5] = { "noire", "jaune", "verte", "rouge", "bleue" };
+    items.push_back(std::string("Tenue des arbitres : ") + REFKN[std::max(0, std::min(4, g_settings.refKit))]);   // 13
+    // ---- présentation en cartes par rubrique (MATCH, AFFICHAGE, SON, COMMANDES)
+    struct Sec { const char* name; std::vector<int> ids; int icon; };
+    static const Sec SECS[4] = { { "MATCH", { 0, 1, 2, 3, 8, 10, 13 }, 13 }, { "AFFICHAGE", { 4 }, 6 }, { "SON & MUSIQUE", { 5, 7, 9 }, 9 }, { "COMMANDES", { 6, 11 }, 3 } };
+    static const int ICO[14] = { 0, 2, 1, 6, 6, 9, 3, 9, 10, 3, 11, 12, 13, 5 };
+    std::vector<int> order; for (auto& sc : SECS) for (int id : sc.ids) order.push_back(id); order.push_back(12);
+    static int vpos = 0;
+    vpos = std::max(0, std::min((int)order.size() - 1, vpos));
+    if (IN.up) vpos = (vpos + (int)order.size() - 1) % (int)order.size();
+    if (IN.down) vpos = (vpos + 1) % (int)order.size();
+    int s = -1;
+    float tt = (float)GetTime();
+    int colX[2] = { 14, VW / 2 + 4 }, colW = VW / 2 - 18, colY[2] = { 32, 32 };
+    int k = 0;
+    for (int si = 0; si < 4; si++) {
+        int col = si == 0 ? 0 : 1;
+        int x = colX[col], y = colY[col];
+        const Sec& sc = SECS[si];
+        DrawRectangle(x, y, colW, 15, Color{ 30, 50, 100, 255 }); DrawRectangle(x, y + 14, colW, 1, C_HI);
+        drawOptIcon(sc.icon, x + 4, y + 1, C_HI);
+        drawTextPx(sc.name, x + 22, y + 2, 10, C_HI);
+        y += 18;
+        for (int id : sc.ids) {
+            bool sel = order[vpos] == id;
+            std::string txt = items[id];
+            size_t colon = txt.find(" : ");
+            std::string lab = colon == std::string::npos ? txt : txt.substr(0, colon), val = colon == std::string::npos ? std::string() : txt.substr(colon + 3);
+            int h = 17;
+            DrawRectangle(x + 2, y + 2, colW, h - 2, Color{ 0, 0, 0, 60 });
+            DrawRectangle(x, y, colW, h - 2, sel ? C_SEL : Color{ 24, 40, 76, 255 });
+            DrawRectangle(x, y, 3, h - 2, sel ? WHITE : Color{ 70, 110, 180, 255 });
+            drawOptIcon(ICO[id], x + 6, y + 1, sel ? Color{ 40, 30, 10, 255 } : C_HI);
+            drawTextPx(fitText(lab, val.empty() ? colW - 30 : colW / 2 - 6, 10), x + 22, y + 3, 10, sel ? BLACK : C_TXT);
+            if (!val.empty()) {
+                bool on = val == "oui", off = val == "non";
+                std::string v = fitText(val, colW / 2 - 30, 10);
+                int vw = textWidth(v, 10) + 10, vx = x + colW - vw - 14;
+                DrawRectangle(vx, y + 2, vw, 11, on ? Color{ 40, 140, 60, 255 } : off ? Color{ 110, 40, 40, 255 } : Color{ 14, 22, 44, 255 });
+                drawTextPx(v, vx + 5, y + 3, 10, WHITE);
+                if (sel && ((int)(tt * 3)) % 2) { drawTextPx("<", vx - 8, y + 3, 10, BLACK); drawTextPx(">", x + colW - 10, y + 3, 10, BLACK); }
+            }
+            if (IN.click && IN.mouse.x >= x && IN.mouse.x < x + colW && IN.mouse.y >= y && IN.mouse.y < y + h - 2) { if (order[vpos] == id) s = id; for (int q = 0; q < (int)order.size(); q++) if (order[q] == id) vpos = q; }
+            y += h; k++;
+        }
+        colY[col] = y + 8;
+    }
+    {   // bouton retour
+        bool sel = order[vpos] == 12;
+        int bw = 160, bx = VW / 2 - bw / 2, by = VH - 40;
+        DrawRectangle(bx, by, bw, 16, sel ? C_SEL : Color{ 120, 30, 40, 255 });
+        drawTextCentered("Retour", VW / 2, by + 3, 10, sel ? BLACK : WHITE, false);
+        if (IN.click && IN.mouse.x >= bx && IN.mouse.x < bx + bw && IN.mouse.y >= by && IN.mouse.y < by + 16) s = 12;
+    }
+    if (IN.ok) s = order[vpos];
+    g_optLW.cur = order[vpos];
+    if (s == 13 || (g_optLW.cur == 13 && (IN.left || IN.right))) { g_settings.refKit = (g_settings.refKit + (IN.left ? 4 : 1)) % 5; g_settings.save(); }
     if (s == 6) { g_ctlLW = ListW(); g_ctlCapture = -1; g_ctlBack = SC_OPTIONS; g_screen = SC_CONTROLS; return; }
     if (s == 7 || (g_optLW.cur == 7 && (IN.left || IN.right))) {
         // non -> tous les thèmes -> thème 1 ... thème N -> non
@@ -4088,7 +4178,7 @@ static void screenMain(float dt) {
         { "< Retour", "Revenir au menu principal.", 0, 3 } };
     static const MI SUB3[] = {
         { "Carrière club : JEU + MANAGER", "Vous gérez le club (effectif, mercato, finances, stade) et vous jouez les matchs. Championnats masculins et féminins du monde entier.", 6, 1 },
-        { "Carrière club : MANAGER", "Vous gérez le club, les matchs se déroulent sans vous (temps forts). Idéal pour enchaîner les saisons.", 7, 1 },
+        { "Carrière club : MANAGER", "Vous gérez le club, les matchs se déroulent sans vous (match complet, durée au choix). Idéal pour enchaîner les saisons.", 7, 1 },
         { "Carrière club : JEU", "Vous jouez les matchs de votre club saison après saison, sans la gestion.", 8, 1 },
         { "Carrière Directeur sportif", "Construisez le club : effectif, mercato, contrats, entraîneur IA, président, emplois et projet sportif.", 35, 1 },
         { "Carrière de joueur / joueuse", "Créez votre joueur ou joueuse, choisissez un club et vivez sa carrière : temps de jeu, salaire, vie privée, paris...", 9, 1 },
@@ -4563,9 +4653,33 @@ void appTestStart(const char* mode) {
         if (m != "trainmode") {
             MatchSetup ms; ms.home = ms.away = g_trainTeam;
             for (int d = 0; d < NUM_INPUTS; d++) ms.side[d] = -1;
-            ms.training = m == "trainfk" ? 2 : 1; ms.title = "Entraînement"; ms.stadium = "Centre d'entraînement"; ms.halfSeconds = 600; ms.crowdFill = 0.02f;
+            ms.training = getenv("FOOT_TRAIN_DRILL") ? atoi(getenv("FOOT_TRAIN_DRILL")) : m == "trainfk" ? 2 : 1; ms.title = "Entraînement"; ms.stadium = "Centre d'entraînement"; ms.halfSeconds = 600; ms.crowdFill = 0.02f;
             g_match.reset(new Match()); g_match->init(ms); g_screen = SC_MATCH;
         }
+    } else if (m == "drawall") {   // test : saisons complètes, chaque tirage affiché à l'écran (équipes de jeunes contrôlées)
+        std::vector<int> users;
+        for (auto& P : g_basePyramids) if (P.country == "FRA" && P.dom < 0) { std::vector<int> tiers; for (auto& pool : P.pools) if (!pool.clubs.empty() && std::find(tiers.begin(), tiers.end(), pool.tier) == tiers.end()) { tiers.push_back(pool.tier); users.push_back(pool.clubs[pool.clubs.size() / 3]); } }
+        int screens = 0;
+        for (int u : users) {
+            g_career.opts = Career::Opts(); g_career.newClubCareer(u, 2026); g_careerActive = true;
+            g_career.mgr.ctrlReserves.clear(); for (int t = 0; t < (int)g_world.teams.size(); t++) if (g_world.teams[t].parent == u) g_career.mgr.ctrlReserves.push_back(t); g_career.syncControlled();
+            Season& S = g_career.season;
+            g_drawQueue.clear(); g_drawSeen.clear(); g_drawSeenYear = g_career.year;
+            for (int k = 0; k < 6000; k++) {
+                auto pm = S.advance(false);
+                if (pm.comp < 0) break;
+                if (collectDraws()) {
+                    int guard = 0;
+                    while (!g_drawQueue.empty() && guard++ < 20000) {
+                        IN = MenuInput(); if (guard % 7 == 0) IN.ok = true;
+                        BeginDrawing(); screenDraw(0.1f); EndDrawing(); screens++;
+                    }
+                }
+                auto& C = S.comps[pm.comp]; simulateMatch(C.matches[pm.match], &C); S.recordResult(pm.comp, pm.match); genMatchEvents(C, pm.match); S.checkRound(pm.comp);
+            }
+            fprintf(stderr, "drawall %s ok (%d frames)\n", g_world.teams[u].name.c_str(), screens);
+        }
+        fprintf(stderr, "PASS drawall\n"); exit(0);
     } else if (m == "draw" || m == "drawgrp" || m == "seasonend" || m == "drawbig" || m == "drawlp") {
         const char* nm = m == "draw" ? "Stade Lavallois" : m == "drawbig" ? "Stade Briochin" : "Paris Saint-Germain";
         int user = -1; for (int i = 0; i < (int)g_world.teams.size(); i++) if (g_world.teams[i].name == nm) user = i;
