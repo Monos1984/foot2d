@@ -4373,7 +4373,7 @@ void appTestStart(const char* mode) {
             return;
         }
     }
-    if (m == "anthem" || m == "duel" || m == "lap" || m == "ettoss" || m == "reds" || m == "setupfr" || m == "hl" || m == "medic" || m == "card" || m == "pstats" || m == "fk" || m == "brawl" || m == "corner" || m == "throwin" || m == "pen") {
+    if (m == "anthem" || m == "duel" || m == "lap" || m == "ettoss" || m == "reds" || m == "setupfr" || m == "hl" || m == "medic" || m == "card" || m == "pstats" || m == "fk" || m == "brawl" || m == "corner" || m == "throwin" || m == "pen" || m == "offside") {
         int a = g_world.nationIndex("FRA"), b = g_world.nationIndex("ARG");
         startSetup(a, b, false, -1, -1);
         if (m == "setupfr") { g_setupRow = 9; return; }
@@ -4399,6 +4399,12 @@ void appTestStart(const char* mode) {
         if (m == "lap") { M.startPeriod(1); M.clock = 90; M.finishMatch(); g_trophyChecked = true; M.startLap(0); }
         if (m == "ettoss") { M.S.decisive = true; M.startPeriod(1); M.state = MS_BREAK; M.stateT = 1.9f; M.nextSp = 2; }
         if (m == "hl") { M.S.highlights = true; }
+        if (m == "offside") {   // passe vers un attaquant hors-jeu de 2 m : drapeau de l'arbitre assistant
+            for (int k = 0; k < 22; k++) { V2 o; M.formationTarget(k, o); M.pl[k].pos = o; M.pl[k].vel = V2(); }
+            M.ball.pos = M.pl[6].pos; M.takePossession(6);
+            float line = M.offsideLine(0); M.pl[9].pos = M.fromTeamFrame(0, line + 2.f / PITCH_L, 0.45f);
+            M.passTo(6, 9, false);
+        }
         if (m == "fk") { for (int k = 0; k < 22; k++) { V2 o; M.formationTarget(k, o); M.pl[k].pos = o; } V2 g = M.goalCenter(0); M.beginSetPiece(SP_FREEKICK, 0, V2(PITCH_W / 2 - 8, g.y + (g.y < 1 ? 24.f : -24.f))); M.spCurl = 0.7f; }
         if (m == "medic" || m == "card") for (int k = 0; k < 22; k++) { V2 o; M.formationTarget(k, o); M.pl[k].pos = o; }
         if (m == "medic") { M.pl[16].injured = true; M.pl[16].state = PS_DOWN; M.state = MS_STOP; M.stateT = 0; M.nextSp = SP_FREEKICK; M.nextSpTeam = 1; M.nextSpPos = M.pl[16].pos; }

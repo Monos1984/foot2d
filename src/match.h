@@ -156,6 +156,20 @@ struct MatchSetup {
     int maxSubs = -1;              // remplacements autorisés (-1 : règle par défaut)
 };
 
+// hors-jeu et arbitres assistants (build 19)
+enum OffsideTouch { OT_DEFLECTION = 0, OT_SAVE, OT_DELIBERATE };
+enum OffsideResetReason { OR_NONE = 0, OR_NEW_TEAMMATE_PLAY, OR_DELIBERATE_OPPONENT, OR_BALL_OUT, OR_FOUL_STOPPAGE, OR_VALID_GOAL, OR_SET_PIECE, OR_EXEMPT_RESTART, OR_SANCTIONED, OR_POSSESSION_CHANGED };
+enum OffsideInvolvementType { OI_NONE = 0, OI_PLAYING_BALL, OI_CHALLENGING, OI_INTERFERING, OI_BLOCKING_VISION, OI_GAINING_ADVANTAGE };
+struct AssistantReferee { int id = 0; char name[40] = {}; int offsideAccuracy = 70, positioning = 70, concentration = 70, experience = 60, communication = 70, decisiveness = 70, reputation = 50; };
+struct OffsideCand { int player = -1; float margin = 0; bool truth = false; bool flagged = false; float perceived = 0; float lineSpeed = 0; };
+struct OffsidePhase { bool active = false; int team = -1, source = -1, seq = 0, restart = -1, assistant = 0; V2 ballAtPlay; float line = 0; bool rebound = false; std::vector<OffsideCand> cands; };
+const float OFFSIDE_ENGINE_EPSILON = 0.002f;     // tolérance numérique du moteur (m), sans rapport avec l'erreur humaine
+const float OFFSIDE_OBVIOUS = 0.40f;              // au-delà : décision toujours correcte
+const float OFFSIDE_TIGHT = 0.15f;                // en deçà : zone litigieuse
+// décision de l'arbitre assistant sur une marge réelle (m) : déterministe (graine), jamais d'erreur au-delà de OFFSIDE_OBVIOUS
+bool offsideDecision(const AssistantReferee& ar, float margin, float lineSpeed, float clockMin, uint64_t seed, float* perceived = nullptr);
+uint64_t offsideHash(uint64_t a, uint64_t b);
+
 struct MatchEvent { int type; int team; float minute; std::string player; int pid = 0; std::string assist; int aid = 0; bool pen = false; }; // 0 but, 1 jaune, 2 rouge, 3 csc, 4 blessure
 
 struct Snap { float x, y, z; int8_t fx, fy; uint8_t state, frame; };
@@ -219,10 +233,29 @@ struct Match {
     int formation[2] = { 0, 0 };
     Kit kit[2];
     unsigned gkShirt[2];
-    // hors-jeu
-    bool offsideArmed = false;
-    int offsideTeam = -1;
-    std::vector<int> offsideSet;
+    // hors-jeu : photographie au moment où un partenaire joue le ballon, puis participation active (voir offside.cpp)
+    OffsidePhase off;
+    AssistantReferee assistants[2];             // AR1 : moitié y > L/2, AR2 : moitié y < L/2
+    uint64_t offSeed = 0;                       // graine déterministe des décisions (replays, tests)
+    int offSeq = 0;                             // numéro de séquence de jeu
+    int offPend = -1, offPendType = 0; float offPendT = 0, offPendMargin = 0; V2 offPendPos;   // drapeau en cours de levée
+    float offFlagT = 0; int offFlagAR = -1;     // drapeau levé (rendu)
+    int offDecisions = 0, offClose = 0, offMistakes = 0;   // statistiques de l'équipe arbitrale (erreurs : debug)
+    bool offsideActive() const { return off.active; }
+    float offsideLine(int attackingTeam) const;                 // progression (0..1) de la ligne : max(milieu, avant-dernier adversaire, ballon)
+    float offsideMarginMeters(int player) const;                // > 0 : hors-jeu de x m ; < 0 : en jeu de x m
+    void offsidePhotograph(int kicker, int restart = -1);       // jeu du ballon par un joueur : nouvelle phase
+    void offsideOpponentTouch(int player, int touchType);       // OT_DEFLECTION / OT_SAVE / OT_DELIBERATE
+    void offsideReset(int reason);
+    void offsideUpdate(float dt);                               // participation sans toucher le ballon, drapeau retardé
+    bool offsideGoalCheck(int team);                            // but : hors-jeu en attente ou gêne du gardien -> but refusé
+    int offsideInvolvement(int player, bool touching) const;    // OI_*
+    bool interferesWithGoalkeeper(int player) const;
+    int offsideAssistantFor(int attackingTeam) const;
+    void offsideSanction(int player, int type, float margin);
+    void offsideWhistle();
+    void makeAssistants();
+    void offsideLog(const char* event, int player, const OffsideCand* c, int reason);
     // message
     std::string msg, msg2;
     int ballStage = 0;            // cérémonie : 1 ballon sur son présentoir au bout du tunnel, 2 porté par l'arbitre
@@ -354,7 +387,7 @@ struct Match {
     void foul(int offender, int victim, bool fromBehind);
     void goalScored(int team);
     void endPeriod();
-    void checkOffsideTouch(int i, bool deliberate = true);
+    void checkOffsideTouch(int i, bool deliberate = true);   // toucher : partenaire -> participation, adversaire -> jeu volontaire ou déviation
     float shotLift(int i, V2 d, float speed, float pw, float vz);
     void armOffside(int kicker);
     V2 goalCenter(int team) const;    // but ATTAQUÉ par l'équipe

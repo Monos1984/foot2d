@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
         int frames = 0;
         while (!m->finished && frames < 60 * 60 * 30) { m->update(1.f / 60); frames++; m->sfxN = 0; }
         check(m->finished, "career match finishes");
-        printf("career match %d: %d-%d shots %d/%d\n", k, m->score[0], m->score[1], m->shots[0], m->shots[1]);
+        printf("career match %d: %d-%d shots %d/%d off %d/%d\n", k, m->score[0], m->score[1], m->shots[0], m->shots[1], m->offsides[0], m->offsides[1]);
         goals += m->score[0] + m->score[1]; shots += m->shots[0] + m->shots[1];
     }
     printf("career avg goals %.2f shots %.1f\n", goals / (float)n, shots / (float)n);

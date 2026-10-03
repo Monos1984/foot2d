@@ -1666,7 +1666,8 @@ void renderMatch(const Match& m, bool radar) {
                 afr = (int)(g_asAnim[it.idx] * 1.8f);
                 if (std::fabs(g_asVel[it.idx]) > 2.5f) dir = g_asVel[it.idx] > 0 ? 0 : 1;
             }
-            bool offs = line && m.msgT > 0 && m.msg == "HORS-JEU" && ((it.idx == 0) == (bpos.y > PITCH_L / 2));
+            // drapeau levé : hors-jeu signalé (délai humain avant le coup de sifflet), par l'assistant responsable de la moitié
+            bool offs = line && !replay && ((m.offFlagT > 0 && m.offFlagAR == it.idx) || (m.msgT > 0 && m.msg == "HORS-JEU" && m.offFlagAR < 0 && (it.idx == 0) == (bpos.y > PITCH_L / 2)));
             drawPlayerSprite(ax, ay, rk, (it.idx * 3 + 1) % 4, (it.idx * 5 + 2) % 7, offs ? (it.idx == 0 ? 2 : 3) : dir, offs ? 0 : afr, offs ? PS_CELEB : PS_NORMAL, false, 0, 1);
             if (line) {     // drapeau (rouge et jaune), levé en cas de hors-jeu
                 int fx = ax + (it.idx == 0 ? 3 : -5), fy = ay - (offs ? 16 : 8);

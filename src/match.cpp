@@ -179,6 +179,8 @@ void Match::init(const MatchSetup& setup) {
     for(int t=0;t<2;t++)pst[t].clear();for(int t=0;t<2;t++){shots[t]=onTarget[t]=passes[t]=completedPasses[t]=saves[t]=blockedShots[t]=woodwork[t]=throws[t]=freeKicks[t]=goalKicks[t]=penalties[t]=corners[t]=fouls[t]=offsides[t]=0;possTime[t]=0;}pendingPass=pendingShot=-1;kickingPass=shotHitWoodwork=false;
     positionMinutes.clear();
     R = Rng(g_rng.next());
+    off = OffsidePhase(); offSeq = 0; offPend = -1; offFlagT = 0; offFlagAR = -1; offDecisions = offClose = offMistakes = 0;
+    makeAssistants();
     int ids[2] = { S.home, S.away };
     for (int t = 0; t < 2; t++) {
         g_world.ensureSquad(ids[t]);
@@ -563,7 +565,7 @@ void Match::updateCeremony(float dt) {
         for (auto& p : pl) p.state = PS_NORMAL;
         startPeriod(0);
         const char* refName = S.referee >= 0 && S.referee < NUM_REFEREES ? REFEREES[S.referee].name : "";
-        say(std::string("Coup d'envoi ! L'arbitre de la rencontre : ") + refName + ".", 3.5f, true);
+        say(std::string("Coup d'envoi ! L'arbitre de la rencontre : ") + refName + ", assisté de " + assistants[0].name + " et " + assistants[1].name + ".", 4.0f, true);
     }
 }
 
@@ -895,18 +897,19 @@ void Match::formationTarget(int i, V2& out) const {
     if (S.rules == RULESET_CAREER && attacking && (p.detailedPosition == DP_AD || p.detailedPosition == DP_AG)) {
         for (int j = t * 11 + 1; j < t * 11 + 11; j++) if (j != i && pl[j].onPitch && pl[j].effects.behave == RB_FALSE9) { u = clampf(u + 0.04f, 0.04f, 0.95f); break; }
     }
-    // ne pas se mettre hors-jeu (attaquants)
+    // ne pas se mettre hors-jeu (attaquants) : marge selon la lecture du jeu ; un attaquant peu attentif part parfois trop tôt
     if (attacking) {
-        float line = 0.5f; // avant-dernier défenseur
-        float best1 = 0, best2 = 0;
-        int ot = 1 - t;
-        for (int j = ot * 11; j < ot * 11 + 11; j++) {
-            if (!pl[j].onPitch) continue;
-            float pr = progress(t, pl[j].pos);
-            if (pr > best1) { best2 = best1; best1 = pr; } else if (pr > best2) best2 = pr;
-        }
-        line = std::max(0.5f, std::max(best2, bu));
-        if (u > line - 0.005f) u = line - 0.005f;
+        float line = offsideLine(t);
+        float aw = clampf((p.posi * 0.6f + p.compo * 0.4f) / 100.f, 0.2f, 1.f);       // sens du hors-jeu
+        float keep = (0.007f - aw * 0.004f);                                           // ~0,3 m (bon) à ~0,8 m (moyen) derrière la ligne
+        float ph = std::fmod(clock * 0.41f + i * 0.613f, 1.f);
+        if (p.role == 3 && ph < (1.f - aw) * 0.12f) keep = -0.005f * (1.f - aw) - 0.001f;   // appel lancé trop tôt
+        if (u > line - keep) u = line - keep;
+    }
+    // piège du hors-jeu : ligne haute, la défense remonte d'un cran quand le porteur adverse lève la tête au milieu ; un défenseur peu discipliné traîne
+    if (!attacking && p.role == 1 && S.tac[t][1] == 2 && possTeam == 1 - t && bu > 0.3f && bu < 0.62f) {
+        u += p.posi >= 58 ? 0.008f : -0.006f;
+        u = clampf(u, 0.04f, std::max(0.05f, bu - 0.03f));
     }
 
     out = fromTeamFrame(t, clampf(u,.04f,.95f), clampf(v,.04f,.96f));
@@ -922,41 +925,6 @@ void Match::takePossession(int i) {
     ball.backpass = false;
     if (possTeam >= 0 && possTeam != pl[i].team) lostT[possTeam] = 0;
     possTeam = pl[i].team;
-}
-
-void Match::armOffside(int kicker) {
-    offsideArmed = true;
-    offsideTeam = pl[kicker].team;
-    offsideSet.clear();
-    int t = offsideTeam, ot = 1 - t;
-    float b1 = 0, b2 = 0;
-    for (int j = ot * 11; j < ot * 11 + 11; j++) {
-        if (!pl[j].onPitch) continue;
-        float pr = progress(t, pl[j].pos);
-        if (pr > b1) { b2 = b1; b1 = pr; } else if (pr > b2) b2 = pr;
-    }
-    float bp = progress(t, ball.pos);
-    for (int j = t * 11; j < t * 11 + 11; j++) {
-        if (j == kicker || !pl[j].onPitch) continue;
-        float pr = progress(t, pl[j].pos);
-        // hors-jeu : dans la moitié adverse, devant le ballon ET devant l'avant-dernier adversaire (même niveau = en jeu)
-        if (pr > 0.5f + 0.0025f && pr > b2 + 0.0025f && pr > bp + 0.0025f) offsideSet.push_back(j);
-    }
-}
-
-void Match::checkOffsideTouch(int i, bool deliberate) {
-    if (!offsideArmed) return;
-    if (pl[i].team != offsideTeam) { if (deliberate) offsideArmed = false; return; }
-    bool off = std::find(offsideSet.begin(), offsideSet.end(), i) != offsideSet.end();
-    offsideArmed = false;
-    if (off && state == MS_PLAY) {
-        playSfx(SFX_WHISTLE);
-        if (pl[i].team == 0 && !S.neutral && !S.training) playSfx(SFX_FANS_WHISTLE);   // le public local conteste le hors-jeu
-        msg = "HORS-JEU"; msg2 = playerName(i); msgT = 2.0f; offsides[pl[i].team]++;
-        state = MS_STOP; stateT = 0;
-        nextSp = SP_INDIRECT; nextSpTeam = 1 - pl[i].team; nextSpPos = pl[i].pos;
-        ball.owner = -1; ball.vel = V2();
-    }
 }
 
 void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deliberate) {
@@ -1105,7 +1073,7 @@ void Match::updateBall(float dt) {
                     b.vel = kd * 3.5f + q.vel * 0.7f;
                     b.lastTouch = j; b.lastTeam = q.team;
                     o.cool = 0.45f;
-                    checkOffsideTouch(j);
+                    checkOffsideTouch(j, false);      // tacle : ballon détourné, pas de jeu maîtrisé
                     playSfx(SFX_KICK);
                     break;
                 }
@@ -1296,19 +1264,21 @@ void Match::updateBall(float dt) {
         }
     }
     if (best >= 0) {
-        checkOffsideTouch(best);if(state!=MS_PLAY)return;statsTouch(best);
         MPlayer& p = pl[best];
+        // hors-jeu : un partenaire de l'équipe en phase = participation ; un adversaire = jeu volontaire, parade ou déviation selon le geste
+        if (p.team == off.team) { checkOffsideTouch(best); if (state != MS_PLAY) return; }
+        statsTouch(best);
         float rel = (b.vel - p.vel).len();
         bool gkCatch = p.gk && inOwnBox(p.team, p.pos) && !(b.backpass && b.lastTeam == p.team);
         if (p.state == PS_SLIDE) {
             V2 d = p.slideDir;
-            checkOffsideTouch(best);
-            if (state != MS_PLAY) return;
+            bool attackingSlide = !off.active || p.team == off.team;
+            if (!attackingSlide) offsideOpponentTouch(best, OT_DEFLECTION);      // tacle réflexe : ne remet pas en jeu
             b.vel = d * 8.5f + V2(R.frange(-1.5f, 1.5f), R.frange(-1.5f, 1.5f));
             b.vz = 0.5f;
             b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
             p.touchedBallInSlide = true; if (!shootout) ps(best).tackle++;
-            armOffside(best);
+            if (attackingSlide) armOffside(best);
             playSfx(SFX_KICK);
             return;
         }
@@ -1317,7 +1287,7 @@ void Match::updateBall(float dt) {
             if (b.lastTeam == p.team) pc = 1;
             pc = clampf(pc, 0.12f, 0.97f);
             if (R.chance(pc)) {
-                checkOffsideTouch(best);
+                checkOffsideTouch(best);          // prise de balle : jeu volontaire et maîtrisé du gardien
                 if (state != MS_PLAY) return;
                 ball.owner = best; b.vel = V2(); b.vz = 0; b.spin = 0; b.aftertouch = 0;
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
@@ -1338,6 +1308,7 @@ void Match::updateBall(float dt) {
                 b.vel = away * spd; b.vz = R.frange(1, 4);
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 p.cool = 0.5f;
+                offsideOpponentTouch(best, OT_SAVE);
                 playSfx(SFX_CROWD_OOH);        // une parade du gardien ne remet pas en jeu un attaquant hors-jeu
                 if (p.team == 0 && !S.neutral) playSfx(SFX_CLAPS);   // le public applaudit son gardien
             }
@@ -1348,7 +1319,7 @@ void Match::updateBall(float dt) {
             float ctrl = (p.dribble * 0.6f + p.pass * 0.4f) / 100.f;
             float miss = clampf((rel - 9.f) * 0.045f - ctrl * 0.35f + (b.z > 0.3f ? 0.08f : 0.f) + 0.03f, 0.f, 0.45f) * (p.human >= 0 ? 0.6f : 1.f);
             if (R.chance(miss)) {
-                checkOffsideTouch(best);
+                checkOffsideTouch(best, false);   // contrôle manqué d'un adversaire : déviation, pas un jeu volontaire
                 if (state != MS_PLAY) return;
                 b.vel = b.vel * 0.3f + p.face * 2.5f + V2(R.frange(-1.5f, 1.5f), R.frange(-1.5f, 1.5f)); b.vz = R.frange(0.f, 1.5f);
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
@@ -1498,22 +1469,8 @@ void Match::goalScored(int t) {
         if (ok) for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch && !pl[i].gk && (pl[i].pos - ball.pos).len() < 25) { pl[i].state = PS_CELEB; pl[i].st = 0; }
         return;
     }
-    // hors-jeu de position qui devient actif : un joueur hors-jeu au départ du ballon gêne le gardien
-    if (offsideArmed && offsideTeam == t && sp != SP_PENALTY) {
-        int gkI = (1 - t) * 11;
-        for (int j : offsideSet) {
-            if (!pl[j].onPitch || j == ball.lastTouch || !pl[gkI].onPitch) continue;
-            if ((pl[j].pos - pl[gkI].pos).len() < 2.2f) {
-                playSfx(SFX_WHISTLE);
-                msg = "BUT REFUSÉ"; msg2 = "Hors-jeu : " + playerName(j) + " gêne le gardien"; msgT = 3.f;
-                say("Le but est refusé ! " + playerName(j) + ", en position de hors-jeu au départ du ballon, gênait le gardien.", 4.f, true);
-                offsideArmed = false;
-                state = MS_STOP; stateT = 0; nextSp = SP_INDIRECT; nextSpTeam = 1 - t; nextSpPos = V2(clampf(pl[j].pos.x, 1.f, PITCH_W - 1.f), clampf(pl[j].pos.y, 1.f, PITCH_L - 1.f));
-                ball.owner = -1;
-                return;
-            }
-        }
-    }
+    // hors-jeu : drapeau en attente, ou joueur signalé qui gênait le gardien
+    if (sp != SP_PENALTY && offsideGoalCheck(t)) return;
     trackTouch();
     score[t]++;
     lastScorerTeam = t;
@@ -1554,7 +1511,7 @@ void Match::goalScored(int t) {
     for (int i = (1 - t) * 11; i < (1 - t) * 11 + 11; i++) addAnger(i, 0.05f);
     if (S.goldenGoal && period >= 2) { msg = "BUT EN OR !"; aet = true; say("But en or ! " + team(t).name + " l'emporte en prolongation !", 4.f, true); }
     kickoffTeam = 1 - t;
-    offsideArmed = false;
+    offsideReset(OR_VALID_GOAL);
     playSfx(SFX_GOAL);
     // célébration : le buteur court vers le poteau de corner ou vers le public, ses coéquipiers le rejoignent
     celebScorer = (sc >= 0 && pl[sc].team == t) ? sc : -1;
@@ -1675,7 +1632,8 @@ void Match::foul(int off, int vic, bool fromBehind) {
         nextSpPos = V2(PITCH_W / 2, g.y == 0 ? 11.f : PITCH_L - 11.f);
         msg = "PENALTY !";
     } else { nextSp = SP_FREEKICK; nextSpTeam = v.team; nextSpPos = spot; }
-    offsideArmed = false;
+    if (offPend >= 0) offsideWhistle();     // le hors-jeu (antérieur) prime sur la faute
+    offsideReset(OR_FOUL_STOPPAGE);
     if (fightRisk && o.onPitch && v.onPitch) { std::string m0 = msg; escalate(vic, off, false); if (m0 == "PENALTY !" && fightT > 0) { msg2 = msg2 + " - PENALTY"; } }
 }
 
@@ -1823,7 +1781,7 @@ void Match::beginSetPiece(int type, int t, V2 spot) {
     ball.pos = spot;
     ball.lastTeam = t;
     possTeam = t;              // l'équipe qui joue le coup de pied arrêté a le ballon (placement des défenseurs adverses)
-    offsideArmed = false;
+    offsideReset(OR_SET_PIECE);
     // tireur
     int k = -1;
     auto nearest = [&](bool allowGk) {
@@ -2105,7 +2063,7 @@ void Match::updateSetPiece(float dt) {
         default: break;
         }
         (void)t;
-        if (sp == SP_THROWIN || sp == SP_CORNER || sp == SP_GOALKICK) offsideArmed = false;
+        if (sp == SP_THROWIN || sp == SP_CORNER || sp == SP_GOALKICK) offsideReset(OR_EXEMPT_RESTART);   // réception directe : pas de hors-jeu
         p.cool = sp == SP_THROWIN ? 0.8f : 0.35f;
         ball.backpass = false;
         state = MS_PLAY; stateT = 0;
@@ -2269,7 +2227,7 @@ void Match::updateSetPiece(float dt) {
         if (mode == 3) {
             int mate = -1; float bd = 13.f;
             for (int j = p.team * 11 + 1; j < p.team * 11 + 11; j++) if (j != k && pl[j].onPitch) { float d = (pl[j].pos - spPos).len(); if (d < bd) { bd = d; mate = j; } }
-            if (mate >= 0) { passTo(k, mate, false); p.cool = 0.35f; ball.backpass = false; offsideArmed = false; state = MS_PLAY; stateT = 0; say("Corner joué à deux.", 2.f); break; }
+            if (mate >= 0) { passTo(k, mate, false); p.cool = 0.35f; ball.backpass = false; offsideReset(OR_EXEMPT_RESTART); state = MS_PLAY; stateT = 0; say("Corner joué à deux.", 2.f); break; }
             mode = 2;
         }
         V2 zone = mode == 0 ? V2(PITCH_W / 2 + near * 2.6f, g.y + sy * 5.f) : mode == 1 ? V2(PITCH_W / 2 - near * 3.4f, g.y + sy * 6.5f) : V2(PITCH_W / 2, g.y + sy * 10.5f);
@@ -2286,7 +2244,7 @@ void Match::updateSetPiece(float dt) {
             V2 d = tgt - ball.pos; float L = d.len();
             kickBall(k, d, clampf(L * 0.55f + 9.f, 16.f, 26.f), clampf(L * 0.22f + 2.f, 6.f, 10.f), false);
             ball.spin = (mode == 1 ? -near : near) * (attackDir[p.team] < 0 ? 2.5f : -2.5f) * (R.chance(0.5f) ? 1.f : 0.4f);   // rentrant ou sortant
-            p.cool = 0.35f; ball.backpass = false; offsideArmed = false; state = MS_PLAY; stateT = 0;
+            p.cool = 0.35f; ball.backpass = false; offsideReset(OR_EXEMPT_RESTART); state = MS_PLAY; stateT = 0;
         } else { spAim = (zone - spPos).norm(); doKick(1); }
         break;
     }
@@ -2319,7 +2277,7 @@ void Match::updateSetPiece(float dt) {
             V2 d = zone - spPos; float dist = std::min(d.len(), 24.f);
             float vz = 4.2f, T2 = 2 * vz / GRAV;
             kickBall(k, d, clampf(dist / T2, 8.f, 19.f), vz, false, false);
-            p.state = PS_NORMAL; p.cool = 0.8f; ball.backpass = false; offsideArmed = false; state = MS_PLAY; stateT = 0;
+            p.state = PS_NORMAL; p.cool = 0.8f; ball.backpass = false; offsideReset(OR_EXEMPT_RESTART); state = MS_PLAY; stateT = 0;
             say("Longue touche dans la surface !", 2.f);
             break;
         }
@@ -2454,7 +2412,6 @@ void Match::humanControlSnes(int i, const Controls& c, float dt) {
                 V2 d = spot - p.pos;
                 float dist = d.len();
                 kickBall(i, d.norm(), std::min(24.f, 9.f + dist * 0.55f), 0.3f, true);
-                armOffside(i);
             } else kickBall(i, aim, 18, 0.2f, true);
             return;
         }
@@ -2514,7 +2471,7 @@ void Match::humanControl(int i, const Controls& c, float dt) {
             p.state = PS_NORMAL; ball.owner = -1;
             ball.pos = p.pos + p.face * 0.6f;
             if (tgt >= 0) passTo(i, tgt, false); else kickBall(i, p.face, 14, 1.0f, true);
-            ball.backpass = false; offsideArmed = false;
+            ball.backpass = false;                 // relance pendant le jeu : le hors-jeu s'applique
             gkProtect(i);
         } else if (c.f2p || p.st > 6) {
             p.state = PS_NORMAL; ball.owner = -1;
@@ -2624,6 +2581,7 @@ void Match::aiCarrier(int i, float dt) {
                 if ((p.pos + dg * tt - pl[k].pos).len() < 1.4f) clear = false;
             }
             if (clear) pr += dist < 18 ? 0.25f : 0.1f;
+            if (clear && dist < 15.f && (pl[ot * 11].pos - p.pos).len() < 9.f) pr += 0.3f;     // face au gardien : conclure avant qu'il ne ferme l'angle
             float ang = std::fabs(p.pos.x - PITCH_W / 2) / std::max(dist, 1.f);
             pr *= (1.2f - ang);
             if (dist > 25.f) pr *= 0.75f;                           // jeu plus construit : moins de frappes lointaines
@@ -2978,7 +2936,7 @@ void Match::gkControl(int i, float dt) {
                 ball.pos = p.pos + bestD.norm() * 0.8f;
                 kickBall(i, bestD, R.frange(28.f, 32.f), R.frange(12.f, 15.f), false);     // long dégagement
             }
-            ball.backpass = false; offsideArmed = false;
+            ball.backpass = false;                 // relance pendant le jeu : le hors-jeu s'applique
             p.cool = 0.6f;
             gkProtect(i);
         }
@@ -3030,7 +2988,11 @@ void Match::gkControl(int i, float dt) {
     }
     if (rush && owner >= 0 && pl[owner].team != t && p.cool <= 0) {
         float dd = (bp - p.pos).len();
-        float trig = 2.6f + (pl[owner].human >= 0 && p.human < 0 ? (S.difficulty == 0 ? 0.f : S.difficulty == 2 ? 0.8f : 0.5f) : 0.f);
+        // 1 contre 1 : le gardien ne plonge que si l'attaquant vient sur lui (ou touche trop long) ; s'il le déborde sur le côté, il reste debout et suit
+        V2 av = pl[owner].vel; V2 toGk = (p.pos - bp).norm();
+        bool comesAt = av.len() < 1.5f || av.norm().dot(toGk) > 0.55f;
+        float trig = 1.55f + (pl[owner].human >= 0 && p.human < 0 ? (S.difficulty == 0 ? 0.f : S.difficulty == 2 ? 0.4f : 0.25f) : 0.f) + p.keep / 250.f;
+        if (!comesAt) trig = 1.05f;
         if (dd < trig && dd > 0.4f && inOwnBox(t, p.pos)) {
             // plongeon dans les pieds
             V2 dir = (bp + pl[owner].vel * 0.15f - p.pos).norm();
@@ -3046,10 +3008,19 @@ void Match::gkControl(int i, float dt) {
         float od = opp >= 0 ? (pl[opp].pos - bp).len() : 99;
         if ((p.pos - bp).len() < od + 1) rush = true;
     }
+    float gkSet = 1.f;      // vitesse de sortie (le gardien se fige quand l'attaquant arrive sur lui)
     if (rush) {
         target = bp;
-        // face-à-face : sortie sur l'axe ballon-but pour fermer l'angle, en restant entre le ballon et le but
-        if (owner >= 0 && pl[owner].team != t) target = bp + pl[owner].vel * 0.2f + (og - bp).norm() * 0.9f;
+        if (owner >= 0 && pl[owner].team != t) {
+            // face-à-face : sortie sur l'axe ballon-but pour fermer l'angle, sans se jeter : il garde 3 m de distance et se
+            // place (appuis) dès que l'attaquant est à une dizaine de mètres, puis glisse latéralement pour rester sur l'axe
+            V2 ap = bp + pl[owner].vel * 0.18f;
+            float da = (ap - og).len();
+            float out = clampf(da * 0.36f, 1.0f, 6.5f + p.keep / 50.f);
+            out = std::min(out, std::max(1.0f, da - 2.4f - (100 - p.keep) / 80.f));
+            target = og + (ap - og).norm() * out;
+            if (da < 11.f) gkSet = 0.78f + p.keep / 600.f;
+        }
     } else {
         float out = clampf(dist * 0.11f+p.effects.advance*100, 0.8f, 9.f);
         target = og + (bp - og).norm() * out;
@@ -3058,7 +3029,7 @@ void Match::gkControl(int i, float dt) {
     target.y = sgn > 0 ? std::max(target.y, 0.3f) : std::min(target.y, PITCH_L - 0.3f);
     V2 d = target - p.pos;
     float l = d.len();
-    float sp2 = rush ? p.speed : p.speed * 0.8f;
+    float sp2 = rush ? p.speed * gkSet : p.speed * 0.8f;
     p.vel = l > 0.2f ? d.norm() * std::min(sp2, l * 4) : V2();
     p.face = (bp - p.pos).norm();
 }
@@ -3361,6 +3332,7 @@ void Match::update(float dt) {
     if (trophyActive) { updateTrophy(dt); return; }
     if (lapActive) { updateLap(dt); return; }
     lostT[0] += dt; lostT[1] += dt;
+    if (offFlagT > 0 && offPend < 0) offFlagT = std::max(0.f, offFlagT - dt);     // drapeau de l'assistant baissé après le signalement
     if (finished) {
         if (invasion) { updateInvasion(dt); return; }
         if (!S.training) {
@@ -3424,6 +3396,7 @@ void Match::update(float dt) {
         if (state != MS_PLAY) break;
         updateBall(dt);
         checkOut();
+        if (!shootout) offsideUpdate(dt);
         record();
         if (ball.owner >= 0) { possTime[pl[ball.owner].team] += dt; }
         if (shootout) {
