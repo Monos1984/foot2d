@@ -140,13 +140,17 @@ static void buildPitch(int type, uint64_t key) {
     // panneaux publicitaires
     static const char* ADS[] = { "SSW", "BROKE STUDIO", "SUPER BUT", "ALEKMAUL", "GOAL FM", "SGDK", "PIXEL COLA", "PVSNESLIB",
                                  "OFFGAME", "DOUBLE SIDE", "BEURTON", "ELEC. DREAMS", "BALLON D'OR", "CRAMPONS+", "STADE TV", "AMIGOAL",
-                                 "GAMOPAT", "ONIROMANCIE", "ATARI", "SEGA", "NINTENDO", "SONY", "SIGAMES", "EA", "AMSTRAD", "COMMODORE", "ORIC", "CAPCOM" };
+                                 "GAMOPAT", "ONIROMANCIE", "ATARI", "SEGA", "NINTENDO", "SONY", "SIGAMES", "EA", "AMSTRAD", "COMMODORE", "ORIC", "CAPCOM",
+                                 "TURBO FIBRE", "BANQUE DU BUT", "VOLT AUTO", "PIZZA PENALTY", "8-BIT ENERGY", "LUCARNE", "HEXA MOBILE", "CAFE CORNER",
+                                 "SPRITE VOYAGES", "GAZON PRO", "PIXEL BURGER", "ARCADE BANK" };
     static const unsigned ADC[] = { 0xD62828, 0x1D3557, 0xF77F00, 0x2A9D8F, 0x6A4C93, 0x3A7D44, 0x264653, 0xE63946,
                                     0xB02020, 0x5A189A, 0x8C6D1F, 0x0077B6, 0x1D3557, 0x2A9D8F, 0xE9C46A, 0xE63946,
-                                    0x3D5A80, 0x6A0572, 0xC1121F, 0x0B3D91, 0xE60012, 0x111111, 0x2B2D42, 0x1B1B1B, 0x8D0801, 0x33415C, 0x7B2CBF, 0x1F4E9E };
+                                    0x3D5A80, 0x6A0572, 0xC1121F, 0x0B3D91, 0xE60012, 0x111111, 0x2B2D42, 0x1B1B1B, 0x8D0801, 0x33415C, 0x7B2CBF, 0x1F4E9E,
+                                    0x00A6A6, 0x14532D, 0x0EA5E9, 0xB91C1C, 0x65A30D, 0x7C3AED, 0xF97316, 0x6B3E26, 0x0891B2, 0x15803D, 0xDC2626, 0x4338CA };
     const int NADS = (int)(sizeof ADS / sizeof ADS[0]);
     float bd = 4.0f; // distance du terrain
     int adi = 0;
+    const int ado = GetRandomValue(0, NADS - 1);   // les panneaux changent d'un match à l'autre
     // images de l'éditeur de publicités : chargées une fois pour cette construction du terrain
     std::vector<Image> custom;
     for (auto& path : g_boardAds) if (FileExists(path.c_str())) { Image im = LoadImage(path.c_str()); if (im.data) custom.push_back(im); }
@@ -192,9 +196,14 @@ static void buildPitch(int type, uint64_t key) {
             adi++;
             return;
         }
-        ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, hexc(ADC[adi % NADS]));
+        Color bc = hexc(ADC[(adi + ado) % NADS]);
+        auto mix = [](Color c, int d) { return Color{ (unsigned char)std::max(0, std::min(255, c.r + d)), (unsigned char)std::max(0, std::min(255, c.g + d)), (unsigned char)std::max(0, std::min(255, c.b + d)), 255 }; };
+        ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, bc);
+        if (horiz) { ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, std::max(1, h / 3), mix(bc, 28)); ImageDrawRectangle(&img, (int)a.x, (int)a.y + h - 2, w, 2, mix(bc, -40)); }
+        else { ImageDrawRectangle(&img, (int)a.x, (int)a.y, std::max(1, w / 3), h, mix(bc, 28)); ImageDrawRectangle(&img, (int)a.x + w - 2, (int)a.y, 2, h, mix(bc, -40)); }
         ImageDrawRectangleLines(&img, Rectangle{ a.x, a.y, (float)w, (float)h }, 1, hexc(0x111111));
-        if (horiz) ImageDrawText(&img, ADS[adi % NADS], (int)a.x + 3, (int)a.y, 10, WHITE);
+        if (horiz) { ImageDrawText(&img, ADS[(adi + ado) % NADS], (int)a.x + 4, (int)a.y + 1, 10, Color{ 0, 0, 0, 140 }); ImageDrawText(&img, ADS[(adi + ado) % NADS], (int)a.x + 3, (int)a.y, 10, WHITE); }
+        else for (int k = 4; k < h - 4; k += 9) ImageDrawRectangle(&img, (int)a.x + w / 2 - 1, (int)a.y + k, 2, 5, WHITE);
         adi++;
     };
     for (float x = -8; x < PITCH_W + 8; x += 14) { board(x, -bd - 2.0f, x + 13.8f, -bd, true); board(x, PITCH_L + bd, x + 13.8f, PITCH_L + bd + 2.0f, true); }
@@ -1124,7 +1133,7 @@ static void drawLedBoards(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     Color fg = Color{ 255, 220, 80, 255 }, bg = Color{ 8, 10, 18, 255 };
     if (goal) { msg = "  BUT !  BUT !  BUT !  " + m.team(m.lastScorerTeam).shortName + "  "; fg = ((int)(t * 6) % 2) ? Color{ 255, 220, 80, 255 } : WHITE; bg = ((int)(t * 6) % 2) ? Color{ 40, 10, 10, 255 } : Color{ 10, 10, 40, 255 }; }
     else if (m.ceremony) msg = "  BIENVENUE  -  " + m.team(0).name + "  -  " + m.team(1).name + "  -  " + (m.S.title.empty() ? std::string("") : m.S.title + "  ");
-    else msg = fmt("  %s %d - %d %s   PIXEL COLA   CRAMPONS+   GOAL FM 98.5   SUPER BUT   ", m.team(0).shortName.c_str(), m.score[0], m.score[1], m.team(1).shortName.c_str());
+    else msg = fmt("  %s %d - %d %s   PIXEL COLA   CRAMPONS+   GOAL FM 98.5   SUPER BUT   TURBO FIBRE   VOLT AUTO   PIZZA PENALTY   ", m.team(0).shortName.c_str(), m.score[0], m.score[1], m.team(1).shortName.c_str());
     int tw = std::max(40, textWidth(msg, 10));
     for (int g = 0; g < 2; g++) {
         float wy = g ? PITCH_L + 4.0f : -6.0f;
@@ -1607,6 +1616,7 @@ void renderMatch(const Match& m, bool radar) {
         items.push_back({ y, 0, i });
         int sx = SX(replay ? m.rp[m.rpPos * 22 + i].x : m.pl[i].pos.x), sy = SY(y);
         DrawEllipse(sx + 1, sy, 4, 1.6f, Color{ 0, 0, 0, 70 });
+        if (!replay && m.pl[i].human >= 0) { Color c = CTRL_COL[m.pl[i].human]; DrawEllipseLines(sx, sy, 5, 2, Color{ c.r, c.g, c.b, 190 }); }   // anneau sous le joueur contrôlé
     }
     items.push_back({ bpos.y, 1, 0 });
     if (!replay && !m.S.training && !(tunnelHide && m.refPos.x < -1.4f)) {   // pas d'arbitre à l'entraînement
@@ -1643,7 +1653,10 @@ void renderMatch(const Match& m, bool radar) {
     if (!replay && m.vipOn) { items.push_back({ m.vipPos.y, 6, 0 }); DrawEllipse(SX(m.vipPos.x) + 1, SY(m.vipPos.y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
     // soigneurs
     if (!replay && m.medicFor >= 0) for (int k = 0; k < 2; k++) { items.push_back({ m.medicPos[k].y, 5, k }); DrawEllipse(SX(m.medicPos[k].x) + 1, SY(m.medicPos[k].y), 4, 1.6f, Color{ 0, 0, 0, 70 }); }
-    DrawEllipse(SX(bpos.x) + (int)(bz * 1.5f), SY(bpos.y) + 1, 2.2f, 1.2f, Color{ 0, 0, 0, 90 });
+    {   // ombre du ballon : plus petite et plus pâle quand il monte
+        float hz = std::min(1.f, bz * 0.12f);
+        DrawEllipse(SX(bpos.x) + (int)(bz * 1.5f), SY(bpos.y) + 1, 2.6f - hz, 1.4f - hz * 0.5f, Color{ 0, 0, 0, (unsigned char)(100 - hz * 50) });
+    }
     std::sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.y < b.y; });
     for (auto& it : items) {
         if (it.kind == 1) {
@@ -1654,9 +1667,12 @@ void renderMatch(const Match& m, bool radar) {
             // traînée des frappes puissantes
             if (!replay && m.ball.owner < 0 && m.ball.vel.len() > 17.f) {
                 V2 bv = m.ball.vel * (1.f / m.ball.vel.len());
-                for (int k = 1; k <= 4; k++) {
-                    int tx = SX(bpos.x - bv.x * k * 0.35f), ty = SY(bpos.y - bv.y * k * 0.35f) - (int)(bz * PPM * HZ);
-                    DrawRectangle(tx - 1, ty - 1, 2, 2, Color{ 255, 255, 255, (unsigned char)(150 - k * 32) });
+                float sp = std::min(1.f, (m.ball.vel.len() - 17.f) / 12.f);
+                for (int k = 1; k <= 6; k++) {
+                    int tx = SX(bpos.x - bv.x * k * 0.32f), ty = SY(bpos.y - bv.y * k * 0.32f) - (int)(bz * PPM * HZ) - 1;
+                    unsigned char al = (unsigned char)((130 - k * 20) * (0.5f + 0.5f * sp));
+                    int r = k < 3 ? 2 : 1;
+                    DrawRectangle(tx - r / 2 - (r > 1 ? 0 : 0), ty - r / 2, r + (k < 2 ? 1 : 0), r, Color{ 255, 255, 255, al });
                 }
             }
             // filet qui tremble après un but
@@ -1664,14 +1680,38 @@ void renderMatch(const Match& m, bool radar) {
                 float ph = (float)GetTime() * 30.f;
                 for (int k = -3; k <= 3; k++) DrawPixel(x + k * 2, y - 3 + (int)(std::sin(ph + k) * 1.5f), Color{ 240, 240, 240, 200 });
             }
-            DrawRectangle(x - 1, y - 2, 3, 3, m.S.meteo == 5 ? Color{ 255, 140, 30, 255 } : WHITE);   // ballon orange sous la neige
-            DrawRectangle(x - 1, y - 3, 3, 1, Color{ 20, 20, 20, 120 });
-            DrawRectangle(x - 2, y - 2, 1, 3, Color{ 20, 20, 20, 120 });
-            DrawRectangle(x + 2, y - 2, 1, 3, Color{ 20, 20, 20, 120 });
-            DrawRectangle(x - 1, y + 1, 3, 1, Color{ 20, 20, 20, 120 });
-            static const int PX[4][2] = { { -1, -2 }, { 1, -2 }, { 1, 0 }, { -1, 0 } };
-            DrawRectangle(x + PX[bf][0], y + PX[bf][1], 1, 1, Color{ 40, 40, 40, 255 });
-            DrawRectangle(x + PX[(bf + 2) & 3][0], y + PX[(bf + 2) & 3][1], 1, 1, Color{ 90, 90, 90, 255 });
+            {   // ballon en pixel art ombré : rond, reflet, panneaux qui tournent avec la distance parcourue ; plus gros en l'air (perspective)
+                static const char* M5[5] = { ".###.", "#####", "#####", "#####", ".###." };
+                static const char* M7[7] = { "..###..", ".#####.", "#######", "#######", "#######", ".#####.", "..###.." };
+                bool big = bz > 2.2f;
+                int n = big ? 7 : 5, c = n / 2;
+                const char* const* M = big ? M7 : M5;
+                bool snow = m.S.meteo == 5;   // ballon orange sous la neige
+                Color base = snow ? Color{ 255, 140, 30, 255 } : Color{ 246, 246, 250, 255 };
+                Color shade = snow ? Color{ 200, 96, 20, 255 } : Color{ 186, 192, 206, 255 };
+                Color rim = snow ? Color{ 140, 60, 10, 255 } : Color{ 120, 126, 140, 255 };
+                Color panel = snow ? Color{ 90, 30, 10, 255 } : Color{ 34, 36, 44, 255 };
+                int ox = x - c, oy = y - 1 - c;
+                auto in = [&](int i, int j) { return i >= 0 && j >= 0 && i < n && j < n && M[j][i] == '#'; };
+                for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) {
+                    if (!in(i, j)) continue;
+                    bool edgeBR = !in(i + 1, j) || !in(i, j + 1);
+                    Color col = edgeBR ? rim : (i + j > n) ? shade : base;
+                    DrawPixel(ox + i, oy + j, col);
+                }
+                // panneaux : deux taches sombres sur un anneau autour du centre, qui tournent quand le ballon roule
+                int rf = ((int)std::floor((bpos.x + bpos.y) * 4.f)) & 7;
+                static const int R5[8][2] = { { 1, 1 }, { 2, 1 }, { 3, 1 }, { 3, 2 }, { 3, 3 }, { 2, 3 }, { 1, 3 }, { 1, 2 } };
+                for (int q = 0; q < 2; q++) {
+                    const int* r = R5[(rf + q * 4) & 7];
+                    int px = big ? (r[0] - 2) * 2 + c : r[0], py = big ? (r[1] - 2) * 2 + c : r[1];
+                    DrawPixel(ox + px, oy + py, panel);
+                    if (big) DrawPixel(ox + px + (px < c ? 1 : -1), oy + py, Color{ panel.r, panel.g, panel.b, 150 });
+                }
+                if (rf & 1) DrawPixel(ox + c, oy + c, Color{ panel.r, panel.g, panel.b, 170 });
+                DrawPixel(ox + 1, oy + 1 + (big ? 1 : 0), WHITE);                  // reflet
+                if (big) DrawPixel(ox + 2, oy + 1, WHITE);
+            }
             continue;
         }
         if (it.kind == 6) {     // costume sombre, écharpe tricolore
@@ -1861,13 +1901,28 @@ void renderMatch(const Match& m, bool radar) {
         // marqueur joueur contrôlé
         if (!replay && p.human >= 0) {
             Color c = CTRL_COL[p.human];
-            int hy = sy - 16;
+            int hy = sy - 16 - (int)(std::fabs(std::sin(GetTime() * 5.0)) * 1.5);
+            DrawTriangle(Vector2{ (float)sx - 4, (float)hy - 1 }, Vector2{ (float)sx, (float)hy + 3 }, Vector2{ (float)sx + 4, (float)hy - 1 }, Color{ 0, 0, 0, 160 });
             DrawTriangle(Vector2{ (float)sx - 3, (float)hy }, Vector2{ (float)sx, (float)hy + 3 }, Vector2{ (float)sx + 3, (float)hy }, c);
-            if (p.charging) {
-                float pw = std::min(1.f, p.charge / 0.55f);
-                DrawRectangle(sx - 5, hy - 4, 10, 2, Color{ 0, 0, 0, 160 });
-                DrawRectangle(sx - 5, hy - 4, (int)(10 * pw), 2, Color{ 255, (unsigned char)(255 - 200 * pw), 40, 255 });
+            // viseur : trois points dans la direction de frappe quand il a le ballon
+            if (m.ball.owner == i && state == PS_NORMAL) {
+                for (int k = 1; k <= 3; k++) {
+                    int ax = sx + (int)std::lround(p.face.x * (4 + k * 3)), ay = sy + (int)std::lround(p.face.y * (4 + k * 3) * 0.75f);
+                    DrawRectangle(ax, ay, 1 + (k == 3), 1 + (k == 3), Color{ c.r, c.g, c.b, (unsigned char)(230 - k * 50) });
+                }
             }
+            if (p.charging) {   // jauge de puissance : verte, jaune puis rouge
+                float pw = std::min(1.f, p.charge / 0.55f);
+                DrawRectangle(sx - 8, hy - 6, 16, 4, Color{ 0, 0, 0, 190 });
+                Color pc = pw < 0.5f ? Color{ (unsigned char)(80 + 340 * pw), 230, 60, 255 } : Color{ 250, (unsigned char)(230 - 300 * (pw - 0.5f)), 40, 255 };
+                DrawRectangle(sx - 7, hy - 5, (int)(14 * pw), 2, pc);
+                if (pw >= 1.f && ((int)(GetTime() * 12)) % 2) DrawRectangleLines(sx - 8, hy - 6, 16, 4, WHITE);
+            }
+        }
+        // receveur d'une passe d'un joueur humain : anneau clignotant
+        if (!replay) for (int c2 = 0; c2 < NUM_INPUTS; c2++) if (m.passRecv[c2] == i && m.passRecvT[c2] > 0 && p.human < 0 && ((int)(GetTime() * 10)) % 2) {
+            Color c = CTRL_COL[c2];
+            DrawEllipseLines(sx, sy, 6, 2.5f, c);
         }
     }
     // envahissement de terrain : les supporters courent vers les joueurs et sautent de joie autour d'eux
@@ -2095,28 +2150,51 @@ void renderMatch(const Match& m, bool radar) {
         drawTextPx(t1, 8, 4, 10, WHITE);
         drawTextPx(t2, 8, 14, 10, Color{ 255, 230, 60, 255 });
     } else {
-        int x = 3;
-        std::string sc = fmt("%d-%d", m.score[0], m.score[1]);
+        // incrustation du score, style diffusion TV : chrono | couleur + équipe | score | équipe + couleur
+        std::string sc = fmt("%d - %d", m.score[0], m.score[1]);
         int reds[2] = { 0, 0 };
         for (int i = 0; i < 22; i++) if (m.pl[i].sentOff) reds[m.pl[i].team]++;
-        for (auto& e : m.events) (void)e;
-        int w = 4 + 4 + textWidth(H.shortName, 10) + 4 + textWidth(sc, 10) + 4 + 4 + textWidth(A.shortName, 10) + 6 + textWidth(clk, 10) + 4 + (reds[0] + reds[1]) * 4 + (reds[0] ? 2 : 0) + (reds[1] ? 2 : 0);
-        DrawRectangle(x, 3, w, 12, Color{ 0, 0, 0, 150 });
-        x += 2;
-        DrawRectangle(x, 5, 2, 8, hexc(m.kit[0].shirt)); DrawRectangle(x + 2, 5, 1, 8, hexc(m.kit[0].shirt2)); x += 5;
-        drawTextPx(H.shortName, x, 4, 10, WHITE); x += textWidth(H.shortName, 10) + 4;
-        for (int k = 0; k < reds[0]; k++) { DrawRectangle(x - 2 + k * 4, 5, 3, 7, Color{ 230, 30, 30, 255 }); } if (reds[0]) x += reds[0] * 4 + 2;
-        drawTextPx(sc, x, 4, 10, Color{ 255, 230, 60, 255 }); x += textWidth(sc, 10) + 4;
-        DrawRectangle(x, 5, 2, 8, hexc(m.kit[1].shirt)); DrawRectangle(x + 2, 5, 1, 8, hexc(m.kit[1].shirt2)); x += 5;
-        drawTextPx(A.shortName, x, 4, 10, WHITE); x += textWidth(A.shortName, 10) + 6;
-        for (int k = 0; k < reds[1]; k++) { DrawRectangle(x - 4 + k * 4, 5, 3, 7, Color{ 230, 30, 30, 255 }); } if (reds[1]) x += reds[1] * 4 + 2;
-        drawTextPx(clk, x, 4, 10, Color{ 200, 255, 200, 255 });
+        static int lastSum = -1; static float flash = 0;
+        int sum = m.score[0] + m.score[1];
+        if (lastSum >= 0 && sum > lastSum) flash = 2.5f;
+        if (sum < lastSum) flash = 0;
+        lastSum = sum;
+        if (flash > 0) flash -= GetFrameTime();
+        int y = 3, h = 13;
+        int cw = textWidth(clk, 10) + 8, hw = std::max(textWidth(H.shortName, 10), textWidth(A.shortName, 10)) + 8, sw = textWidth(sc, 10) + 10;
+        int w = cw + 4 + hw + sw + hw + 4 + (reds[0] + reds[1]) * 4;
+        int x = 3;
+        DrawRectangle(x + 1, y + 1, w, h, Color{ 0, 0, 0, 90 });                                   // ombre portée
+        DrawRectangleGradientV(x, y, cw, h, Color{ 40, 48, 60, 235 }, Color{ 14, 18, 26, 235 });  // chrono
+        drawTextPx(clk, x + 4, y + 1, 10, m.clock > pe ? Color{ 255, 200, 90, 255 } : Color{ 210, 255, 210, 255 });
+        x += cw;
+        for (int s2 = 0; s2 < 2; s2++) {
+            const std::string& nm = s2 ? A.shortName : H.shortName;
+            Color k1 = hexc(m.kit[s2].shirt), k2 = hexc(m.kit[s2].shirt2);
+            if (s2 == 1) {   // score au centre
+                bool fl = flash > 0 && ((int)(flash * 6)) % 2 == 0;
+                DrawRectangleGradientV(x, y, sw, h, fl ? Color{ 255, 236, 120, 255 } : Color{ 250, 250, 252, 245 }, fl ? Color{ 230, 180, 40, 255 } : Color{ 205, 210, 222, 245 });
+                drawTextPx(sc, x + 5, y + 1, 10, Color{ 16, 20, 34, 255 });
+                x += sw;
+            }
+            int bx = x;
+            if (s2 == 0) { DrawRectangle(bx, y, 4, h, k1); DrawRectangle(bx + 2, y, 2, h, k2); bx += 4; }
+            DrawRectangleGradientV(bx, y, hw, h, Color{ 22, 34, 78, 235 }, Color{ 10, 16, 42, 235 });
+            DrawRectangle(bx, y, hw, 1, Color{ 255, 255, 255, 50 });
+            drawTextPx(nm, bx + (hw - textWidth(nm, 10)) / 2, y + 1, 10, WHITE);
+            bx += hw;
+            if (s2 == 1) { DrawRectangle(bx, y, 4, h, k1); DrawRectangle(bx, y, 2, h, k2); bx += 4; }
+            for (int k = 0; k < reds[s2]; k++) { DrawRectangle(bx + 1 + k * 4, y + 3, 3, 7, Color{ 230, 30, 30, 255 }); }
+            bx += reds[s2] * 4;
+            x = bx;
+        }
+        DrawRectangle(3, y + h, w - (reds[0] + reds[1]) * 4, 1, Color{ 240, 200, 60, 200 });       // liseré doré
         // temps additionnel annoncé
         if (m.boardDone && m.boardN > 0 && !m.shootout && m.clock >= pe - 1.f) {
-            int ax = x + textWidth(clk, 10) + 6;
+            int ax = x + 3;
             std::string at = fmt("+%d", m.boardN);
-            DrawRectangle(ax - 2, 3, textWidth(at, 10) + 6, 12, Color{ 20, 120, 40, 230 });
-            drawTextPx(at, ax + 1, 4, 10, WHITE);
+            DrawRectangleGradientV(ax, y, textWidth(at, 10) + 6, h, Color{ 40, 170, 70, 240 }, Color{ 14, 100, 34, 240 });
+            drawTextPx(at, ax + 3, y + 1, 10, WHITE);
         }
     }
     // panneau lumineux de remplacement (numéro sortant en rouge, entrant en vert)
@@ -2264,9 +2342,14 @@ void renderMatch(const Match& m, bool radar) {
     }
     // logo de la chaîne
     if (m.S.tv && !m.S.channel.empty()) {
-        int w = textWidth(m.S.channel, 10) + 8;
-        DrawRectangle(MW - w - 3, 3, w, 11, Color{ 180, 20, 30, 200 });
-        drawTextPx(m.S.channel, MW - w + 1, 4, 10, WHITE);
+        int w = textWidth(m.S.channel, 10) + 16;
+        int lx = MW - w - 3;
+        DrawRectangle(lx + 1, 4, w, 12, Color{ 0, 0, 0, 80 });
+        DrawRectangleGradientV(lx, 3, w, 12, Color{ 220, 40, 50, 215 }, Color{ 140, 12, 22, 215 });
+        DrawRectangle(lx, 3, w, 1, Color{ 255, 255, 255, 90 });
+        float pulse = 0.5f + 0.5f * std::sin((float)GetTime() * 4.f);
+        DrawCircle(lx + 6, 9, 2.f, Color{ 255, 255, 255, (unsigned char)(120 + 135 * pulse) });
+        drawTextPx(m.S.channel, lx + 11, 4, 10, WHITE);
     }
     // radar
     if (radar) {
@@ -2373,8 +2456,23 @@ void renderMatch(const Match& m, bool radar) {
     // messages
     if (m.msgT > 0 && !m.msg.empty() && !replay && !(m.state == MS_GOAL && m.stateT < 1.8f) && !(m.ceremony && m.tossUI > 0) && m.tossKind == 0 && !m.lapActive && !(m.duel && m.fightT > 0)) {
         int y = 40;
-        int w = std::max(textWidth(m.msg, 10), textWidth(m.msg2, 10)) + 16;
-        DrawRectangle(MW / 2 - w / 2, y - 4, w, m.msg2.empty() ? 18 : 30, Color{ 0, 0, 30, 170 });
+        int w = std::max(textWidth(m.msg, 10), textWidth(m.msg2, 10)) + 24;
+        int h = m.msg2.empty() ? 18 : 30;
+        // bandeau TV : ouverture horizontale depuis le centre, liserés dorés, reflet
+        static std::string lastMsg; static float openT = 0;
+        if (m.msg != lastMsg) { lastMsg = m.msg; openT = 0; }
+        openT += GetFrameTime();
+        float op = std::min(1.f, openT * 6.f);
+        int ww = std::max(4, (int)(w * (1 - (1 - op) * (1 - op))));
+        int bx = MW / 2 - ww / 2;
+        DrawRectangle(bx + 2, y - 2, ww, h, Color{ 0, 0, 0, 90 });
+        DrawRectangleGradientV(bx, y - 4, ww, h, Color{ 22, 34, 82, 225 }, Color{ 4, 8, 30, 225 });
+        DrawRectangle(bx, y - 4, ww, 1, Color{ 255, 214, 80, 255 });
+        DrawRectangle(bx, y - 4 + h - 1, ww, 1, Color{ 255, 214, 80, 160 });
+        DrawRectangle(bx, y - 4, 2, h, Color{ 255, 214, 80, 255 }); DrawRectangle(bx + ww - 2, y - 4, 2, h, Color{ 255, 214, 80, 255 });
+        int sx = (int)(std::fmod(openT * 120.f, (float)ww + 60)) - 30;
+        for (int k = 0; k < 10; k++) if (sx + k > 2 && sx + k < ww - 2) DrawRectangle(bx + sx + k, y - 3, 1, h - 2, Color{ 255, 255, 255, (unsigned char)(28 - std::abs(k - 5) * 5) });
+        if (op >= 1.f) {
         Color c = Color{ 255, 240, 80, 255 };
         if (m.cardShow == 2 && m.msg.find("ROUGE") != std::string::npos) c = Color{ 255, 70, 70, 255 };
         drawTextCentered(m.msg, MW / 2, y, 10, c);
@@ -2382,6 +2480,7 @@ void renderMatch(const Match& m, bool radar) {
         if (m.cardShow && (m.msg.find("CARTON") != std::string::npos || m.msg.find("ROUGE") != std::string::npos)) {
             Color cc = m.cardShow == 1 ? Color{ 255, 220, 0, 255 } : Color{ 230, 30, 30, 255 };
             DrawRectangle(MW / 2 - w / 2 - 9, y - 2, 6, 9, cc);
+        }
         }
     }
     rlDrawRenderBatchActive();

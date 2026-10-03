@@ -83,14 +83,17 @@ static bool button(int x, int y, int w, int h, const std::string& label, bool se
         DrawRectangleLines(x - 2, y - 2, w + 4, h + 4, C_SEL);
         DrawRectangleLines(x - 1, y - 1, w + 2, h + 2, Color{ 255, 255, 255, 160 });
     }
-    if (focus && g_btnPress && enabled) { g_btnPress = false; return true; }
+    if (focus && g_btnPress && enabled) { g_btnPress = false; audioPlay(SFX_UI_OK); return true; }
     bool hover = enabled && IN.mouse.x >= x && IN.mouse.x < x + w && IN.mouse.y >= y && IN.mouse.y < y + h;
     Color bg = !enabled ? Color{ 40, 50, 70, 255 } : selected ? C_SEL : hover ? Color{ 70, 104, 170, 255 } : C_ITEM;
-    DrawRectangle(x, y, w, h, bg);
+    auto lift = [](Color c, int d) { return Color{ (unsigned char)std::max(0, std::min(255, c.r + d)), (unsigned char)std::max(0, std::min(255, c.g + d)), (unsigned char)std::max(0, std::min(255, c.b + d)), c.a }; };
+    DrawRectangleGradientV(x, y, w, h, lift(bg, 22), lift(bg, -18));
+    if (hover && enabled) DrawRectangle(x, y + h, w, 1, Color{ 0, 0, 0, 120 });
     DrawRectangle(x, y, w, 1, Color{ 255, 255, 255, (unsigned char)(selected ? 110 : 45) });     // biseau clair
     DrawRectangle(x, y + h - 1, w, 1, Color{ 0, 0, 0, 90 });
     if (hover && !selected) DrawRectangleLines(x, y, w, h, Color{ 255, 225, 90, 120 });
     drawTextCentered(fitText(label, w - 4, 10), x + w / 2, y + (h - 10) / 2, 10, selected ? BLACK : enabled ? C_TXT : C_DIM, false);
+    if (hover && IN.click) audioPlay(SFX_UI_OK);
     return hover && IN.click;
 }
 
@@ -113,7 +116,12 @@ static void drawMusicButton(int x, int y) {
 static void drawBackground(const std::string& title) {
     ClearBackground(C_BG);
     DrawRectangleGradientV(0, 26, VW, VH - 26, Color{ 24, 40, 76, 255 }, Color{ 12, 22, 44, 255 });
-    for (int i = -VH; i < VW; i += 16) DrawLine(i, VH, i + VH, 0, Color{ C_BG2.r, C_BG2.g, C_BG2.b, 150 });
+    {   // lignes diagonales qui défilent lentement, halo lumineux
+        int off = (int)(GetTime() * 6) % 16;
+        for (int i = -VH; i < VW + 16; i += 16) DrawLine(i + off, VH, i + off + VH, 0, Color{ C_BG2.r, C_BG2.g, C_BG2.b, 150 });
+        DrawCircleGradient(VW / 2, 40, 260, Color{ 80, 120, 200, 26 }, Color{ 80, 120, 200, 0 });
+        DrawRectangleGradientV(0, VH - 60, VW, 60, Color{ 0, 0, 0, 0 }, Color{ 0, 0, 0, 70 });
+    }
     // filigrane : rond central et surface de réparation
     DrawCircleLines(VW - 70, VH - 60, 46, Color{ 255, 255, 255, 10 });
     DrawCircleLines(VW - 70, VH - 60, 45, Color{ 255, 255, 255, 10 });
@@ -153,7 +161,7 @@ static void drawFooter(const std::string& s) {
     if (g_btnCountPrev > 0 && anyPad()) { std::string h = g_btnFocus >= 0 ? "X : activer  Y : bouton suivant" : "Y : boutons"; drawTextPx(h, VW - 8 - textWidth(h, 10), VH - 12, 10, C_HI); }
 }
 
-struct ListW { int cur = 0, top = 0; };
+struct ListW { int cur = 0, top = 0; float hy = -1; };   // hy : position animée de la barre de sélection (en lignes)
 static ListW g_statusLW;
 static Screen g_optBack = SC_MAIN; static ListW g_optLW;   // retour de l'écran Options (menu principal ou carrière)
 static ListW g_ctlLW; static int g_ctlCapture = -1; static Screen g_ctlBack = SC_OPTIONS;   // configuration des commandes (options ou pause)
@@ -162,6 +170,7 @@ static ListW g_ctlLW; static int g_ctlCapture = -1; static Screen g_ctlBack = SC
 static int listRun(ListW& w, int n, int x, int y, int wd, int rows, int rowH, std::function<void(int, int, int, bool)> row, bool active = true) {
     if (n <= 0) { w.cur = 0; w.top = 0; return -1; }
     int act = -1;
+    int prevCur = w.cur;
     if (active) {
         if (IN.up) w.cur = (w.cur - 1 + n) % n;
         if (IN.down) w.cur = (w.cur + 1) % n;
@@ -173,6 +182,8 @@ static int listRun(ListW& w, int n, int x, int y, int wd, int rows, int rowH, st
             if (i < n && IN.click) act = i;
         }
         if (IN.ok) act = w.cur;
+        if (w.cur != prevCur && w.cur < n) audioPlay(SFX_UI_MOVE);
+        if (act >= 0) audioPlay(SFX_UI_OK);
     }
     if (w.cur >= n) w.cur = n - 1;
     if ((IN.wheel == 0 || !active) && w.cur >= 0) {
@@ -181,20 +192,45 @@ static int listRun(ListW& w, int n, int x, int y, int wd, int rows, int rowH, st
     }
     if (w.top > std::max(0, n - rows)) w.top = std::max(0, n - rows);
     if (w.top < 0) w.top = 0;
+    // fond des lignes, puis barre de sélection qui glisse vers la ligne choisie, puis contenu
+    for (int i = w.top; i < n && i < w.top + rows; i++) {
+        int yy = y + (i - w.top) * rowH;
+        Color base = (i % 2) ? C_ITEM : Color{ 38, 62, 108, 255 };
+        DrawRectangle(x, yy, wd, rowH - 1, base);
+        DrawRectangle(x, yy, wd, 1, Color{ (unsigned char)std::min(255, base.r + 18), (unsigned char)std::min(255, base.g + 18), (unsigned char)std::min(255, base.b + 22), 255 });
+    }
+    {
+        float target = (float)(w.cur - w.top);
+        float dtf = std::min(0.05f, GetFrameTime());
+        if (w.hy < 0 || std::fabs(w.hy - target) > rows) w.hy = target;
+        else w.hy += (target - w.hy) * std::min(1.f, dtf * 22.f);
+        if (std::fabs(w.hy - target) < 0.02f) w.hy = target;
+        if (target >= 0 && target < rows) {
+            int yy = y + (int)std::lround(w.hy * rowH);
+            int hh = rowH - 1;
+            DrawRectangleGradientH(x, yy, wd, hh, Color{ 255, 214, 80, 255 }, C_SEL);
+            // reflet qui balaie la barre
+            float tt = (float)GetTime();
+            int sx = (int)(std::fmod(tt * 260.f, (float)wd + 160.f)) - 80;
+            for (int k = 0; k < 18; k++) {
+                int cx = x + sx + k * 2;
+                if (cx >= x && cx < x + wd - 1) DrawRectangle(cx, yy + 1, 2, hh - 2, Color{ 255, 255, 255, (unsigned char)(70 - std::abs(k - 9) * 7) });
+            }
+            DrawRectangle(x, yy, wd, 1, Color{ 255, 255, 255, 140 });
+            DrawRectangle(x, yy + hh - 1, wd, 1, Color{ 150, 100, 10, 255 });
+            DrawRectangle(x, yy, 3, hh, Color{ 200, 140, 20, 255 });
+            DrawRectangle(x + wd - 3, yy, 3, hh, Color{ 200, 140, 20, 255 });
+            // curseur ballon qui pulse à gauche
+            if (x >= 8 && active) {
+                float pz = 0.5f + 0.5f * std::sin(tt * 8.f);
+                int cx = x - 6 - (int)(pz * 2), cy = yy + hh / 2;
+                DrawTriangle(Vector2{ (float)cx - 3, (float)cy - 4 }, Vector2{ (float)cx - 3, (float)cy + 4 }, Vector2{ (float)cx + 2, (float)cy }, C_HI);
+            }
+        }
+    }
     for (int i = w.top; i < n && i < w.top + rows; i++) {
         int yy = y + (i - w.top) * rowH;
         bool sel = i == w.cur;
-        if (sel) {
-            DrawRectangleGradientH(x, yy, wd, rowH - 1, Color{ 255, 214, 80, 255 }, C_SEL);
-            DrawRectangle(x, yy, wd, 1, Color{ 255, 255, 255, 140 });
-            DrawRectangle(x, yy + rowH - 2, wd, 1, Color{ 150, 100, 10, 255 });
-            DrawRectangle(x, yy, 3, rowH - 1, Color{ 200, 140, 20, 255 });
-            DrawRectangle(x + wd - 3, yy, 3, rowH - 1, Color{ 200, 140, 20, 255 });
-        } else {
-            Color base = (i % 2) ? C_ITEM : Color{ 38, 62, 108, 255 };
-            DrawRectangle(x, yy, wd, rowH - 1, base);
-            DrawRectangle(x, yy, wd, 1, Color{ (unsigned char)std::min(255, base.r + 18), (unsigned char)std::min(255, base.g + 18), (unsigned char)std::min(255, base.b + 22), 255 });
-        }
         row(i, x, yy, sel);
     }
     if (n > rows) {
@@ -1464,6 +1500,29 @@ static void screenMatch(float dt) {
     }
     if (m.trophyActive && m.trTotal > 2.5f && IN.start) m.endTrophy();          // Entrée uniquement (la touche de tir ne coupe plus la cérémonie)
     renderMatch(m, g_settings.radar);
+    {   // aide des commandes : au début du jeu, puis à la demande (F1) ; rappelle les actions avec et sans ballon
+        static const Match* hintM = nullptr; static float hintT = 99;
+        if (hintM != &m) { hintM = &m; hintT = 0; }
+        if (IsKeyPressed(KEY_F1)) hintT = 0;
+        if (!g_paused && m.state == MS_PLAY && !m.ceremony) hintT += dt;
+        std::vector<int> devs; for (int c = 0; c < NUM_INPUTS; c++) if (m.S.side[c] >= 0 && inputAvailable(c)) devs.push_back(c);
+        if (hintT < 8.f && !devs.empty() && !m.finished && m.S.managed < 0 && (m.state == MS_PLAY || m.state == MS_SETPIECE)) {
+            float a = std::min(1.f, std::min(hintT * 3.f + 0.3f, (8.f - hintT) * 1.5f));
+            int n = std::min(2, (int)devs.size());
+            int h = 14 + n * 24, y = VH - 30 - h;
+            DrawRectangle(8, y, VW - 16, h, Color{ 6, 10, 28, (unsigned char)(200 * a) });
+            DrawRectangle(8, y, 3, h, Color{ 240, 200, 60, (unsigned char)(255 * a) });
+            Color hc = C_HI; hc.a = (unsigned char)(255 * a); Color tc = C_TXT; tc.a = hc.a; Color dc = C_DIM; dc.a = hc.a;
+            drawTextPx("COMMANDES  (F1 : afficher à nouveau)", 16, y + 2, 10, hc);
+            for (int k = 0; k < n; k++) {
+                int c = devs[k];
+                drawTextPx(fitText(std::string(inputName(c)) + " : " + inputHelp(c), VW - 36, 10), 16, y + 14 + k * 24, 10, tc);
+                std::string off = g_settings.controlStyle == 1 ? "Sans ballon : passe = changer de joueur (stick = direction), tir = tacle glissé, lob = pressing. Passe : le contrôle suit le receveur."
+                                                              : "Sans ballon : bouton 1 = changer de joueur (près du porteur : tacle), bouton 2 = tacle glissé. Passe : le contrôle suit le receveur.";
+                drawTextPx(fitText(off, VW - 36, 10), 16, y + 25 + k * 24, 10, dc);
+            }
+        }
+    }
     if (m.S.managed >= 0 && !m.S.highlights && !m.trophyActive && !g_paused && !m.finished) {
         DrawRectangle(VW - 170, VH - 20, 162, 14, Color{ 0, 0, 0, 150 });
         drawTextPx(fmt("FULL MANAGER  x%d  (Tab : vitesse)", g_fmSpeed), VW - 166, VH - 18, 10, C_HI);
@@ -1911,24 +1970,46 @@ static void postExit() {
 static void screenPost() {
     drawBackground("Résultat");
     const Team& H = g_world.teams[g_post.home]; const Team& A = g_world.teams[g_post.away];
-    {   // bandeau du stade : tribunes aux couleurs des deux clubs, confettis pour le vainqueur
+    // animation d'entrée : remise à zéro quand l'écran réapparaît
+    static float postT = 0; static double postSeen = -10;
+    if (GetTime() - postSeen > 0.5) postT = 0;
+    postSeen = GetTime(); postT += GetFrameTime();
+    int win = g_post.hg > g_post.ag || (g_post.hg == g_post.ag && g_post.ph > g_post.pa) ? 0 : g_post.ag > g_post.hg || (g_post.hg == g_post.ag && g_post.pa > g_post.ph) ? 1 : -1;
+    {   // bandeau TV de fin de match : tribunes, panneaux aux couleurs des clubs, score en grand
         float t = (float)GetTime();
-        DrawRectangleGradientV(8, 46, VW - 16, 32, Color{ 18, 30, 70, 255 }, Color{ 40, 26, 60, 255 });
-        fxCrowd(8, 48, VW - 16, 28, hexc(H.home.shirt), hexc(A.home.shirt), t, g_post.hg != g_post.ag ? 0.6f : 0.2f, (unsigned)(g_post.home + g_post.away * 3), 4);
-        DrawRectangle(8, 46, VW - 16, 32, Color{ 0, 0, 0, 120 });
-        int w = g_post.hg > g_post.ag || (g_post.hg == g_post.ag && g_post.ph > g_post.pa) ? 0 : g_post.ag > g_post.hg || (g_post.hg == g_post.ag && g_post.pa > g_post.ph) ? 1 : -1;
-        if (w >= 0) { Color cc[3] = { hexc(w ? A.home.shirt : H.home.shirt), WHITE, C_HI }; fxConfetti(w ? VW / 2 : 8, 30, VW / 2 - 8, 60, t, cc, 3, 40, 21); }
-        DrawRectangle(8, 46, (VW - 16) / 2, 2, hexc(H.home.shirt)); DrawRectangle(VW / 2, 46, (VW - 16) / 2, 2, hexc(A.home.shirt));
+        int by = 44, bh = 36;
+        DrawRectangleGradientV(8, by, VW - 16, bh, Color{ 18, 30, 70, 255 }, Color{ 40, 26, 60, 255 });
+        fxCrowd(8, by + 2, VW - 16, bh - 4, hexc(H.home.shirt), hexc(A.home.shirt), t, win >= 0 ? 0.6f : 0.2f, (unsigned)(g_post.home + g_post.away * 3), 4);
+        DrawRectangle(8, by, VW - 16, bh, Color{ 0, 0, 0, 120 });
+        float in = std::min(1.f, postT * 3.f); float e = 1 - (1 - in) * (1 - in);
+        for (int side = 0; side < 2; side++) {
+            Color c = hexc(side ? A.home.shirt : H.home.shirt);
+            int pw = VW / 2 - 56, px = side ? VW / 2 + 48 + (int)((1 - e) * 200) : 8 - (int)((1 - e) * 200);
+            if (side == 0) DrawRectangleGradientH(px, by, pw, bh, Color{ c.r, c.g, c.b, 200 }, Color{ c.r, c.g, c.b, 40 });
+            else DrawRectangleGradientH(px, by, pw, bh, Color{ c.r, c.g, c.b, 40 }, Color{ c.r, c.g, c.b, 200 });
+            DrawRectangle(px, by, pw, 1, Color{ 255, 255, 255, 70 });
+        }
+        if (win >= 0) { Color cc[3] = { hexc(win ? A.home.shirt : H.home.shirt), WHITE, C_HI }; fxConfetti(win ? VW / 2 : 8, 30, VW / 2 - 8, 60, t, cc, 3, 40, 21); }
+        // score : deux cases, celle du vainqueur en or
+        for (int side = 0; side < 2; side++) {
+            int sx = VW / 2 + (side ? 4 : -36), sy = by + 3;
+            bool w = win == side;
+            DrawRectangle(sx + 2, sy + 2, 32, 30, Color{ 0, 0, 0, 120 });
+            DrawRectangleGradientV(sx, sy, 32, 30, w ? Color{ 255, 230, 110, 255 } : Color{ 245, 246, 250, 255 }, w ? Color{ 220, 170, 40, 255 } : Color{ 190, 196, 210, 255 });
+            float pop = std::min(1.f, std::max(0.f, (postT - 0.25f - side * 0.15f) * 5.f));
+            if (pop > 0) drawTextCentered(fmt("%d", side ? g_post.ag : g_post.hg), sx + 16, sy + 5, 20, Color{ 16, 20, 34, 255 }, false);
+        }
+        DrawRectangle(VW / 2 - 60, by + bh + 2, 120, 12, Color{ 200, 30, 40, 255 });
+        drawTextCentered(g_post.ph >= 0 ? "TIRS AU BUT" : g_post.aet ? "APRÈS PROLONGATION" : "FIN DU MATCH", VW / 2, by + bh + 3, 10, WHITE, false);
+        DrawRectangle(8, by + bh, (VW - 16) / 2, 2, hexc(H.home.shirt)); DrawRectangle(VW / 2, by + bh, (VW - 16) / 2, 2, hexc(A.home.shirt));
     }
-    drawTextCentered(fitText(g_post.title, VW - 20, 10), VW / 2, 34, 10, C_DIM);
-    drawKitIcon(H.home, 40, 52, 3); drawKitIcon(A.home, VW - 64, 52, 3);
-    drawTextCentered(fitText(H.name, 200, 10), 170, 54, 10, C_TXT);
-    drawTextCentered(fitText(A.name, 200, 10), VW - 170, 54, 10, C_TXT);
-    drawTextCentered(shortLevel(g_post.home), 170, 66, 10, C_DIM, false);
-    drawTextCentered(shortLevel(g_post.away), VW - 170, 66, 10, C_DIM, false);
-    drawTextCentered(fmt("%d - %d", g_post.hg, g_post.ag), VW / 2, 52, 20, C_HI);
-    int y = 80;
-    if (g_post.aet) { drawTextCentered("après prolongation", VW / 2, y, 10, C_DIM); y += 12; }
+    drawTextCentered(fitText(g_post.title, VW - 20, 10), VW / 2, 30, 10, C_DIM);
+    drawKitIcon(H.home, 16, 49, 3); drawKitIcon(A.home, VW - 40, 49, 3);
+    drawTextShadow(fitText(H.name, VW / 2 - 110, 20), 46, 47, 20, WHITE);
+    { std::string an = fitText(A.name, VW / 2 - 110, 20); drawTextShadow(an, VW - 46 - textWidth(an, 20), 47, 20, WHITE); }
+    drawTextPx(shortLevel(g_post.home) + (win == 0 ? "   VICTOIRE" : win == 1 ? "   DÉFAITE" : "   NUL"), 46, 68, 10, win == 0 ? C_GOOD : win == 1 ? C_BAD : C_DIM);
+    { std::string al = std::string(win == 1 ? "VICTOIRE   " : win == 0 ? "DÉFAITE   " : "NUL   ") + shortLevel(g_post.away); drawTextPx(al, VW - 46 - textWidth(al, 10), 68, 10, win == 1 ? C_GOOD : win == 0 ? C_BAD : C_DIM); }
+    int y = 98;
     if (g_post.ph >= 0) { drawTextCentered(fmt("Tirs au but : %d - %d", g_post.ph, g_post.pa), VW / 2, y, 10, C_HI); y += 12; }
     if (!g_post.extra.empty()) { drawTextCentered(g_post.extra, VW / 2, y, 10, C_GOOD); y += 12; }
     y += 4;
@@ -1962,14 +2043,21 @@ static void screenPost() {
     }
     DrawRectangle(VW / 2, y, 1, 150, Color{ 255, 255, 255, 40 });
     y = drawEventColumns(g_post.ev, y, VH - 100) + 8;
-    if (g_post.poss >= 0) {
-        drawTextCentered("Possession", VW / 2, y, 10, C_DIM);
-        drawTextPx(fmt("%d%%", (int)std::lround(g_post.poss)), 200, y, 10, C_TXT);
-        drawTextPx(fmt("%d%%", 100 - (int)std::lround(g_post.poss)), VW - 230, y, 10, C_TXT);
-        y += 12;
-        drawTextCentered("Tirs", VW / 2, y, 10, C_DIM);
-        drawTextPx(fmt("%d", g_post.shots[0]), 200, y, 10, C_TXT);
-        drawTextPx(fmt("%d", g_post.shots[1]), VW - 230, y, 10, C_TXT);
+    if (g_post.poss >= 0) {   // barres comparatives façon TV
+        int hp = (int)std::lround(g_post.poss);
+        auto bar = [&](const char* lab, int a, int b, int yy) {
+            int bw = 150, cx = VW / 2;
+            float tot = std::max(1, a + b), ga = std::min(1.f, postT * 1.5f);
+            int wa = (int)(bw * a / tot * ga), wb = (int)(bw * b / tot * ga);
+            DrawRectangle(cx - 40 - bw, yy + 2, bw, 7, Color{ 0, 0, 0, 120 }); DrawRectangle(cx + 40, yy + 2, bw, 7, Color{ 0, 0, 0, 120 });
+            DrawRectangle(cx - 40 - wa, yy + 2, wa, 7, hexc(H.home.shirt)); DrawRectangle(cx + 40, yy + 2, wb, 7, hexc(A.home.shirt));
+            DrawRectangle(cx - 40 - wa, yy + 2, wa, 1, Color{ 255, 255, 255, 90 }); DrawRectangle(cx + 40, yy + 2, wb, 1, Color{ 255, 255, 255, 90 });
+            drawTextCentered(lab, cx, yy, 10, C_DIM, false);
+            std::string sa = strcmp(lab, "Possession") == 0 ? fmt("%d%%", a) : fmt("%d", a), sb = strcmp(lab, "Possession") == 0 ? fmt("%d%%", b) : fmt("%d", b);
+            drawTextPx(sa, cx - 46 - bw - textWidth(sa, 10), yy, 10, C_TXT); drawTextPx(sb, cx + 46 + bw, yy, 10, C_TXT);
+        };
+        bar("Possession", hp, 100 - hp, y); y += 12;
+        bar("Tirs", g_post.shots[0], g_post.shots[1], y);
     }
     // gros titre de la presse
     DrawRectangle(20, VH - 36, VW - 40, 18, Color{ 238, 232, 214, 255 });
@@ -4307,6 +4395,10 @@ void appFrame(float dt) {
         IN.ok = IN.start = false;
     }
     if (IsKeyPressed(KEY_F9)) toggleMusic();
+    if (g_screen != SC_MATCH && g_screen != SC_SPLASH) {   // bruitages de l'interface : retour, réglage gauche / droite
+        if (IN.back) audioPlay(SFX_UI_BACK);
+        else if (IN.left || IN.right) audioPlay(SFX_UI_TICK);
+    }
     {   // fil d'Ariane pour debug.log : changement d'écran
         static int markScreen = -1;
         if ((int)g_screen != markScreen) { crashMark("écran %d", (int)g_screen); markScreen = (int)g_screen; }
@@ -4835,7 +4927,7 @@ void appTestStart(const char* mode) {
         g_studioPhase = 0; g_studioT = 0; g_screen = SC_STUDIO;
     } else if (m == "help") g_screen = SC_HELP;
     else if (m == "main") g_screen = SC_MAIN;
-    else if (m == "tv" || m == "tvmatch" || m == "tdcmatch" || m == "amateur" || m == "clubmenu" || m == "staff" || m == "reserves" || m == "referees" || m == "article" || m == "controls2" || m == "training") {
+    else if (m == "tv" || m == "tvmatch" || m == "tdcmatch" || m == "amateur" || m == "clubmenu" || m == "staff" || m == "reserves" || m == "referees" || m == "article" || m == "post" || m == "controls2" || m == "training") {
         const char* nm = m == "amateur" ? "" : "Paris Saint-Germain";
         int user = -1;
         if (m == "amateur") { for (auto& pl : g_basePyramids[0].pools) if (pl.tier == 9 && !pl.clubs.empty()) { user = pl.clubs[0]; break; } }
@@ -4851,6 +4943,7 @@ void appTestStart(const char* mode) {
         if (m == "referees") { g_screen = SC_REFEREES; return; }
         if (m == "controls2") { g_screen = SC_CONTROLS; return; }
         if (m == "article") { simulateUserMatch(); g_screen = SC_ARTICLE; return; }
+        if (m == "post") { simulateUserMatch(); g_screen = SC_POST; return; }
         const MatchRes& mr = S.comps[g_pending.comp].matches[g_pending.match];
         startSetup(mr.home, mr.away, true, g_pending.comp, g_pending.match);
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;

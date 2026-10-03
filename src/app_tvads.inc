@@ -3,7 +3,7 @@
 static int g_adsSpots[3] = { 0, 1, 2 }, g_adsIdx = 0, g_adsCount = 3;
 static float g_adsT = 0;
 static Screen g_adsNext = SC_MATCH;
-static const int NUM_AD_SPOTS = 8;
+static const int NUM_AD_SPOTS = 13;
 static const float AD_LEN = 4.2f;
 static void openTvAds(int phase, Screen next) {
     g_adsNext = next; g_adsIdx = 0; g_adsT = 0; g_adsCount = phase == 0 ? 3 : 2;
@@ -113,6 +113,75 @@ static void drawAdSpot(int spot, float t) {
         for (int k = 0; k < 6; k++) DrawLine(ux, uy, ux - 140 + k * 56, uy, Color{ 20, 100, 80, 255 });
         DrawRectangle(ux - 2, uy, 4, 60, Color{ 80, 60, 40, 255 });
         adSlogan("MUTUELLE DU SUPPORTER", "Qu'il pleuve ou qu'on perde 3-0, on vous couvre.", WHITE, Color{ 200, 240, 220, 255 }, t);
+        break;
+    }
+    case 7: {   // TURBO FIBRE : traits de lumière, barre de téléchargement instantanée, box qui clignote
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ 6, 16, 50, 255 }, Color{ 0, 60, 90, 255 });
+        for (int k = 0; k < 40; k++) {
+            float sp = 300 + (k * 53) % 400; int y = 20 + (k * 37) % 180;
+            int x = (int)std::fmod(k * 97.f + t * sp, (float)VW + 200) - 100;
+            DrawRectangleGradientH(x, y, 90, 2, Color{ 0, 220, 255, 0 }, Color{ 120, 255, 255, 220 });
+        }
+        int bx = VW / 2 - 70, by = 140;
+        DrawRectangle(bx, by, 140, 40, Color{ 230, 235, 245, 255 }); DrawRectangle(bx, by + 34, 140, 6, Color{ 170, 180, 200, 255 });
+        for (int k = 0; k < 5; k++) DrawCircle(bx + 20 + k * 25, by + 18, 4, ((int)(t * 10) + k) % 3 ? Color{ 0, 230, 120, 255 } : Color{ 20, 80, 50, 255 });
+        float pr = std::min(1.f, t * 2.5f);
+        DrawRectangle(VW / 2 - 150, 196, 300, 12, Color{ 0, 0, 0, 140 }); DrawRectangle(VW / 2 - 150, 196, (int)(300 * pr), 12, Color{ 0, 230, 255, 255 });
+        drawTextCentered(pr < 1 ? fmt("Téléchargement du match : %d %%", (int)(pr * 100)) : std::string("Match téléchargé en 0,4 s !"), VW / 2, 182, 10, WHITE, false);
+        adSlogan("TURBO FIBRE", "Le replay avant même la fin de l'action. Ping garanti plus bas que votre défense.", Color{ 0, 230, 255, 255 }, WHITE, t);
+        break;
+    }
+    case 8: {   // VOLT AUTO : voiture électrique sur une route, ville la nuit, éclairs
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ 20, 10, 60, 255 }, Color{ 230, 90, 120, 255 });
+        for (int k = 0; k < 16; k++) { int h = 40 + (k * 41) % 90; DrawRectangle(k * 42, 200 - h, 38, h, Color{ 30, 20, 60, 255 }); for (int w = 0; w < h - 10; w += 10) if ((k + w) % 3) DrawRectangle(k * 42 + 8, 206 - h + w, 6, 4, Color{ 255, 220, 120, 200 }); }
+        DrawRectangle(0, 200, VW, 30, Color{ 40, 40, 50, 255 });
+        for (int k = 0; k < 12; k++) { float lx = std::fmod(k * 60 - t * 300, (float)VW + 60); if (lx < 0) lx += VW + 60; DrawRectangle((int)lx - 30, 214, 30, 3, Color{ 240, 240, 240, 255 }); }
+        int cx = (int)(std::fmin(1.f, t * 0.7f) * (VW / 2 + 60)) - 60, cy = 186;
+        DrawRectangle(cx - 50, cy, 100, 16, Color{ 230, 240, 255, 255 }); DrawRectangle(cx - 30, cy - 12, 56, 14, Color{ 230, 240, 255, 255 });
+        DrawRectangle(cx - 24, cy - 9, 22, 9, Color{ 60, 120, 200, 255 }); DrawRectangle(cx + 2, cy - 9, 20, 9, Color{ 60, 120, 200, 255 });
+        DrawRectangle(cx - 50, cy + 6, 100, 3, Color{ 0, 200, 255, 255 });
+        for (int w = 0; w < 2; w++) { DrawCircle(cx - 30 + w * 60, cy + 16, 8, Color{ 20, 20, 24, 255 }); DrawCircle(cx - 30 + w * 60, cy + 16, 3, Color{ 180, 180, 190, 255 }); }
+        if (((int)(t * 5)) % 2) { DrawTriangle(Vector2{ (float)cx + 60, (float)cy - 30 }, Vector2{ (float)cx + 52, (float)cy - 10 }, Vector2{ (float)cx + 66, (float)cy - 14 }, Color{ 255, 240, 80, 255 }); DrawTriangle(Vector2{ (float)cx + 66, (float)cy - 14 }, Vector2{ (float)cx + 52, (float)cy - 10 }, Vector2{ (float)cx + 58, (float)cy + 6 }, Color{ 255, 240, 80, 255 }); }
+        adSlogan("VOLT AUTO", "Zéro émission, cent pour cent contre-attaque. 0 à 100 km/h plus vite qu'un ailier.", WHITE, Color{ 255, 230, 160, 255 }, t);
+        break;
+    }
+    case 9: {   // PIZZA PENALTY : une pizza tirée au but
+        DrawRectangle(0, 0, VW, VH, Color{ 30, 120, 50, 255 });
+        for (int k = 0; k < 10; k++) if (k % 2) DrawRectangle(k * VW / 10, 0, VW / 10, 220, Color{ 36, 132, 58, 255 });
+        int gx = VW - 220, gy = 50;
+        DrawRectangle(gx, gy, 160, 6, WHITE); DrawRectangle(gx, gy, 6, 120, WHITE); DrawRectangle(gx + 154, gy, 6, 120, WHITE);
+        for (int k = 0; k < 12; k++) DrawLine(gx + 6 + k * 13, gy + 6, gx + 6 + k * 13, gy + 120, Color{ 230, 230, 230, 110 });
+        for (int k = 0; k < 9; k++) DrawLine(gx + 6, gy + 6 + k * 13, gx + 154, gy + 6 + k * 13, Color{ 230, 230, 230, 110 });
+        float u = std::min(1.f, t * 0.8f);
+        int px = 80 + (int)(u * (gx + 80 - 80)), py = 190 - (int)(std::sin(u * 3.14159f) * 90) - (int)(u * 40);
+        DrawCircle(px, py, 26, Color{ 230, 170, 70, 255 }); DrawCircle(px, py, 22, Color{ 220, 60, 30, 255 });
+        for (int k = 0; k < 7; k++) { float a = k * 0.9f + t * 6; DrawCircle(px + (int)(std::cos(a) * 12), py + (int)(std::sin(a) * 12), 4, Color{ 170, 30, 30, 255 }); DrawCircle(px + (int)(std::cos(a + 0.4f) * 6), py + (int)(std::sin(a + 0.4f) * 6), 2, Color{ 250, 240, 200, 255 }); }
+        if (u >= 1.f) drawTextCentered("BUUUT !", gx + 80, 20, 20, Color{ 255, 230, 90, 255 });
+        adSlogan("PIZZA PENALTY", "Livrée en 11 mètres chrono. Jamais arrêtée par le gardien.", Color{ 255, 230, 90, 255 }, WHITE, t);
+        break;
+    }
+    case 10: {  // 8-BIT ENERGY : canette, étoiles en pixels, fond qui pulse
+        float pl = 0.5f + 0.5f * std::sin(t * 6);
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ (unsigned char)(60 + 60 * pl), 10, 120, 255 }, Color{ 10, 0, 40, 255 });
+        for (int k = 0; k < 60; k++) { int x = (k * 131) % VW, y = (k * 71) % 220; if (((int)(t * 8) + k) % 4) DrawRectangle(x, y, 3, 3, Color{ 255, 255, 120, 220 }); }
+        int cx = VW / 2, cy = 120;
+        DrawRectangle(cx - 30, cy - 60, 60, 120, Color{ 30, 30, 36, 255 }); DrawRectangle(cx - 30, cy - 60, 60, 8, Color{ 180, 180, 190, 255 }); DrawRectangle(cx - 30, cy + 52, 60, 8, Color{ 180, 180, 190, 255 });
+        DrawRectangle(cx - 30, cy - 20, 60, 30, Color{ 120, 255, 60, 255 });
+        DrawTriangle(Vector2{ (float)cx + 6, (float)cy - 40 }, Vector2{ (float)cx - 12, (float)cy + 2 }, Vector2{ (float)cx + 2, (float)cy + 2 }, Color{ 255, 230, 40, 255 });
+        DrawTriangle(Vector2{ (float)cx + 2, (float)cy - 6 }, Vector2{ (float)cx - 6, (float)cy + 40 }, Vector2{ (float)cx + 14, (float)cy - 6 }, Color{ 255, 230, 40, 255 });
+        drawTextCentered("8-BIT", cx, cy - 16, 10, BLACK, false);
+        adSlogan("8-BIT ENERGY", "Recharge tes 3 vies avant la seconde période. Saveur cartouche soufflée.", Color{ 120, 255, 60, 255 }, WHITE, t);
+        break;
+    }
+    case 11: {  // BANQUE DU BUT : pièces qui tombent dans un filet
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ 10, 50, 40, 255 }, Color{ 4, 20, 16, 255 });
+        int gx = VW / 2 - 90, gy = 70;
+        DrawRectangle(gx, gy, 180, 5, WHITE); DrawRectangle(gx, gy, 5, 130, WHITE); DrawRectangle(gx + 175, gy, 5, 130, WHITE);
+        for (int k = 0; k < 14; k++) DrawLine(gx + 5 + k * 13, gy + 5, gx + 5 + k * 13, gy + 130, Color{ 220, 220, 220, 80 });
+        int pile = (int)std::min(8.f, t * 3);
+        for (int k = 0; k < pile; k++) DrawRectangle(gx + 30, gy + 118 - k * 6, 120, 6, k % 2 ? Color{ 230, 190, 50, 255 } : Color{ 250, 215, 80, 255 });
+        for (int k = 0; k < 14; k++) { float y = std::fmod(t * 160 + k * 37, 160.f); int x = gx + 20 + (k * 47) % 140; DrawCircle(x, gy - 40 + (int)y, 5, Color{ 250, 210, 70, 255 }); DrawCircleLines(x, gy - 40 + (int)y, 5, Color{ 160, 120, 20, 255 }); }
+        adSlogan("BANQUE DU BUT", "Votre épargne au fond des filets. Taux garanti même en cas de défaite.", Color{ 250, 215, 80, 255 }, WHITE, t);
         break;
     }
     default: {  // auto-promotion de la chaîne : prochain grand rendez-vous

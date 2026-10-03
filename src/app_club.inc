@@ -448,7 +448,9 @@ static void screenStadium() {
                                              "Broke Studio", "Alekmaul Studio", "SGDK", "PVSNESLIB", "OFFGAME", "Double Side Game", "Champagne Beurton et Fils", "Electric Dreams",
                                              "Rétro Arcade", "Cartouche 16 bits", "Mutuelle du Sport", "Optique Vision+", "Pizzeria Da Luigi", "Radio Stade FM",
                                              "Gamopat", "Oniromancie", "Atari", "Sega", "Nintendo", "Sony", "Sigames", "EA", "Amstrad", "Commodore", "Oric", "Capcom",
-                                             "RGC", "AC", "PGR", "GEMTOS", "ADN" };
+                                             "RGC", "AC", "PGR", "GEMTOS", "ADN",
+                                             "Turbo Fibre", "Banque du But", "Volt Auto", "Pizza Penalty", "8-Bit Energy", "Lucarne Assurances", "Crampons+", "Frites du Stade",
+                                             "Mutuelle du Supporter", "Hexa Mobile", "Café Corner", "Sprite Voyages", "Gazon Pro", "Maillot Express", "Pixel Burger", "Arcade Bank" };
                 const int NSPN = (int)(sizeof SPN / sizeof SPN[0]);
                 int cap = S.capacity();
                 int64_t base = std::max<int64_t>(2, (int64_t)(MM.incomeBase / 12 + cap / 200));

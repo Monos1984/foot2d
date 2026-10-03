@@ -606,7 +606,7 @@ void Match::updateReferee(float dt) {
     if (refCardT > 0) refCardT -= dt;
     if (comT > 0) comT -= dt;
     if (comCool > 0) comCool -= dt;
-    for (int i = 0; i < NUM_INPUTS; i++) if (lockSwitch[i] > 0) lockSwitch[i] -= dt;
+    for (int i = 0; i < NUM_INPUTS; i++) { if (lockSwitch[i] > 0) lockSwitch[i] -= dt; if (passRecvT[i] > 0) { passRecvT[i] -= dt; if (passRecvT[i] <= 0) passRecv[i] = -1; } }
     if (ceremony) return;
     V2 target;
     if (refCardT > 0 && refCardFor >= 0) target = pl[refCardFor].pos + V2(1.2f, 0.8f);
@@ -971,7 +971,7 @@ void Match::kickBall(int i, V2 dir, float speed, float vz, bool human, bool deli
     p.state = p.state == PS_NORMAL ? PS_KICK : p.state; p.st = 0;
     p.charging = false; p.charge = 0;
     armOffside(i);
-    playSfx(SFX_KICK);
+    playSfx(speed > 21 ? SFX_SHOT : SFX_KICK);
     // tir cadré ?
     V2 g = goalCenter(p.team);
     if (!shootout&&!kickingPass&&(g - ball.pos).len() < 40 && dir.dot((g - ball.pos).norm()) > 0.70f && speed > 16) { shots[p.team]++;pendingShot=i; ps(i).shot++; lastShooter = i; lastShotAge = 0; lastShotDist = (g - ball.pos).len(); }
@@ -1042,6 +1042,7 @@ void Match::passTo(int i, int target, bool lob) {
         p.runTarget.x = clampf(p.runTarget.x, 2.f, PITCH_W - 2.f); p.runTarget.y = clampf(p.runTarget.y, 2.f, PITCH_L - 2.f);
         q.wallFrom = i; q.wallT = 1.6f;
     }
+    if (p.human >= 0 && !q.gk && S.lockSquad[p.team] < 0) { passRecv[p.human] = target; passRecvT[p.human] = std::min(2.2f, 0.6f + dist / 14.f); }
     kickingPass=true;
     if (!lob) {
         float sp = clampf(std::sqrt(2 * 4.2f * pitchFriction * dist) + 3.0f, 8, 25);
@@ -1094,7 +1095,7 @@ void Match::updateBall(float dt) {
                     b.lastTouch = j; b.lastTeam = q.team;
                     o.cool = 0.45f;
                     checkOffsideTouch(j, false);      // tacle : ballon détourné, pas de jeu maîtrisé
-                    playSfx(SFX_KICK);
+                    playSfx(SFX_TACKLE);
                     break;
                 }
             }
@@ -1304,7 +1305,7 @@ void Match::updateBall(float dt) {
             b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
             p.touchedBallInSlide = true; if (!shootout) ps(best).tackle++;
             if (attackingSlide) armOffside(best);
-            playSfx(SFX_KICK);
+            playSfx(SFX_TACKLE);
             return;
         }
         if (gkCatch) {
@@ -1318,6 +1319,7 @@ void Match::updateBall(float dt) {
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 possTeam = p.team;
                 p.state = PS_GKHOLD; p.st = 0; p.vel = V2();
+                if (rel > 4) playSfx(SFX_CATCH);
                 if (rel > 18 && b.lastTeam != p.team) say("Belle prise de balle de " + playerName(best) + " !", 2.5f);
                 p.pos.y = clampf(p.pos.y, 0.6f, PITCH_L - 0.6f);
                 p.face = (goalCenter(p.team) - p.pos).norm();
@@ -1334,6 +1336,7 @@ void Match::updateBall(float dt) {
                 b.lastTouch = best; b.lastTeam = p.team; b.backpass = false;
                 p.cool = 0.5f;
                 offsideOpponentTouch(best, OT_SAVE);
+                playSfx(SFX_PARRY);
                 playSfx(SFX_CROWD_OOH);        // une parade du gardien ne remet pas en jeu un attaquant hors-jeu
                 if (p.team == 0 && !S.neutral) playSfx(SFX_CLAPS);   // le public applaudit son gardien
             }
@@ -1484,6 +1487,7 @@ void Match::goalScored(int t) {
     statsGoal(t);
     if (shootout) {
         ball.inNet = true;
+        playSfx(SFX_NET);
         return;
     }
     if (S.training) {
@@ -1491,6 +1495,7 @@ void Match::goalScored(int t) {
         if (ok) trainGoals++;
         msg = S.training == 5 ? "BUT..." : "BUT !"; msg2 = ""; msgT = 1.5f;
         ball.inNet = true; state = MS_GOAL; stateT = 0;
+        playSfx(SFX_NET);
         playSfx(ok ? SFX_GOAL : SFX_CROWD_OOH);
         if (ok) for (int i = t * 11; i < t * 11 + 11; i++) if (pl[i].onPitch && !pl[i].gk && (pl[i].pos - ball.pos).len() < 25) { pl[i].state = PS_CELEB; pl[i].st = 0; }
         return;
@@ -1538,6 +1543,7 @@ void Match::goalScored(int t) {
     if (S.goldenGoal && period >= 2) { msg = "BUT EN OR !"; aet = true; say("But en or ! " + team(t).name + " l'emporte en prolongation !", 4.f, true); }
     kickoffTeam = 1 - t;
     offsideReset(OR_VALID_GOAL);
+    playSfx(SFX_NET);
     playSfx(SFX_GOAL);
     // célébration : le buteur court vers le poteau de corner ou vers le public, ses coéquipiers le rejoignent
     celebScorer = (sc >= 0 && pl[sc].team == t) ? sc : -1;
@@ -2362,13 +2368,29 @@ void Match::assignHumans() {
             int cur = ctrlPlayer[c];
             if (cur >= 0 && (pl[cur].team != t || !pl[cur].onPitch)) cur = -1;
             int want = cur;
+            // passe en cours : on prend directement le receveur (tant que le ballon voyage ou qu'il vient de le recevoir)
+            if (passRecvT[c] > 0) {
+                int r = passRecv[c];
+                bool flying = ball.owner < 0 || ball.owner == r;
+                if (r >= 0 && pl[r].onPitch && pl[r].team == t && flying && std::find(taken.begin(), taken.end(), r) == taken.end()) {
+                    if (cur >= 0 && cur != r) { pl[cur].human = -1; pl[cur].charging = false; }
+                    ctrlPlayer[c] = r; pl[r].human = c; taken.push_back(r);
+                    if (ball.owner == r) { passRecvT[c] = 0; passRecv[c] = -1; lockSwitch[c] = 0.3f; }
+                    continue;
+                }
+                if (ball.owner >= 0 && ball.owner != r) { passRecvT[c] = 0; passRecv[c] = -1; }
+            }
             if (wantSwitch[c] && cur >= 0) {
                 wantSwitch[c] = false;
                 V2 bp = ball.pos + ball.vel * 0.35f;
                 int best = -1; float bd = 1e9;
+                V2 sd = switchDir[c];
+                bool dirSw = sd.len2() > 0.25f;
                 for (int j = t * 11 + 1; j < t * 11 + 11; j++) {
                     if (j == cur || !pl[j].onPitch || std::find(taken.begin(), taken.end(), j) != taken.end()) continue;
                     float d = (pl[j].pos - bp).len();
+                    // stick orienté : on privilégie le partenaire situé dans cette direction (par rapport au joueur actuel)
+                    if (dirSw) { V2 rel = pl[j].pos - pl[cur].pos; float l = rel.len(); if (l > 0.5f) d += (1.f - rel.dot(sd.norm()) / l) * 9.f + l * 0.15f; }
                     if (d < bd) { bd = d; best = j; }
                 }
                 if (best >= 0) { pl[cur].human = -1; pl[cur].charging = false; ctrlPlayer[c] = best; pl[best].human = c; taken.push_back(best); lockSwitch[c] = 0.6f; continue; }
@@ -2477,8 +2499,8 @@ void Match::humanControlSnes(int i, const Controls& c, float dt) {
                 p.vel = p.slideDir * 6.f;
                 p.fouledInSlide = false; p.touchedBallInSlide = false;
             } else {
-                // changer de joueur
-                for (int k = 0; k < NUM_INPUTS; k++) if (ctrlPlayer[k] == i) wantSwitch[k] = true;
+                // changer de joueur (vers la direction du stick si elle est tenue)
+                for (int k = 0; k < NUM_INPUTS; k++) if (ctrlPlayer[k] == i) { wantSwitch[k] = true; switchDir[k] = c.dir; }
             }
         }
     }
@@ -2552,6 +2574,9 @@ void Match::humanControl(int i, const Controls& c, float dt) {
                 p.slideDir = c.dir.len2() > 0.01f ? c.dir.norm() : p.face;
                 p.vel = p.slideDir * std::max(spd * 1.25f, 9.f);
                 p.fouledInSlide = false; p.touchedBallInSlide = false;
+            } else if (c.f1p && S.lockSquad[p.team] < 0) {
+                // loin du porteur : le bouton 1 change de joueur (vers la direction du stick si elle est tenue)
+                for (int k = 0; k < NUM_INPUTS; k++) if (ctrlPlayer[k] == i) { wantSwitch[k] = true; switchDir[k] = c.dir; }
             }
         }
     }

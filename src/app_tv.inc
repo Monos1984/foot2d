@@ -111,6 +111,51 @@ static void matchContext(MatchSetup& s, bool career, int comp, int match) {
 
 
 
+
+// ---------------- habillage TV commun (build 22) : logo de la chaîne, bandeau défilant, panneaux en verre
+static void tvLogo(int x, int y, const std::string& ch, float t) {
+    std::string c = ch.empty() ? std::string("FOOT TV") : ch;
+    int w = textWidth(c, 20) + 26, h = 24;
+    DrawRectangle(x + 2, y + 2, w + 8, h, Color{ 0, 0, 0, 90 });
+    DrawRectangleGradientV(x, y, w, h, Color{ 236, 46, 56, 255 }, Color{ 150, 14, 24, 255 });
+    DrawTriangle(Vector2{ (float)x + w, (float)y }, Vector2{ (float)x + w, (float)y + h }, Vector2{ (float)x + w + 8, (float)y }, Color{ 200, 30, 40, 255 });
+    DrawRectangle(x, y, w, 2, Color{ 255, 255, 255, 110 });
+    float sweep = std::fmod(t * 0.6f, 3.f);   // reflet qui traverse le logo
+    if (sweep < 1.f) { int sx = x + (int)(sweep * (w + 20)) - 10; for (int k = 0; k < 8; k++) if (sx + k >= x && sx + k < x + w) DrawRectangle(sx + k, y + 2, 1, h - 2, Color{ 255, 255, 255, (unsigned char)(60 - std::abs(k - 4) * 12) }); }
+    DrawCircle(x + 10, y + h / 2, 4, WHITE); DrawCircle(x + 10, y + h / 2, 2, Color{ 200, 20, 30, 255 });
+    drawTextShadow(c, x + 18, y + 2, 20, WHITE);
+}
+static void tvLive(int rx, int y, float t, const char* label = "EN DIRECT") {
+    int w = textWidth(label, 10) + 18;
+    DrawRectangle(rx - w, y, w, 14, Color{ 0, 0, 0, 150 });
+    float p = 0.5f + 0.5f * std::sin(t * 5.f);
+    DrawCircle(rx - w + 7, y + 7, 3.5f, Color{ 255, (unsigned char)(40 + 60 * p), (unsigned char)(40 + 60 * p), 255 });
+    drawTextPx(label, rx - w + 13, y + 2, 10, WHITE);
+}
+static void tvTicker(int y, const std::string& text, float t, Color accent) {
+    DrawRectangle(0, y, VW, 13, Color{ 6, 10, 28, 235 });
+    DrawRectangle(0, y, VW, 1, accent);
+    int tw = textWidth(text, 10) + 40;
+    int off = (int)(t * 40.f) % std::max(1, tw);
+    for (int x = -off; x < VW; x += tw) drawTextPx(text, x + 70, y + 2, 10, Color{ 230, 235, 250, 255 });
+    DrawRectangleGradientH(0, y + 1, 68, 12, accent, Color{ (unsigned char)(accent.r * 3 / 4), (unsigned char)(accent.g * 3 / 4), (unsigned char)(accent.b * 3 / 4), 255 });
+    drawTextPx("INFOS", 8, y + 2, 10, WHITE);
+}
+static void tvGlass(int x, int y, int w, int h, Color accent) {
+    DrawRectangleGradientV(x, y, w, h, Color{ 18, 26, 60, 215 }, Color{ 6, 10, 28, 225 });
+    DrawRectangle(x, y, w, 1, Color{ 255, 255, 255, 60 });
+    DrawRectangle(x, y, 2, h, accent);
+    DrawRectangleLines(x, y, w, h, Color{ accent.r, accent.g, accent.b, 90 });
+}
+static void tvBackdrop(float t) {
+    DrawRectangleGradientV(0, 0, VW, VH, Color{ 10, 14, 44, 255 }, Color{ 2, 4, 16, 255 });
+    for (int i = 0; i < 12; i++) { float a = t * 0.3f + i * 0.52f; DrawLine(VW / 2, -40, VW / 2 + (int)(std::cos(a) * 700), VH, Color{ 60, 90, 200, 26 }); }
+    for (int k = 0; k < 40; k++) {   // particules lumineuses
+        float u = std::fmod(k * 0.137f + t * 0.03f * (1 + k % 3), 1.f);
+        DrawRectangle((k * 157) % VW, VH - (int)(u * VH), 2, 2, Color{ 140, 170, 255, (unsigned char)(50 * (1 - u)) });
+    }
+}
+
 // ---------------- présentation télévisée
 // cabine des commentateurs : vue sur le stade, les deux voix de la chaîne présentent l'affiche
 static void drawCommentaryBooth(float t) {
@@ -146,9 +191,8 @@ static void drawCommentaryBooth(float t) {
         drawTextCentered(fitText(k ? g_tv.com2 : g_tv.com1, 176, 10), cx, 266, 10, WHITE, false);
         drawTextCentered(k ? "Consultant" : "Commentaires", cx, 284, 10, C_DIM, false);
     }
-    DrawRectangle(0, 0, VW, 24, Color{ 180, 20, 30, 240 });
-    drawTextShadow(g_tv.channel, 10, 3, 20, WHITE);
-    drawTextPx("EN DIRECT DE LA CABINE", VW - 160, 8, 10, ((int)(t * 2)) % 2 ? WHITE : Color{ 255, 200, 200, 255 });
+    tvLogo(8, 2, g_tv.channel, t);
+    tvLive(VW - 8, 6, t, "EN DIRECT DE LA CABINE");
     // phrase d'ouverture
     std::string l1 = "Bonsoir à tous et bienvenue " + std::string(g_setup.stadium.empty() ? "au stade" : "au " + g_setup.stadium) + " pour " + H.name + " - " + A.name + " !";
     std::string l2 = (g_setup.title.empty() ? std::string("Une belle affiche") : g_setup.title) + fmt(" : %d spectateurs attendus, ambiance %s.", g_setup.attendance, g_setup.supporterAtmosphere >= 70 ? "électrique" : g_setup.supporterAtmosphere >= 45 ? "chaleureuse" : "calme");
@@ -157,6 +201,8 @@ static void drawCommentaryBooth(float t) {
     int ly = 308; for (auto& l : wrapText(line, VW - 60)) { if (ly > 330) break; drawTextPx(l, 30, ly, 10, WHITE); ly += 12; }
 }
 
+static std::string formOf(int team);
+static std::string starOf(int team);
 static void screenTvIntro(float dt) {
     static float t = 0; t += dt;
     static int phase = 0; static float pt = 0;
@@ -169,41 +215,111 @@ static void screenTvIntro(float dt) {
         if (IN.back) { phase = 0; pt = 0; g_screen = SC_SETUP; }
         return;
     }
-    // plateau TV
-    for (int y = 0; y < VH; y += 4) { unsigned char k = (unsigned char)(y * 40 / VH); DrawRectangle(0, y, VW, 4, Color{ (unsigned char)(8 + k / 3), (unsigned char)(10 + k / 3), (unsigned char)(30 + k), 255 }); }
-    for (int i = 0; i < 12; i++) { float a = t * 0.3f + i * 0.52f; DrawLine(VW / 2, -40, VW / 2 + (int)(std::cos(a) * 700), VH, Color{ 60, 90, 200, 30 }); }
-    DrawRectangle(0, 18, VW, 26, Color{ 180, 20, 30, 230 });
-    drawTextShadow(g_tv.channel, 14, 22, 20, WHITE);
-    drawTextPx("EN DIRECT", VW - 90, 26, 10, ((int)(t * 2)) % 2 ? WHITE : Color{ 255, 200, 200, 255 });
-    drawTextCentered(fitText(g_setup.title, VW - 40, 10), VW / 2, 52, 10, C_HI);
-    drawTextCentered("En direct du " + g_setup.stadium + "  -  " + (g_setup.kickoffDate.empty() ? "coup d'envoi " + g_setup.kickoffTime : g_setup.kickoffDate) + "  -  " + METEO_NAMES[g_setup.meteo], VW / 2, 66, 10, C_TXT);
-    // équipes
-    drawKitIcon(H.home, 40, 86, 4); drawKitIcon(A.home, VW - 72, 86, 4);
-    drawTextCentered(fitText(H.name, 220, 20), 190, 90, 20, WHITE);
-    drawTextCentered(fitText(A.name, 220, 20), VW - 190, 90, 20, WHITE);
-    drawTextCentered(shortLevel(g_setup.home), 190, 112, 10, C_DIM, false);
-    drawTextCentered(shortLevel(g_setup.away), VW - 190, 112, 10, C_DIM, false);
-    drawTextCentered("VS", VW / 2, 94, 20, C_HI);
-    if (g_setup.hasFirstLeg) drawTextCentered(fmt("Match aller : %d - %d", g_setup.aggAway, g_setup.aggHome), VW / 2, 116, 10, C_HI, false);
-    // compositions
+    // plateau TV : présentation de l'affiche et des compositions
+    pt += dt;
+    tvBackdrop(t);
+    tvLogo(10, 8, g_tv.channel, t);
+    tvLive(VW - 10, 12, t);
+    drawTextCentered(fitText(g_setup.title, VW - 300, 10), VW / 2, 14, 10, C_HI, false);
+    MatchSetup tmpS = g_setup; Kit kits[2]; matchKits(tmpS, kits);
+    // bannières des équipes : glissent depuis les côtés
+    float in = std::min(1.f, pt * 2.5f); float ease = 1 - (1 - in) * (1 - in) * (1 - in);
+    for (int side = 0; side < 2; side++) {
+        const Team& T = side ? A : H;
+        Color c1 = hexc(kits[side].shirt), c2 = hexc(kits[side].shirt2);
+        int bw = 270, by = 40, bh = 38;
+        int bx = side ? VW - 14 - bw + (int)((1 - ease) * 300) : 14 - (int)((1 - ease) * 300);
+        DrawRectangle(bx + 3, by + 3, bw, bh, Color{ 0, 0, 0, 100 });
+        if (side == 0) DrawRectangleGradientH(bx, by, bw, bh, Color{ c1.r, c1.g, c1.b, 235 }, Color{ 10, 14, 40, 235 });
+        else DrawRectangleGradientH(bx, by, bw, bh, Color{ 10, 14, 40, 235 }, Color{ c1.r, c1.g, c1.b, 235 });
+        DrawRectangle(bx, by, bw, 2, Color{ 255, 255, 255, 80 });
+        DrawRectangle(side ? bx + bw - 4 : bx, by, 4, bh, c2);
+        int kx = side ? bx + bw - 44 : bx + 12;
+        drawKitIcon(T.home, kx, by + 3, 4);
+        int nx = side ? bx + bw - 56 : bx + 56;
+        std::string nm = fitText(T.name, 180, 20);
+        drawTextShadow(nm, side ? nx - textWidth(nm, 20) : nx, by + 3, 20, WHITE);
+        std::string lv = shortLevel(side ? g_setup.away : g_setup.home);
+        std::string fm = formOf(side ? g_setup.away : g_setup.home);
+        std::string sub = lv + (fm.empty() ? std::string() : "   forme " + fm) + fmt("   note %d", (int)T.rating);
+        drawTextPx(sub, side ? nx - textWidth(sub, 10) : nx, by + 25, 10, Color{ 220, 228, 255, 255 });
+    }
+    {   // disque VS
+        float pop = std::min(1.f, std::max(0.f, (pt - 0.3f) * 4.f));
+        float r = 20 * pop + (pop >= 1 ? std::sin(t * 4) * 1.f : 0);
+        DrawCircleGradient(VW / 2, 59, r + 14, Color{ 255, 210, 80, 60 }, Color{ 255, 210, 80, 0 });
+        DrawCircle(VW / 2, 59, r, Color{ 16, 20, 40, 255 }); DrawCircleLines(VW / 2, 59, r, C_HI); DrawCircleLines(VW / 2, 59, r - 2, Color{ 255, 210, 80, 120 });
+        if (pop >= 1) drawTextCentered("VS", VW / 2, 50, 20, C_HI, false);
+    }
+    std::string info = "En direct du " + g_setup.stadium + "  -  " + (g_setup.kickoffDate.empty() ? "coup d'envoi " + g_setup.kickoffTime : g_setup.kickoffDate) + "  -  " + METEO_NAMES[g_setup.meteo];
+    if (g_setup.hasFirstLeg) info += fmt("  -  aller : %d - %d", g_setup.aggAway, g_setup.aggHome);
+    drawTextCentered(fitText(info, VW - 40, 10), VW / 2, 84, 10, C_TXT, false);
+    // compositions : terrain tactique + liste qui apparaît joueur par joueur
     for (int side = 0; side < 2; side++) {
         int team = side ? g_setup.away : g_setup.home;
         g_world.ensureSquad(team);
         const Team& T = g_world.teams[team];
         int f = g_setup.formation[side] >= 0 ? g_setup.formation[side] : T.formation;
         auto lu = g_world.pickLineup(team, f);
-        int x = side ? VW / 2 + 20 : 30, y = 132;
-        DrawRectangle(x - 6, y - 4, VW / 2 - 44, 12 * 11 + 18, Color{ 0, 0, 0, 120 });
-        drawTextPx(std::string("Composition (") + FORMATIONS[f].name + ")", x, y, 10, C_HI); y += 12;
+        Color kc = hexc(kits[side].shirt), kc2 = hexc(kits[side].shirt2);
+        unsigned sh = kits[side].shirt; int lum = (int)((sh >> 16) & 255) * 3 + (int)((sh >> 8) & 255) * 6 + (int)(sh & 255);
+        Color numC = lum > 1400 ? Color{ 10, 10, 20, 255 } : WHITE;
+        int px = side ? VW - 20 - 106 : 20, py = 100, pw = 106, ph = 160;
+        int lx = side ? VW / 2 + 8 : 136, lw = VW / 2 - 8 - 136 + (side ? 0 : 0) - 8;
+        tvGlass(side ? VW / 2 + 2 : 12, 96, VW / 2 - 14, 170, kc);
+        // terrain
+        DrawRectangle(px, py, pw, ph, Color{ 40, 128, 54, 255 });
+        for (int k = 0; k < 8; k++) if (k % 2) DrawRectangle(px, py + k * ph / 8, pw, ph / 8, Color{ 46, 138, 60, 255 });
+        DrawRectangleLines(px + 3, py + 3, pw - 6, ph - 6, Color{ 230, 240, 230, 170 });
+        DrawRectangleLines(px + pw / 2 - 26, py + ph - 3 - 24, 52, 24, Color{ 230, 240, 230, 170 });
+        DrawLine(px + 3, py + 3, px + pw - 3, py + 3, Color{ 230, 240, 230, 170 });
+        DrawCircleLines(px + pw / 2, py + 3, 14, Color{ 230, 240, 230, 120 });
+        auto slot = [&](int k, int& sx, int& sy) {
+            if (k == 0) { sx = px + pw / 2; sy = py + ph - 14; return; }
+            float fx = FORMATIONS[f].x[k - 1], fy = FORMATIONS[f].y[k - 1];
+            sx = px + 8 + (int)(fx * (pw - 16)); sy = py + ph - 14 - (int)(fy / 0.72f * (ph - 34));
+        };
         for (int k = 0; k < 11 && k < (int)lu.size(); k++) {
+            float ap = std::min(1.f, std::max(0.f, (pt - 0.5f - k * 0.09f) * 5.f));
+            if (ap <= 0) continue;
             const Player& p = T.squad[lu[k]];
-            drawTextPx(fmt("%2d  %s  ", p.num, posName(p.pos)) + fitText(p.name, 180, 10), x, y, 10, C_TXT);
-            y += 11;
+            int sx, sy; slot(k, sx, sy);
+            sy -= (int)((1 - ap) * 10);
+            DrawCircle(sx + 1, sy + 1, 6, Color{ 0, 0, 0, 90 });
+            DrawCircle(sx, sy, 6, k == 0 ? Color{ 240, 200, 40, 255 } : kc);
+            DrawCircleLines(sx, sy, 6, k == 0 ? Color{ 120, 90, 10, 255 } : kc2);
+            std::string n = fmt("%d", p.num);
+            drawTextPx(n, sx - textWidth(n, 5) / 2, sy - 2, 5, k == 0 ? Color{ 10, 10, 20, 255 } : numC);
+        }
+        // liste
+        int x = side ? VW / 2 + 12 : 136, y = 102;
+        if (side) x = VW / 2 + 12;
+        (void)lx; (void)lw;
+        int listW = side ? (VW - 20 - 106) - x - 8 : VW / 2 - 6 - x;
+        drawTextPx(fitText(std::string("Composition  ") + FORMATIONS[f].name, listW, 10), x, y, 10, C_HI); y += 13;
+        for (int k = 0; k < 11 && k < (int)lu.size(); k++) {
+            float ap = std::min(1.f, std::max(0.f, (pt - 0.5f - k * 0.09f) * 5.f));
+            if (ap <= 0) break;
+            const Player& p = T.squad[lu[k]];
+            int xo = (int)((1 - ap) * (side ? 30 : -30));
+            if (k % 2 == 0) DrawRectangle(x - 2, y - 1, listW, 12, Color{ 255, 255, 255, 12 });
+            DrawRectangle(x - 2 + xo, y - 1, 2, 12, kc);
+            drawTextPx(fmt("%2d", p.num), x + 3 + xo, y, 10, C_HI);
+            drawTextPx(posName(p.pos), x + 21 + xo, y, 10, C_DIM);
+            drawTextPx(fitText(p.name, listW - 40, 10), x + 38 + xo, y, 10, C_TXT);
+            y += 13;
         }
     }
     const char* refName = g_setup.referee >= 0 && g_setup.referee < NUM_REFEREES ? REFEREES[g_setup.referee].name : "";
-    drawTextPx(std::string("Arbitre : ") + refName, 30, VH - 32, 10, C_DIM);
-    drawTextPx("Commentaires : " + g_tv.com1 + " et " + g_tv.com2, VW / 2 + 20, VH - 32, 10, C_DIM);
+    tvGlass(12, 272, VW - 24, 20, C_HI);
+    drawTextPx(std::string("Arbitre : ") + refName, 20, 277, 10, C_DIM);
+    std::string comm = "Commentaires : " + g_tv.com1 + " et " + g_tv.com2;
+    drawTextPx(comm, VW - 20 - textWidth(comm, 10), 277, 10, C_DIM);
+    {
+        std::string tick = g_setup.title + "   |   " + H.name + " - " + A.name + "   |   " + g_setup.stadium + fmt("   |   %d spectateurs attendus", g_setup.attendance)
+                         + "   |   Joueurs à suivre : " + starOf(g_setup.home) + " et " + starOf(g_setup.away) + "   |   Avec PIXEL COLA, TURBO FIBRE et VOLT AUTO, partenaires de la retransmission";
+        tvTicker(VH - 30, tick, t, Color{ 200, 30, 40, 255 });
+    }
     drawFooter("OK : coup d'envoi   Retour : avant-match");
     if (IN.ok || IN.start || IN.click) {
         t = 0; phase = 0; pt = 0;
@@ -330,6 +446,21 @@ static void screenStudio(float dt) {
     // caméra au premier plan
     DrawRectangle(VW - 64, 176, 30, 16, Color{ 25, 25, 30, 255 }); DrawRectangle(VW - 72, 180, 8, 8, Color{ 60, 60, 70, 255 });
     DrawRectangle(VW - 50, 192, 3, 20, Color{ 40, 40, 45, 255 }); DrawRectangle(VW - 36, 178, 2, 2, ((int)(t * 2)) % 2 ? RED : Color{ 90, 20, 20, 255 });
+    {   // synthé (nom de l'intervenant) qui glisse à chaque prise de parole
+        static int lastSp = -1; static float spT = 0;
+        if (speaker != lastSp) { lastSp = speaker; spT = 0; }
+        spT += dt;
+        static const char* ROLE[3] = { "Commentateur", "Présentatrice", "Consultant" };
+        float e = std::min(1.f, spT * 5.f); e = 1 - (1 - e) * (1 - e);
+        int lw = 190, lx = 12 - (int)((1 - e) * 220), ly = 186;
+        ly = 180;
+        DrawRectangle(lx + 2, ly + 2, lw, 26, Color{ 0, 0, 0, 110 });
+        DrawRectangleGradientH(lx, ly, lw, 14, Color{ 245, 246, 252, 245 }, Color{ 205, 212, 230, 245 });
+        DrawRectangle(lx, ly + 14, lw - 50, 12, Color{ 200, 30, 40, 240 });
+        DrawRectangle(lx, ly, 3, 26, C_HI);
+        drawTextPx(fitText(NM[speaker], lw - 10, 10), lx + 7, ly + 2, 10, Color{ 16, 20, 34, 255 });
+        drawTextPx(ROLE[speaker], lx + 7, ly + 15, 10, WHITE);
+    }
     // bandeau supérieur
     DrawRectangle(0, 0, VW, 14, Color{ 10, 20, 70, 240 });
     drawTextPx(g_tv.channel + "  -  " + (g_studioPhase == 0 ? "AVANT-MATCH" : g_studioPhase == 1 ? "LA MI-TEMPS" : "APRÈS-MATCH"), 8, 2, 10, WHITE);

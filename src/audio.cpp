@@ -513,40 +513,110 @@ void audioInit() {
     if (!IsAudioDeviceReady()) return;
     srand(42);
     const float PI2 = 6.2831853f;
-    // frappe
+    // bruitages synthétisés (build 22) : filtres simples sur bruit blanc et oscillateurs à hauteur glissante
+    struct Lp { float y = 0, a; Lp(float fc) { a = 1 - std::exp(-6.2831853f * fc / SR); } float f(float x) { y += a * (x - y); return y; } };
+    struct Bp { Lp l1, l2; Bp(float lo, float hi) : l1(hi), l2(lo) {} float f(float x) { float h = l1.f(x); return h - l2.f(h); } };
+    // impact sur le ballon : coup sourd (hauteur qui chute) + claquement du cuir
+    auto kickSound = [&](float len, float f0, float f1, float drop, float thump, float crack, float crackHi, float decay) {
+        int n = (int)(SR * len); std::vector<float> v(n); float ph = 0; Bp bp(900, crackHi);
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / SR; float f = f1 + (f0 - f1) * std::exp(-t * drop); ph += PI2 * f / SR;
+            float body = std::sin(ph) * std::exp(-t * decay) * thump;
+            float cr = bp.f(frand()) * std::exp(-t * 140) * crack;
+            v[i] = body + cr;
+        }
+        normalize(v, 0.9f, 0.f); return v;
+    };
+    g_sfx[SFX_KICK] = makeSound(kickSound(0.10f, 170, 70, 55, 0.9f, 0.9f, 3500, 38));
+    g_sfx[SFX_SHOT] = makeSound(kickSound(0.18f, 260, 55, 38, 1.0f, 1.8f, 6000, 22));
+    g_sfx[SFX_BOUNCE] = makeSound(kickSound(0.08f, 130, 60, 70, 0.8f, 0.25f, 2000, 55));
+    // tacle : frottement sur la pelouse + choc
     {
-        int n = SR * 0.09f; std::vector<float> v(n);
-        for (int i = 0; i < n; i++) { float t = (float)i / SR; float e = std::exp(-t * 45); v[i] = (std::sin(PI2 * 110 * t) * 0.9f + frand() * 0.35f) * e; }
-        g_sfx[SFX_KICK] = makeSound(v);
+        int n = (int)(SR * 0.22f); std::vector<float> v(n); Bp bp(400, 2500); float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / SR; ph += PI2 * (90 + 60 * std::exp(-t * 40)) / SR;
+            float scuff = bp.f(frand()) * std::min(1.f, t * 60) * std::exp(-t * 14) * (0.7f + 0.3f * std::sin(t * 190));
+            v[i] = scuff * 1.2f + std::sin(ph) * std::exp(-t * 35) * 0.8f;
+        }
+        normalize(v, 0.8f, 0.f); g_sfx[SFX_TACKLE] = makeSound(v);
     }
-    // sifflets
+    // gardien : prise de balle (claquement des gants) et parade (choc sec)
     for (int k = 0; k < 2; k++) {
-        float len = k ? 1.1f : 0.35f;
-        int n = SR * len; std::vector<float> v(n);
+        int n = (int)(SR * (k ? 0.16f : 0.12f)); std::vector<float> v(n); Bp bp(k ? 600 : 1200, k ? 3000 : 5000); float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / SR; ph += PI2 * (k ? 140 : 110) / SR;
+            v[i] = bp.f(frand()) * std::exp(-t * (k ? 60 : 90)) * 1.4f + std::sin(ph) * std::exp(-t * 45) * (k ? 0.9f : 0.5f);
+        }
+        normalize(v, k ? 0.85f : 0.7f, 0.f); g_sfx[k ? SFX_PARRY : SFX_CATCH] = makeSound(v);
+    }
+    // filet : froissement qui gonfle puis retombe
+    {
+        int n = (int)(SR * 0.6f); std::vector<float> v(n); Bp bp(700, 5500); Lp rust(18);
         for (int i = 0; i < n; i++) {
             float t = (float)i / SR;
-            float trem = 0.65f + 0.35f * std::sin(PI2 * 32 * t);
-            float att = std::min(1.f, t * 60) * std::min(1.f, (len - t) * 25);
-            v[i] = (std::sin(PI2 * 2950 * t) * 0.5f + std::sin(PI2 * 3010 * t) * 0.3f + frand() * 0.05f) * trem * att * 0.55f;
+            float env = std::min(1.f, t * 35) * std::exp(-t * 6.5f);
+            float r = 0.55f + 0.45f * std::fabs(rust.f(frand()) * 6);
+            v[i] = bp.f(frand()) * env * r;
         }
-        g_sfx[k ? SFX_WHISTLE_LONG : SFX_WHISTLE] = makeSound(v);
-        if (!k) g_sfx[SFX_CARD] = makeSound(v);
+        normalize(v, 0.75f, 0.f); g_sfx[SFX_NET] = makeSound(v);
     }
-    // coup de sifflet final : deux coups brefs puis un long
+    // poteau : son métallique (partiels inharmoniques) + impact
     {
-        const float segs[5][2] = { { 0.f, 0.32f }, { 0.47f, 0.79f }, { 0.95f, 2.15f }, { 0, 0 }, { 0, 0 } };
-        int n = SR * 2.3f; std::vector<float> v(n, 0.f);
-        for (int s2 = 0; s2 < 3; s2++) {
-            float a = segs[s2][0], b = segs[s2][1], len = b - a;
-            for (int i = (int)(a * SR); i < (int)(b * SR) && i < n; i++) {
-                float t = (float)i / SR - a;
-                float trem = 0.65f + 0.35f * std::sin(PI2 * 32 * t);
-                float att = std::min(1.f, t * 60) * std::min(1.f, (len - t) * 25);
-                v[i] = (std::sin(PI2 * 2950 * t) * 0.5f + std::sin(PI2 * 3010 * t) * 0.3f + frand() * 0.05f) * trem * att * 0.6f;
-            }
+        int n = (int)(SR * 1.1f); std::vector<float> v(n);
+        const float fr[5] = { 523, 1187, 1951, 2733, 3610 }, am[5] = { 1.f, 0.7f, 0.45f, 0.3f, 0.18f }, dc[5] = { 3.2f, 4.5f, 6.f, 8.f, 11.f };
+        Bp bp(1500, 7000);
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / SR; float x = 0;
+            for (int q = 0; q < 5; q++) x += std::sin(PI2 * fr[q] * t * (1 + 0.002f * std::sin(t * 30))) * am[q] * std::exp(-t * dc[q]);
+            v[i] = x * 0.4f + bp.f(frand()) * std::exp(-t * 120) * 1.2f + std::sin(PI2 * 95 * t) * std::exp(-t * 40) * 0.6f;
         }
-        g_sfx[SFX_WHISTLE_FINAL] = makeSound(v);
+        normalize(v, 0.8f, 0.f); g_sfx[SFX_POST] = makeSound(v);
     }
+    // sifflet à bille de l'arbitre : trille (modulation de fréquence par la bille), souffle, harmonique
+    auto whistleSeg = [&](std::vector<float>& v, float a, float len, float amp, unsigned seed) {
+        srand(seed); Bp breath(2000, 6000); float ph = 0, ph2 = 0;
+        float trill = 26 + 6 * std::fabs(frand()), base = 2900 + 120 * frand();
+        for (int i = (int)(a * SR); i < (int)((a + len) * SR) && i < (int)v.size(); i++) {
+            float t = (float)i / SR - a;
+            float att = std::min(1.f, t * 45) * std::min(1.f, (len - t) * 18);
+            float bend = 1 - 0.035f * std::exp(-t * 18);                              // la note monte quand l'arbitre souffle
+            float fm = std::sin(PI2 * trill * t) * 110 + std::sin(PI2 * trill * 2.03f * t) * 30;
+            float f = base * bend + fm;
+            ph += PI2 * f / SR; ph2 += PI2 * f * 2 / SR;
+            float flut = 0.72f + 0.28f * std::sin(PI2 * trill * t + 1.3f);
+            v[i] += (std::sin(ph) * 0.62f + std::sin(ph2) * 0.12f + breath.f(frand()) * 0.22f) * flut * att * amp;
+        }
+    };
+    {
+        std::vector<float> v((size_t)(SR * 0.38f), 0.f); whistleSeg(v, 0, 0.36f, 0.6f, 7); g_sfx[SFX_WHISTLE] = makeSound(v);
+        std::vector<float> c((size_t)(SR * 0.62f), 0.f); whistleSeg(c, 0, 0.18f, 0.6f, 8); whistleSeg(c, 0.24f, 0.36f, 0.62f, 9); g_sfx[SFX_CARD] = makeSound(c);
+        std::vector<float> l((size_t)(SR * 1.15f), 0.f); whistleSeg(l, 0, 1.12f, 0.6f, 10); g_sfx[SFX_WHISTLE_LONG] = makeSound(l);
+        // coup de sifflet final : deux coups brefs puis un long
+        std::vector<float> f((size_t)(SR * 2.3f), 0.f);
+        whistleSeg(f, 0.f, 0.32f, 0.62f, 11); whistleSeg(f, 0.47f, 0.32f, 0.62f, 12); whistleSeg(f, 0.95f, 1.2f, 0.66f, 13);
+        g_sfx[SFX_WHISTLE_FINAL] = makeSound(f);
+    }
+    // interface : déplacement dans un menu, validation, retour, réglage
+    auto blip = [&](std::initializer_list<std::pair<float, float>> notes, float noteLen, float amp, float duty) {
+        int n = (int)(SR * noteLen * notes.size() + SR * 0.03f); std::vector<float> v(n, 0.f); int k = 0; Lp lp(5000);
+        for (auto nt : notes) {
+            float ph = 0;
+            for (int i = 0; i < (int)(SR * (noteLen + 0.03f)); i++) {
+                int j = (int)(k * noteLen * SR) + i; if (j >= n) break;
+                float t = (float)i / SR; float f = nt.first + (nt.second - nt.first) * std::min(1.f, t / noteLen);
+                ph += f / SR; ph -= std::floor(ph);
+                float sq = ph < duty ? 1.f : -1.f, tri = 4 * std::fabs(ph - 0.5f) - 1;
+                v[j] += (sq * 0.35f + tri * 0.65f) * std::min(1.f, t * 400) * std::exp(-t * (4.5f / noteLen)) * amp;
+            }
+            k++;
+        }
+        for (auto& x : v) x = lp.f(x);
+        return v;
+    };
+    g_sfx[SFX_UI_MOVE] = makeSound(blip({ { 1180, 1320 } }, 0.045f, 0.32f, 0.25f));
+    g_sfx[SFX_UI_TICK] = makeSound(blip({ { 2000, 1800 } }, 0.02f, 0.25f, 0.5f));
+    g_sfx[SFX_UI_OK] = makeSound(blip({ { 784, 784 }, { 1175, 1175 }, { 1568, 1568 } }, 0.05f, 0.4f, 0.25f));
+    g_sfx[SFX_UI_BACK] = makeSound(blip({ { 880, 760 }, { 587, 520 } }, 0.06f, 0.36f, 0.25f));
     // coup de poing (bagarre)
     {
         int n = SR * 0.12f; std::vector<float> v(n);
@@ -559,16 +629,6 @@ void audioInit() {
     // but : clameur
     g_sfx[SFX_GOAL] = makeSound(noise(3.5f, 0.25f, 2.2f, [](float t) { return std::min(1.f, t * 8) * (1 - t) * (1 - t) + 0.2f * (1 - t); }));
     g_sfx[SFX_CROWD_OOH] = makeSound(noise(1.2f, 0.12f, 2.5f, [](float t) { return std::sin(t * 3.14159f); }));
-    {
-        int n = SR * 0.05f; std::vector<float> v(n);
-        for (int i = 0; i < n; i++) { float t = (float)i / SR; v[i] = std::sin(PI2 * 80 * t) * std::exp(-t * 60) * 0.8f; }
-        g_sfx[SFX_BOUNCE] = makeSound(v);
-    }
-    {
-        int n = SR * 0.4f; std::vector<float> v(n);
-        for (int i = 0; i < n; i++) { float t = (float)i / SR; v[i] = (std::sin(PI2 * 880 * t) + 0.6f * std::sin(PI2 * 1370 * t)) * std::exp(-t * 9) * 0.5f; }
-        g_sfx[SFX_POST] = makeSound(v);
-    }
     g_crowd = makeSound(noise(4.0f, 0.08f, 1.6f, [](float t) { return 0.75f + 0.25f * std::sin(t * 6.2831f * 2); }));
     for (int kind = 0; kind < NUM_CHANTS; kind++) g_fanVoice[kind] = makeSound(renderChant(kind));
     // la ola : clameur qui monte et redescend en faisant le tour du stade

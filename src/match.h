@@ -307,6 +307,8 @@ struct Match {
     int touchSeen = -1, assistCand = -1;   // passeur décisif potentiel
     bool wantSwitch[NUM_INPUTS] = {};
     float lockSwitch[NUM_INPUTS] = {};
+    int passRecv[NUM_INPUTS] = { -1, -1, -1, -1, -1, -1 }; float passRecvT[NUM_INPUTS] = {};   // passe d'un humain : le contrôle passe au receveur
+    V2 switchDir[NUM_INPUTS];                                                                    // direction du stick au moment du changement de joueur
     // arbitre
     V2 refPos, refVel, refFace{ 0, 1 };
     float refCardT = 0; int refCardType = 0, refCardFor = -1;
@@ -468,7 +470,8 @@ struct Match {
     int shootBtn(int human, bool pressedOnly) const;
 };
 
-enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER, SFX_FANS_WHISTLE, SFX_CLAPS, SFX_OLA, NUM_SFX };
+enum Sfx { SFX_KICK = 0, SFX_WHISTLE, SFX_WHISTLE_LONG, SFX_GOAL, SFX_BOUNCE, SFX_POST, SFX_CROWD_OOH, SFX_CARD, SFX_WHISTLE_FINAL, SFX_PUNCH, SFX_BOO, SFX_THUNDER, SFX_FANS_WHISTLE, SFX_CLAPS, SFX_OLA,
+           SFX_SHOT, SFX_NET, SFX_TACKLE, SFX_CATCH, SFX_PARRY, SFX_UI_MOVE, SFX_UI_OK, SFX_UI_BACK, SFX_UI_TICK, NUM_SFX };
 extern const char* METEO_NAMES[6];
 int meteoForMonth(int month, int climate, uint64_t seed);   // month 0 août ... 10 juin ; climate 0 tempéré, 1 chaud, 2 hémisphère sud, 3 nordique
 void meteoApply(MatchSetup& s, bool heated, int turf);       // terrain et affichage selon la météo
