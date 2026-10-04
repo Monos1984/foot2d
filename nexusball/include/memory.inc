@@ -287,3 +287,4 @@ pn_l:       .res 2
 pn_m:       .res 2
 pn_rt:      .res 2
 hdma_sh:    .res 2          ; valeur de HDMAEN ecrite au NMI
+fade_v:     .res 2

@@ -10,6 +10,7 @@
   sur la ligne choisie, texte avec ombre portée.
 - Écran titre : logo opaque (HDMA sur CGADSUB), menu dans un panneau translucide sur le stade.
 - En match, l'écran TEAM SETUP de la pause s'affiche en panneau translucide sur le terrain.
+- Fondus enchaînés (luminosité) à chaque changement d'écran ; bandeau de titre dans les menus.
 - Registres de calques (TM, TS, CGWSEL, CGADSUB, HDMAEN) écrits au NMI depuis des ombres ;
   tilemap BG2 copiée en WRAM $7E:2000.
 

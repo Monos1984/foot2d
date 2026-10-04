@@ -26,6 +26,16 @@ ui_fill:
     lda #28
     sta pn_h
     jsr bg2_panel
+    ; bandeau de titre (ligne 1)
+    ldx #(1 * 32 + 1) * 2
+    ldy #30
+@hb:
+    lda #P_BAR
+    sta f:BG2_SHADOW,x
+    inx
+    inx
+    dey
+    bne @hb
     lda #1
     sta bar_x0
     lda #30

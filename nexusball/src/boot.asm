@@ -220,6 +220,20 @@ wait_frame:
 ;  screen_off / screen_on (A16/I16)
 ; -----------------------------------------------------------------------------
 screen_off:
+    ; fondu vers le noir puis ecran force eteint
+    .a16
+    lda #12
+@f: sta fade_v
+    sep #$20
+    .a8
+    sta inidisp
+    rep #$20
+    .a16
+    jsr wait_frame
+    lda fade_v
+    sec
+    sbc #3
+    bpl @f
     sep #$20
     .a8
     lda #$8F
@@ -236,13 +250,33 @@ screen_off:
     rts
 
 screen_on:
+    ; ecran rallume avec un fondu depuis le noir
     sep #$20
     .a8
-    lda #$0F
+    lda #$00
     sta inidisp
     lda #$81                    ; NMI + lecture auto manettes
     sta NMITIMEN
     sta nmi_on
+    rep #$20
+    .a16
+    lda #3
+@f: sta fade_v
+    sep #$20
+    .a8
+    sta inidisp
+    rep #$20
+    .a16
+    jsr wait_frame
+    lda fade_v
+    clc
+    adc #3
+    cmp #16
+    bcc @f
+    sep #$20
+    .a8
+    lda #$0F
+    sta inidisp
     rep #$20
     .a16
     rts
