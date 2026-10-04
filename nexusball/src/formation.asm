@@ -125,6 +125,17 @@ load_slot_stats:
     ldx t5
     jsr roster_rec
     plx
+    ; teinte de peau (masque de l'equipe)
+    phy
+    lda t5
+    asl a
+    tay
+    lda bit_tab,y
+    and trec_buf+T_SKIN
+    beq :+
+    lda #1
+:   sta p_skin,x
+    ply
     lda a:PL_STATS+0,y
     and #$00FF
     sta p_speed,x

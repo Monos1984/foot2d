@@ -3,7 +3,7 @@
 
 Ecrit data/gen/teams.inc (inclus par src/teams.asm).
 
-Enregistrement d'equipe (TEAM_REC = 260 octets) :
+Enregistrement d'equipe (TEAM_REC = 262 octets) :
   +0   nom (16 octets, termine par 0)
   +16  nom court (4 octets, termine par 0)
   +20  monde d'origine (16 octets, termine par 0)
@@ -113,7 +113,7 @@ def kit(rgb):
 def main():
     rng = random.Random(1984)
     used = set()
-    out = ["; genere par tools/teams.py - ne pas modifier", "NUM_TEAMS = %d" % len(TEAMS), "TEAM_REC = 260", "",
+    out = ["; genere par tools/teams.py - ne pas modifier", "NUM_TEAMS = %d" % len(TEAMS), "TEAM_REC = 262", "",
            "; enregistrements en banque $C0 (copies a la demande dans trec_buf par team_rec_id)",
            '.segment "DATA0"']
     for ti, (nm, sh, world, col, fam, away, afam, style, level, form, tac) in enumerate(TEAMS):
@@ -135,7 +135,10 @@ def main():
                 rb = ROLE_BASE[role]
                 st = [clamp(base + rb[i] + adj[i] + rng.randint(-1, 1)) for i in range(7)]
             rec += (name(rng, used).ljust(8)).encode() + bytes([role] + st)
-        assert len(rec) == 260
+        # +260 : masque des peaux foncees (bit k = joueur k de l'effectif)
+        mask = sum(1 << k for k in range(12) if rng.random() < 0.4)
+        rec += bytes((mask & 255, mask >> 8))
+        assert len(rec) == 262
         out.append("team_%d:  ; %s" % (ti, nm))
         for i in range(0, len(rec), 20):
             out.append("    .byte " + ",".join("$%02X" % b for b in rec[i:i + 20]))

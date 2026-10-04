@@ -126,11 +126,16 @@ draw_player:
     cmp #PS_OUT
     bne :+
     rts
-:   ; palette : equipe (0/1) ou gardien (2/3)
+:   ; palette : equipe (0/1), gardien (2/3), peau foncee (5/6)
     lda p_team,x
     ldy p_role,x
     bne :+
     ora #2
+    bra :++
+:   ldy p_skin,x
+    beq :+
+    clc
+    adc #5
 :   asl a
     xba                         ; palette << 9
     ora #OBJ_PRIO

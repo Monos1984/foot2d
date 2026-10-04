@@ -49,7 +49,9 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | CREATE TEAM : 8 équipes (nom, nom court, monde, 14 couleurs, formation, tactique, effectif de 12 parmi joueurs créés et officiels) | ✅ |
 | Équipes créées utilisables en exhibition et dans toutes les compétitions | ✅ |
 | Bloc SRAM d'édition indépendant (en-tête, version, longueur, checksum, remise à zéro du seul bloc corrompu) | ✅ |
-| Apparence des joueurs créés (peau, coiffure) affichée en match | ⏳ enregistrée mais pas encore rendue (palettes OBJ limitées) |
+| Teinte de peau rendue en match (2 teintes via palettes OBJ 5/6, équipes officielles et joueurs créés) | ✅ |
+| Coiffure / couleur de cheveux des joueurs créés | ⏳ enregistrées, pas encore rendues |
+| Compétitions : WATCH CPU MATCHES, choix du camp (PLAY AS) quand une manette possède les deux équipes | ✅ |
 | Finition : graphismes finaux, équilibrage, tests sur matériel réel | ⏳ Milestone 9 |
 
 Graphismes temporaires générés (lisibles, contraste bleu/orange) — les graphismes finaux viendront au milestone 6.

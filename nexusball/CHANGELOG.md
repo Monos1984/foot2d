@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.6.0 — finition (début du Milestone 9)
+
+- Teinte de peau en match : palettes OBJ 5/6 (maillot de l'équipe + peau foncée), masque par
+  équipe officielle, teinte des joueurs créés reprise dans CREATE TEAM (format d'équipe 262 octets,
+  bloc d'édition SRAM version 2).
+- Compétitions : option WATCH CPU MATCHES (les matchs CPU se jouent à l'écran), choix PLAY AS
+  HOME / AWAY quand la même manette possède les deux équipes (sauvegarde version 3).
+
 ## 0.5.0 — création (Milestone 8)
 
 - Menu principal complet : EXHIBITION, CHAMPIONSHIP, CUP, CUSTOM COMPETITION, CREATE TEAM,

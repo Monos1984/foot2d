@@ -193,6 +193,7 @@ c_match:    .res 2
 c_done:     .res 2
 c_champ:    .res 2          ; equipe championne
 c_cur:      .res 2          ; match global en cours (humain)
+c_watch:    .res 2          ; 1 = regarder les matchs CPU contre CPU
 c_teams:    .res 16         ; equipes participantes (index participant -> equipe)
 c_ctrl:     .res 24         ; par equipe : 0 absente, 1 CPU, 2 P1, 3 P2
 c_res:      .res 240        ; scores (domicile, exterieur), $FF = non joue
@@ -225,14 +226,14 @@ pm_diff:    .res 2
 pm_rule:    .res 2
 hub_i:      .res 2
 trec_id:    .res 2          ; equipe actuellement copiee dans trec_buf ($FFFF : aucune)
-trec_buf:   .res 260
+trec_buf:   .res 262
 
 ; ---- editeurs
 ct_tmp:     .res 2
 ts_cur:     .res 2
 ed_slot:    .res 2
 ed_pl:      .res 24
-ed_team:    .res 260
+ed_team:    .res 262
 te_c1:      .res 2
 te_c2:      .res 2
 te_k:       .res 2
@@ -246,3 +247,7 @@ vt_list:    .res 24
 cs_top:     .res 2
 rep_bits:   .res 2
 rep_t:      .res 2
+p_skin:     .res NUM_PLAYERS*2   ; 1 = peau foncee (palette OBJ 5/6)
+pm_conf:    .res 2
+pm_side:    .res 2
+pm_cpad:    .res 2

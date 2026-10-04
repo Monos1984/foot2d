@@ -6,13 +6,13 @@
 ;    +8    32 joueurs crees x 24 octets :
 ;          nom (8, espaces), poste, 7 caracteristiques, numero, 2e poste ($FF aucun),
 ;          peau, coiffure, couleur des cheveux, valide, reserve x2
-;    +776  8 equipes creees x 264 octets : enregistrement d'equipe (260) + valide + reserve
+;    +776  8 equipes creees x 264 octets : enregistrement d'equipe (262) + valide + reserve
 ;    +2888 checksum (somme des mots)
 ;  Equipes creees : numeros 16..23 dans tout le jeu.
 ; =============================================================================
 
 SRAM_ED      = $A16000
-ED_VERSION   = 1
+ED_VERSION   = 2
 ED_PL_N      = 32
 ED_PL_SIZE   = 24
 ED_TM_N      = 8
@@ -27,7 +27,7 @@ PL_SKIN      = 18
 PL_HAIR      = 19
 PL_HCOL      = 20
 PL_VALID     = 21
-CT_VALID     = 260
+CT_VALID     = TEAM_REC
 STAT_BUDGET  = 40
 MAX_TEAMS    = NUM_TEAMS + ED_TM_N
 
@@ -1600,7 +1600,9 @@ src_copy:
     iny
     dec t6
     bne @c
-    rts
+    lda f:SRAM_ED & $FF0000 + (PL_SKIN - 16),x
+    and #$00FF                  ; teinte 0 : claire, 1-2 : foncee
+    jmp set_skin_bit
 @off:
     sec
     sbc #ED_PL_N
@@ -1615,6 +1617,8 @@ src_copy:
     clc
     adc #T_PLAYERS
     sta t6                      ; offset du joueur
+    lda RDMPYL
+    sta t5                      ; joueur dans son equipe
     pla
     jsr team_rec_id
     tya
@@ -1623,16 +1627,38 @@ src_copy:
     tax
     ldy t4
     lda #8
-    sta t5
+    sta t6
 @o: lda a:0,x
     sta ed_team,y
     inx
     inx
     iny
     iny
-    dec t5
+    dec t6
     bne @o
-    rts
+    lda t5
+    asl a
+    tay
+    lda bit_tab,y
+    and trec_buf+T_SKIN
+    ; continue
+
+; set_skin_bit : A != 0 -> peau foncee pour la place te_k/2 de l'effectif
+set_skin_bit:
+    .a16
+    .i16
+    pha
+    ldy te_k
+    lda bit_tab,y
+    eor #$FFFF
+    and ed_team+T_SKIN
+    sta ed_team+T_SKIN
+    pla
+    beq :+
+    lda bit_tab,y
+    ora ed_team+T_SKIN
+    sta ed_team+T_SKIN
+:   rts
 
 ; te_finalize : niveau global = moyenne des caracteristiques, style BALANCED
 te_finalize:

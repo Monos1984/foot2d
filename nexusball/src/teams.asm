@@ -17,6 +17,7 @@ T_TACT   = 59
 T_STYLE  = 65
 T_LEVEL  = 66
 T_PLAYERS = 68
+T_SKIN   = 260
 PL_REC   = 16
 PL_ROLE  = 8
 PL_STATS = 9
@@ -255,21 +256,28 @@ load_kits:
     adc #128 + 5
     sta t4
     ldy t6
-    lda a:0,y
     ldx t4
+    jsr kit_write
+    ; meme maillot dans la palette peau foncee (5 / 6)
+    lda t4
+    clc
+    adc #80
+    tax
+    jsr kit_write
+    lda t4
+    clc
+    adc #80 - 5 + 1
+    tax
+    lda #$1022                  ; contour
     jsr cg_write
-    lda a:2,y
     inx
+    lda #$1951                  ; peau foncee
     jsr cg_write
-    lda a:4,y
     inx
+    lda #$0CCB                  ; ombre
     jsr cg_write
-    lda a:6,y
     inx
-    jsr cg_write
-    lda a:8,y
-    inx
-    inx
+    lda #$0842                  ; cheveux
     jsr cg_write
     ; reflet -> nom du HUD (BG3 couleur 6 / 14) et point du radar (OBJ 4 : 12 / 13)
     lda a:8,y
@@ -292,8 +300,28 @@ load_kits:
     inx
     inx
     cpx #4
-    bne @side
+    jne @side
     rts
+
+; kit_write : X = CGRAM (index 5 de la palette), Y = 5 couleurs du maillot. Preserve Y.
+kit_write:
+    .a16
+    .i16
+    lda a:0,y
+    jsr cg_write
+    lda a:2,y
+    inx
+    jsr cg_write
+    lda a:4,y
+    inx
+    jsr cg_write
+    lda a:6,y
+    inx
+    jsr cg_write
+    lda a:8,y
+    inx
+    inx
+    jmp cg_write
 
 ; cg_write : A = couleur BGR555, X = index CGRAM (ecran eteint ou VBlank). Preserve X, Y.
 cg_write:

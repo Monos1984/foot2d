@@ -7,7 +7,7 @@
 MODE_PRESET  = 3            ; start_match : manettes deja reglees
 SRAM_COMP    = $A06100      ; 3 emplacements de $400 octets
 COMP_SIZE    = comp_data_end - comp_data
-COMP_VERSION = 2
+COMP_VERSION = 3
 NUM_CITEMS   = 21           ; 16 equipes + TYPE, LENGTH, DIFFICULTY, STADIUM, START
 
 .segment "RODATA"
@@ -139,6 +139,7 @@ comp_new:
     sta c_diff
     lda #6
     sta c_stad
+    stz c_watch
     jmp comp_setup
 
 ; -----------------------------------------------------------------------------
@@ -937,12 +938,22 @@ comp_hub:
     lda t7
     beq @loop
     lda ui_sel
-    ldy #3
+    ldy #4
     jsr ui_updown
     cmp ui_sel
     beq :+
     sta ui_sel
     jsr hub_cursor
+    bra @loop
+:   lda ui_sel
+    cmp #2
+    bne :+
+    ; regarder les matchs CPU : oui / non
+    lda c_watch
+    ldy #2
+    jsr ui_lr
+    sta c_watch
+    jsr hub_draw
     bra @loop
 :   lda t7
     and #(JOY_A | JOY_START)
@@ -965,13 +976,13 @@ comp_hub:
     bne @loop
     jmp comp_play
 
-hub_rows: .byte 24, 25, 26
+hub_rows: .byte 23, 24, 25, 26
 
 hub_cursor:
     .a16
     lda #.loword(hub_rows)
     sta t3
-    lda #3
+    lda #4
     sta t4
     lda ui_sel
     jmp ui_cursor
@@ -1111,18 +1122,31 @@ hub_draw:
 @menu:
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(4, 24)
+    ldx #TPOS(4, 23)
     ldy #.loword(str_c_play)
     lda c_done
     beq :+
     ldy #.loword(str_c_over)
 :   jsr print
-    ldx #TPOS(4, 25)
+    ldx #TPOS(4, 24)
     ldy #.loword(str_c_table)
     lda c_type
     beq :+
     ldy #.loword(str_c_bracket)
 :   jsr print
+    ldx #TPOS(4, 25)
+    ldy #.loword(str_c_watch)
+    jsr print
+    ldy #.loword(str_off)
+    lda c_watch
+    beq :+
+    ldy #.loword(str_on)
+:   lda #UI_HI
+    sta t0
+    ldx #TPOS(22, 25)
+    jsr print
+    lda #UI_ATTR
+    sta t0
     ldx #TPOS(4, 26)
     ldy #.loword(str_c_save)
     jsr print
@@ -1206,6 +1230,8 @@ comp_play:
     ora t4
     cmp #2
     bcs @human
+    lda c_watch
+    bne @human
     jsr sim_match
     jsr comp_store
 @skip:
@@ -1282,6 +1308,20 @@ comp_prematch:
     ldx pm_a
     jsr part_ctrl
     sta t5
+    ; une meme manette possede les deux equipes : elle choisit son camp
+    stz pm_conf
+    stz pm_side
+    lda t4
+    cmp t5
+    bne :+
+    cmp #2
+    bcc :+
+    sbc #2
+    asl a
+    sta pm_cpad                 ; 0 = manette 1, 2 = manette 2
+    lda #1
+    sta pm_conf
+:
     lda t4
     cmp #2
     bne :+
@@ -1348,6 +1388,12 @@ comp_prematch:
     jsr print
     lda #UI_ATTR
     sta t0
+    ldx #TPOS(4, 15)
+    ldy #.loword(str_c_playas)
+    jsr print
+    jsr pm_side_draw
+    lda #UI_ATTR
+    sta t0
     ldx #TPOS(4, 17)
     ldy #.loword(str_home_tac)
     jsr print
@@ -1367,25 +1413,44 @@ comp_prematch:
     beq :+
     jmp comp_hub
 :   lda ui_sel
-    ldy #3
+    ldy #4
     jsr ui_updown
     cmp ui_sel
     beq :+
     sta ui_sel
     jsr pm_cursor
     bra @loop
+:   lda ui_sel
+    bne :+
+    lda pm_conf
+    beq @loop
+    lda pm_side
+    ldy #2
+    jsr ui_lr
+    sta pm_side
+    jsr pm_side_draw
+    bra @loop
 :   lda t7
     and #(JOY_A | JOY_START)
     beq @loop
     lda ui_sel
-    cmp #2
+    cmp #3
     beq @go
+    dec a
     sta ui_team
     stz ui_back
     jsr team_screen
     jmp @redraw
 @go:
-    ; reglages du match de competition (sauvegarde des reglages d'exhibition)
+    lda pm_conf
+    beq :+
+    lda #NO_OWNER
+    sta pad_team
+    sta pad_team+2
+    ldx pm_cpad
+    lda pm_side
+    sta pad_team,x
+:   ; reglages du match de competition (sauvegarde des reglages d'exhibition)
     lda menu_len
     sta pm_len
     lda difficulty
@@ -1404,12 +1469,30 @@ comp_prematch:
     sta game_mode
     jmp start_match
 
-pm_rows: .byte 17, 18, 20
+pm_rows: .byte 15, 17, 18, 20
+
+; pm_side_draw : camp choisi (ou "-" si pas de conflit)
+pm_side_draw:
+    .a16
+    ldy #.loword(str_c_tbd)
+    lda pm_conf
+    beq :+
+    ldy #.loword(str_c_home)
+    lda pm_side
+    beq :+
+    ldy #.loword(str_c_away)
+:   lda #UI_HI
+    sta t0
+    lda #5
+    sta t1
+    ldx #TPOS(14, 15)
+    jmp print_w
+
 pm_cursor:
     .a16
     lda #.loword(pm_rows)
     sta t3
-    lda #3
+    lda #4
     sta t4
     lda ui_sel
     jmp ui_cursor
@@ -2112,6 +2195,10 @@ str_c_over:     .byte "COMPETITION OVER", 0
 str_c_table:    .byte "TABLE", 0
 str_c_bracket:  .byte "BRACKET", 0
 str_c_save:     .byte "SAVE & EXIT", 0
+str_c_watch:    .byte "WATCH CPU MATCHES", 0
+str_c_playas:   .byte "PLAY AS", 0
+str_c_home:     .byte "HOME", 0
+str_c_away:     .byte "AWAY", 0
 str_c_champ:    .byte "CHAMPION", 0
 str_c_thead:    .byte "   TEAM             P W D L PTS", 0
 str_c_tbd:      .byte "---", 0
