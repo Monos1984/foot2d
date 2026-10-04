@@ -251,3 +251,4 @@ p_skin:     .res NUM_PLAYERS*2   ; 1 = peau foncee (palette OBJ 5/6)
 pm_conf:    .res 2
 pm_side:    .res 2
 pm_cpad:    .res 2
+opt_ctrl:   .res 2          ; configuration des boutons (0..2)

@@ -157,7 +157,7 @@ human_input:
     and #(JOY_UP | JOY_DOWN | JOY_LEFT | JOY_RIGHT)
     sta p_want,x
     lda joy_new,y
-    and #(JOY_A | JOY_B | JOY_X | JOY_Y)
+    jsr map_buttons
     sta t5
     lda joy_cur,y
     and #JOY_R
@@ -558,10 +558,62 @@ player_actions:
     bit #JOY_A
     beq :+
     jmp act_tackle
-:   bit #JOY_Y
+:   and #(JOY_X | JOY_Y)
+    beq @r
+    ; reprise de volee : ballon libre a portee
+    jsr volley_reach
+    bcc @nov
+    lda cp
+    lsr a
+    jsr take_ball
+    ldx cp
+    lda t6
+    bit #JOY_Y
     beq :+
+    jmp act_shoot
+:   jmp act_kick
+@nov:
+    lda t6
+    bit #JOY_Y
+    beq @r
     jmp act_jump
-:   rts
+@r: rts
+
+; volley_reach : X = cp -> carry = 1 si le ballon libre est a portee de reprise
+volley_reach:
+    .a16
+    .i16
+    lda b_owner
+    cmp #NO_OWNER
+    bne @no
+    txa
+    lsr a
+    cmp b_nograb
+    bne :+
+    lda b_nograb_t
+    bne @no
+:   lda b_x
+    sec
+    sbc p_x,x
+    ABS_A
+    cmp #14 * FP
+    bcs @no
+    lda b_y
+    sec
+    sbc p_y,x
+    ABS_A
+    cmp #10 * FP
+    bcs @no
+    lda p_z,x
+    clc
+    adc #32 * FP
+    cmp b_z
+    bcc @no
+    sec
+    rts
+@no:
+    clc
+    rts
 
 ; --- charge
 act_tackle:
@@ -1373,3 +1425,45 @@ player_anim:
 
 run_cycle:
     .byte SPR_RUN1, SPR_RUN2, SPR_RUN3, SPR_RUN2
+
+; -----------------------------------------------------------------------------
+;  map_buttons : A = boutons appuyes -> A = actions standard selon opt_ctrl
+;  (JOY_B passe, JOY_X frappe, JOY_Y tir, JOY_A charge). Preserve X, Y.
+; -----------------------------------------------------------------------------
+map_buttons:
+    .a16
+    .i16
+    phx
+    phy
+    sta t4
+    stz t5
+    lda opt_ctrl
+    asl a
+    asl a
+    asl a
+    tax
+    ldy #0
+@l: lda ctrl_map,x
+    and t4
+    beq :+
+    lda std_act,y
+    ora t5
+    sta t5
+:   inx
+    inx
+    iny
+    iny
+    cpy #8
+    bne @l
+    lda t5
+    ply
+    plx
+    rts
+
+; boutons de PASS, KICK, SHOOT, CHARGE pour chaque configuration
+ctrl_map:
+    .word JOY_B, JOY_X, JOY_Y, JOY_A
+    .word JOY_A, JOY_B, JOY_Y, JOY_X
+    .word JOY_Y, JOY_B, JOY_A, JOY_X
+std_act:
+    .word JOY_B, JOY_X, JOY_Y, JOY_A

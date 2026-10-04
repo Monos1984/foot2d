@@ -7,6 +7,8 @@
   bloc d'édition SRAM version 2).
 - Compétitions : option WATCH CPU MATCHES (les matchs CPU se jouent à l'écran), choix PLAY AS
   HOME / AWAY quand la même manette possède les deux équipes (sauvegarde version 3).
+- OPTIONS : 3 configurations de boutons (TYPE A / B / C), sauvegardées en SRAM.
+- Jeu contextuel : X ou Y sans ballon près d'un ballon libre (même en l'air) = reprise de volée.
 
 ## 0.5.0 — création (Milestone 8)
 

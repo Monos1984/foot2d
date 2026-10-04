@@ -225,7 +225,7 @@ options_screen:
     and #JOY_B
     bne @back
     lda ui_sel
-    ldy #3
+    ldy #4
     jsr ui_updown
     cmp ui_sel
     beq :+
@@ -240,11 +240,18 @@ options_screen:
     sta opt_radar
     bra @chg
 :   cmp #1
-    bne @done
+    bne :+
     lda menu_len
     ldy #4
     jsr ui_lr
     sta menu_len
+    bra @chg
+:   cmp #2
+    bne @done
+    lda opt_ctrl
+    ldy #3
+    jsr ui_lr
+    sta opt_ctrl
 @chg:
     jsr save_options
     jsr opt_draw
@@ -257,7 +264,7 @@ options_screen:
     jmp title_screen
 
 opt_rows:
-    .byte 6, 7, 9
+    .byte 6, 7, 8, 11
 
 opt_draw:
     .a16
@@ -289,12 +296,31 @@ opt_draw:
     jsr print_digit
     lda #UI_ATTR
     sta t0
+    ldx #TPOS(2, 8)
+    ldy #.loword(str_o_ctrl)
+    jsr print
+    lda #UI_HI
+    sta t0
+    lda opt_ctrl
+    clc
+    adc #'A' - 32 + UI_HI
+    sta bg3_map + TPOS(23, 8)
+    ; rappel des boutons
+    lda opt_ctrl
+    asl a
+    tay
+    lda ctrl_help,y
+    tay
+    lda #UI_ATTR
+    sta t0
     ldx #TPOS(2, 9)
+    jsr print
+    ldx #TPOS(2, 11)
     ldy #.loword(str_back)
     jsr print
     lda #.loword(opt_rows)
     sta t3
-    lda #3
+    lda #4
     sta t4
     lda ui_sel
     jmp ui_cursor
@@ -376,6 +402,11 @@ str_o_len:      .byte "MATCH LENGTH    2X  MIN", 0
 str_on:         .byte "ON ", 0
 str_off:        .byte "OFF", 0
 str_back:       .byte "BACK", 0
+str_o_ctrl:     .byte "CONTROLS        TYPE", 0
+str_ch0:        .byte "B:PASS X:KICK Y:SHOOT A:CHARGE", 0
+str_ch1:        .byte "A:PASS B:KICK Y:SHOOT X:CHARGE", 0
+str_ch2:        .byte "Y:PASS B:KICK A:SHOOT X:CHARGE", 0
+ctrl_help:      .word .loword(str_ch0), .loword(str_ch1), .loword(str_ch2)
 str_project:    .byte " AN OFFGAME PROJECT ", 0
 str_ntsc:       .byte " NTSC 60HZ ", 0
 str_pal:        .byte " PAL 50HZ  ", 0

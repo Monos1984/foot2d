@@ -69,6 +69,9 @@ Graphismes temporaires générés (lisibles, contraste bleu/orange) — les grap
 | **R** | sprint (fatigue) | sprint |
 | **START** | pause | pause |
 | **SELECT** (pause) | radar ON/OFF | |
+| **X / Y** près d'un ballon libre | | reprise de volée / tir en l'air |
+
+OPTIONS propose 3 configurations de boutons (TYPE A ci-dessus, B et C).
 
 ## Construire
 
