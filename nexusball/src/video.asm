@@ -260,4 +260,10 @@ load_stadium:
     sta crowd_pal+2
     lda a:28,y
     sta crowd_pal+4
+    lda a:20,y
+    sta ring_pal
+    sta ring_base
+    lda a:22,y
+    sta ring_pal+2
+    sta ring_base+2
     rts

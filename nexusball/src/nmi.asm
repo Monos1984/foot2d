@@ -66,14 +66,14 @@ NmiHandler:
     lda pal_dirty
     beq @nopal
     stz pal_dirty
-    lda #44
+    lda #42
     sta CGADD
     ldx #0
 @pl:
-    lda crowd_pal,x
+    lda ring_pal,x
     sta CGDATA
     inx
-    cpx #6
+    cpx #10
     bne @pl
 @nopal:
 

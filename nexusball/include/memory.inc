@@ -44,7 +44,9 @@ bg3_dirty:  .res 2
 msg_time:   .res 2
 hud_cache:  .res 8
 pal_dirty:  .res 2
+ring_pal:   .res 4          ; couleurs des anneaux (CGRAM 42-43), suivies du public
 crowd_pal:  .res 6
+ring_base:  .res 4
 crowd_t:    .res 2
 crowd_fast: .res 2
 

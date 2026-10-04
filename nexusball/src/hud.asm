@@ -258,6 +258,26 @@ hud_full_time:
 crowd_update:
     .a16
     .i16
+    ; anneaux : clignotement pendant la celebration d'un but
+    lda m_state
+    cmp #MS_GOAL
+    bne @ring_n
+    lda frame
+    and #$0004
+    beq @ring_n
+    lda #$7FFF
+    sta ring_pal
+    lda ring_base
+    sta ring_pal+2
+    bra @ring_d
+@ring_n:
+    lda ring_base
+    sta ring_pal
+    lda ring_base+2
+    sta ring_pal+2
+@ring_d:
+    lda #1
+    sta pal_dirty
     lda crowd_fast
     beq :+
     sec
