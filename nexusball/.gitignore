@@ -1,0 +1,4 @@
+build/*
+!build/nexusball.sfc
+!build/nexusball_ntsc.sfc
+data/gen/

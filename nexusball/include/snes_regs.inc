@@ -1,0 +1,105 @@
+; NEXUS BALL - registres materiel SNES
+
+; ---- PPU
+INIDISP  = $2100
+OBJSEL   = $2101
+OAMADDL  = $2102
+OAMADDH  = $2103
+OAMDATA  = $2104
+BGMODE   = $2105
+MOSAIC   = $2106
+BG1SC    = $2107
+BG2SC    = $2108
+BG3SC    = $2109
+BG4SC    = $210A
+BG12NBA  = $210B
+BG34NBA  = $210C
+BG1HOFS  = $210D
+BG1VOFS  = $210E
+BG2HOFS  = $210F
+BG2VOFS  = $2110
+BG3HOFS  = $2111
+BG3VOFS  = $2112
+VMAIN    = $2115
+VMADDL   = $2116
+VMADDH   = $2117
+VMDATAL  = $2118
+VMDATAH  = $2119
+M7SEL    = $211A
+M7A      = $211B
+M7B      = $211C
+CGADD    = $2121
+CGDATA   = $2122
+W12SEL   = $2123
+W34SEL   = $2124
+WOBJSEL  = $2125
+TM       = $212C
+TS       = $212D
+TMW      = $212E
+TSW      = $212F
+CGWSEL   = $2130
+CGADSUB  = $2131
+COLDATA  = $2132
+SETINI   = $2133
+MPYL     = $2134
+MPYM     = $2135
+MPYH     = $2136
+SLHV     = $2137
+RDOAM    = $2138
+STAT77   = $213E
+STAT78   = $213F
+
+; ---- APU
+APUIO0   = $2140
+
+; ---- WRAM
+WMDATA   = $2180
+WMADDL   = $2181
+
+; ---- CPU
+NMITIMEN = $4200
+WRIO     = $4201
+WRMPYA   = $4202
+WRMPYB   = $4203
+WRDIVL   = $4204
+WRDIVH   = $4205
+WRDIVB   = $4206
+HTIMEL   = $4207
+VTIMEL   = $4209
+MDMAEN   = $420B
+HDMAEN   = $420C
+MEMSEL   = $420D
+RDNMI    = $4210
+TIMEUP   = $4211
+HVBJOY   = $4212
+RDDIVL   = $4214
+RDDIVH   = $4215
+RDMPYL   = $4216
+RDMPYH   = $4217
+JOY1L    = $4218
+JOY1H    = $4219
+JOY2L    = $421A
+JOY2H    = $421B
+
+; ---- DMA (canal 0..7, +$10 par canal)
+DMAP0    = $4300
+BBAD0    = $4301
+A1T0L    = $4302
+A1T0H    = $4303
+A1B0     = $4304
+DAS0L    = $4305
+DAS0H    = $4306
+
+; ---- boutons manette (mot JOYxL/H)
+JOY_B      = $8000
+JOY_Y      = $4000
+JOY_SELECT = $2000
+JOY_START  = $1000
+JOY_UP     = $0800
+JOY_DOWN   = $0400
+JOY_LEFT   = $0200
+JOY_RIGHT  = $0100
+JOY_A      = $0080
+JOY_X      = $0040
+JOY_L      = $0020
+JOY_R      = $0010

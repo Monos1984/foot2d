@@ -1,0 +1,15 @@
+#!/bin/sh
+# NEXUS BALL - build reproductible
+#   produit build/nexusball.sfc (en-tete Europe/PAL) et build/nexusball_ntsc.sfc
+#   le jeu detecte lui-meme la region de la console (50/60 Hz)
+set -e
+cd "$(dirname "$0")"
+mkdir -p build data/gen
+python3 tools/gfx.py
+ca65 --cpu 65816 -I include -I src -I . --bin-include-dir . -g \
+     -l build/nexusball.lst -o build/main.o src/main.asm
+ld65 -C hirom.cfg -o build/nexusball.sfc -m build/nexusball.map \
+     --dbgfile build/nexusball.dbg -Ln build/nexusball.lbl build/main.o
+cp build/nexusball.sfc build/nexusball_ntsc.sfc
+python3 tools/checksum.py build/nexusball.sfc pal
+python3 tools/checksum.py build/nexusball_ntsc.sfc ntsc

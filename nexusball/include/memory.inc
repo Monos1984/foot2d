@@ -1,0 +1,147 @@
+; NEXUS BALL - carte memoire WRAM ($0000-$1FFF, accessible avec DB=$80)
+
+.segment "ZEROPAGE"
+t0:         .res 2          ; temporaires (non preserves entre routines)
+t1:         .res 2
+t2:         .res 2
+t3:         .res 2
+t4:         .res 2
+t5:         .res 2
+t6:         .res 2
+t7:         .res 2
+ptr:        .res 3          ; pointeur long
+nmi_ready:  .res 1          ; 1 = la frame est prete a etre transferee
+nmi_count:  .res 2
+frame:      .res 2
+is_pal:     .res 2          ; 0 NTSC, 1 PAL
+rng:        .res 2
+joy_cur:    .res 4          ; manettes 1 et 2
+joy_new:    .res 4          ; boutons appuyes cette frame
+joy_old:    .res 4
+inidisp:    .res 1          ; valeur a ecrire dans INIDISP au NMI
+nmi_on:     .res 2          ; 1 = NMI actif
+scroll_x:   .res 2          ; scroll BG1 (pixels)
+scroll_y:   .res 2
+cp:         .res 2          ; joueur courant (index*2)
+l_dx:       .res 2          ; parametres de lancer du ballon
+l_dy:       .res 2
+l_spd:      .res 2
+l_zt:       .res 2
+l_err:      .res 2
+l_foot:     .res 2
+l_t:        .res 2
+
+.segment "BSS"
+oam_buf:    .res 544
+oam_ptr:    .res 2
+
+; ---- constantes de region (copiees depuis la table NTSC ou PAL)
+rc:         .res 128
+
+; ---- copie de la tilemap BG3 (HUD, messages, menus)
+bg3_map:    .res 32*32*2
+bg3_dirty:  .res 2
+msg_time:   .res 2
+hud_cache:  .res 8
+pal_dirty:  .res 2
+crowd_pal:  .res 6
+crowd_t:    .res 2
+crowd_fast: .res 2
+
+; ---- options
+opt_radar:  .res 2
+game_mode:  .res 2
+menu_sel:   .res 2
+menu_len:   .res 2          ; 0..3 -> 2..5 minutes par periode
+pause_sel:  .res 2
+sort_buf:   .res 14
+sort_key:   .res (NUM_PLAYERS + 1) * 2
+pause_save: .res 256
+b_gkdone:   .res 2          ; le gardien a deja tente l'arret sur ce tir
+near_tmp:   .res 6
+gk_best:    .res 2
+ai_gx:      .res 2
+tk_foul:    .res 2
+dbg_fouls:  .res 2          ; compteurs de test (tools/lrtest.py)
+dbg_turnovers: .res 2
+dbg_late:   .res 2
+dbg_gkzone: .res 2
+near_team:  .res 4          ; joueur de champ le plus proche du ballon, par equipe
+near_dist:  .res 4
+title_scroll: .res 2
+
+; ---- joueurs (tableaux de mots, index = numero*2)
+p_x:        .res NUM_PLAYERS*2
+p_y:        .res NUM_PLAYERS*2
+p_vx:       .res NUM_PLAYERS*2
+p_vy:       .res NUM_PLAYERS*2
+p_z:        .res NUM_PLAYERS*2   ; saut (12.4)
+p_vz:       .res NUM_PLAYERS*2
+p_state:    .res NUM_PLAYERS*2
+p_timer:    .res NUM_PLAYERS*2
+p_cd:       .res NUM_PLAYERS*2
+p_dir:      .res NUM_PLAYERS*2   ; direction 0..7 (0 = droite, sens horaire)
+p_flip:     .res NUM_PLAYERS*2   ; $4000 si tourne vers la gauche
+p_anim:     .res NUM_PLAYERS*2
+p_spr:      .res NUM_PLAYERS*2
+p_team:     .res NUM_PLAYERS*2
+p_role:     .res NUM_PLAYERS*2
+p_homex:    .res NUM_PLAYERS*2   ; position de formation (pixels, equipe attaquant vers la droite)
+p_homey:    .res NUM_PLAYERS*2
+p_tx:       .res NUM_PLAYERS*2   ; cible IA (pixels)
+p_ty:       .res NUM_PLAYERS*2
+p_think:    .res NUM_PLAYERS*2
+p_want:     .res NUM_PLAYERS*2   ; directions voulues (bits manette) pour ce frame
+p_act:      .res NUM_PLAYERS*2   ; actions voulues (bits manette) pour ce frame
+p_speed:    .res NUM_PLAYERS*2
+p_power:    .res NUM_PLAYERS*2
+p_passst:   .res NUM_PLAYERS*2
+p_kickst:   .res NUM_PLAYERS*2
+p_ctrlst:   .res NUM_PLAYERS*2
+p_defst:    .res NUM_PLAYERS*2
+p_stam:     .res NUM_PLAYERS*2
+p_fatigue:  .res NUM_PLAYERS*2   ; 0..255
+p_human:    .res NUM_PLAYERS*2   ; 0 IA, 1 manette 1, 2 manette 2
+
+; ---- ballon
+b_x:        .res 2
+b_y:        .res 2
+b_z:        .res 2
+b_vx:       .res 2
+b_vy:       .res 2
+b_vz:       .res 2
+b_owner:    .res 2          ; numero du porteur ou NO_OWNER
+b_last:     .res 2          ; dernier joueur a avoir touche
+b_nograb:   .res 2          ; joueur qui ne peut pas reprendre
+b_nograb_t: .res 2
+b_shot:     .res 2          ; SHOT_*
+b_points:   .res 2          ; points accordes si le tir entre
+b_carry:    .res 2          ; temps de port (tu)
+b_passt:    .res 2          ; temps depuis la derniere passe (fautes tardives)
+b_passer:   .res 2
+b_prevx:    .res 2
+
+; ---- match
+m_state:    .res 2
+m_timer:    .res 2
+m_sec:      .res 2          ; secondes restantes de la periode
+m_acc:      .res 2          ; accumulateur tu -> secondes
+m_half:     .res 2
+m_len:      .res 2          ; duree d'une periode (s)
+score:      .res 4
+kick_team:  .res 2
+first_kick: .res 2
+team_dir:   .res 4          ; sens d'attaque par equipe : 0 = vers la droite, 1 = vers la gauche
+ctrl:       .res 4          ; joueur controle par manette 1 / 2 ($FF aucun)
+pad_team:   .res 4          ; equipe de la manette 1 / 2 ($FF aucune)
+poss_team:  .res 2          ; equipe en possession ($FF aucune)
+switch_t:   .res 4
+foul_team:  .res 2          ; equipe qui recoit le ballon apres faute
+foul_x:     .res 2
+foul_y:     .res 2
+foul_kind:  .res 2
+sent_off:   .res 2          ; joueur exclu temporairement ($FF aucun)
+sent_t:     .res 2
+cam_x:      .res 2          ; camera (12.4)
+cam_y:      .res 2
+ai_phase:   .res 2
