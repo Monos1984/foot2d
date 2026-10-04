@@ -10,7 +10,7 @@
 
 static Sound g_sfx[NUM_SFX];
 static Sound g_crowd;
-static const int NUM_CHANTS = 12;
+static const int NUM_CHANTS = 14;
 static Sound g_fanVoice[NUM_CHANTS];
 static Sound g_music;
 static bool g_musicOk = false, g_musicOn = true;
@@ -239,8 +239,9 @@ static void addBand(std::vector<float>& v, const std::vector<Syll>& song, float 
     for (auto& sy : song) { addBrass(v, (int)(sy.t0 * SR), (int)(sy.len * SR * 0.9f), base * 2.f * std::pow(2.f, sy.semi / 12.f), amp); addBrass(v, (int)(sy.t0 * SR), (int)(sy.len * SR * 0.9f), base * 2.f * std::pow(2.f, (sy.semi - 12) / 12.f), amp * 0.5f); }
 }
 // chants complets (boucles) : 0 « Allez ! », 1 sifflets, 2 contestation, 3 encouragements rythmés, 4 « Olé ! »
+static void chantMarseillaise(std::vector<float>& v);
 static std::vector<float> renderChant(int kind) {
-    float len = kind == 1 ? 5.f : kind == 5 ? 12.f : kind == 9 ? 9.6f : kind == 10 ? 8.f : 6.4f;
+    float len = kind == 1 ? 5.f : kind == 5 ? 12.f : kind == 9 ? 9.6f : kind == 10 ? 8.f : kind == 12 ? 26.f : kind == 13 ? 25.f : 6.4f;
     std::vector<float> v((size_t)(len * SR), 0.f);
     const float b = 60.f / 132.f;                    // une noire à 132 bpm
     std::vector<Syll> song;
@@ -369,6 +370,23 @@ static std::vector<float> renderChant(int kind) {
         addMurmur(v, 0.15f, 0.07f);
         break;
     }
+    case 12: {  // « When the Saints Go Marching In » (air traditionnel) repris par tout le stade, avec la fanfare
+        struct N { float b; int s; float l; };
+        static const N M[] = { {0,0,1},{1,4,1},{2,5,1},{3,7,4}, {7,0,1},{8,4,1},{9,5,1},{10,7,4},
+                               {14,0,1},{15,4,1},{16,5,1},{17,7,2},{19,4,2},{21,0,2},{23,4,2},{25,2,4},
+                               {29,4,1},{30,4,1},{31,2,1},{32,0,2},{34,0,1},{35,4,1},{36,7,1},{37,7,1},{38,5,3},
+                               {41,4,1},{42,5,1},{43,7,1},{44,4,1},{45,0,1},{46,2,1},{47,0,4} };
+        const float q = 0.5f;
+        const Vowel* VW[4] = { &V_O, &V_E, &V_A, &V_I };
+        int k = 0;
+        for (auto& n : M) song.push_back({ 0.2f + n.b * q, n.l * q * 0.92f, n.s, VW[(k++) % 4], n.l >= 2 ? 1.f : 0.85f, k % 3 == 0 ? 'd' : 0 });
+        addChoir(v, song, 220.f, 32, 1.3f, 81);
+        addBand(v, song, 220.f, 0.28f);
+        for (float t = 0.2f; t < len; t += q) addDrum(v, t, ((int)((t - 0.2f) / q + 0.5f)) % 2 ? 0.2f : 0.38f);
+        addMurmur(v, 0.15f, 0.07f);
+        break;
+    }
+    case 13: chantMarseillaise(v); addMurmur(v, 0.12f, 0.07f); break;   // le public entonne le refrain de La Marseillaise
     case 11: {  // « Qui ne saute pas... » : chant sauté, piétinement des tribunes
         for (int r = 0; r < 4; r++) {
             float t0 = 0.1f + r * b * 3.f;
@@ -1060,8 +1078,19 @@ static void addBass(std::vector<float>& v, int i0, int len, float f, float amp) 
     }
 }
 static std::vector<float> renderMarseillaise();
-static std::vector<float> renderReal(const RealAnthem& A, int reps = 2) {
-    if (!strcmp(A.codes, "FRA")) return renderMarseillaise();
+// God Save the King en entier (14 mesures) : « God save our gracious King... » puis « Send him victorious... »
+static const RNote GSTK_FULL[] = { { 0.f, 67, 1.f }, { 1.f, 67, 1.f }, { 2.f, 69, 1.f }, { 3.f, 66, 1.5f }, { 4.5f, 67, 0.5f }, { 5.f, 69, 1.f },
+    { 6.f, 71, 1.f }, { 7.f, 71, 1.f }, { 8.f, 72, 1.f }, { 9.f, 71, 1.5f }, { 10.5f, 69, 0.5f }, { 11.f, 67, 1.f },
+    { 12.f, 69, 1.f }, { 13.f, 67, 1.f }, { 14.f, 66, 1.f }, { 15.f, 67, 3.f },
+    { 18.f, 74, 1.f }, { 19.f, 74, 1.f }, { 20.f, 74, 1.f }, { 21.f, 74, 1.5f }, { 22.5f, 72, 0.5f }, { 23.f, 71, 1.f },
+    { 24.f, 72, 1.f }, { 25.f, 72, 1.f }, { 26.f, 72, 1.f }, { 27.f, 72, 1.5f }, { 28.5f, 71, 0.5f }, { 29.f, 69, 1.f },
+    { 30.f, 71, 1.f }, { 31.f, 72, 0.5f }, { 31.5f, 71, 0.5f }, { 32.f, 69, 0.5f }, { 32.5f, 67, 0.5f },
+    { 33.f, 71, 1.5f }, { 34.5f, 72, 0.5f }, { 35.f, 74, 1.f },
+    { 36.f, 76, 0.5f }, { 36.5f, 72, 0.5f }, { 37.f, 71, 1.f }, { 38.f, 69, 1.f }, { 39.f, 67, 3.f } };
+static std::vector<float> renderReal(const RealAnthem& A0, int reps = 2) {
+    if (!strcmp(A0.codes, "FRA")) return renderMarseillaise();
+    RealAnthem A = A0;
+    if (strstr(A0.codes, "ENG")) { A.mel = GSTK_FULL; A.nm = (int)(sizeof GSTK_FULL / sizeof GSTK_FULL[0]); A.lengthBeats = 42.f; A.bpm = 62.f; A.bass = nullptr; A.nb = 0; A.inner = nullptr; A.ni = 0; reps = 1; }
     const float PI2 = 6.2831853f;
     float bpm = A.bpm > 0 ? A.bpm : 84.f;
     if (A.lengthBeats * reps * 60.f / bpm < 14.f) reps = 3;                  // extrait très court : une reprise de plus
@@ -1192,6 +1221,66 @@ static std::vector<float> renderMarseillaise() {
     normalize(out, 0.85f, 0.01f);
     return out;
 }
+// fanfare d'entrée des équipes (composition originale du jeu, cérémonie des matchs de sélections : tunnel)
+static std::vector<float> renderEntrance() {
+    const float PI2 = 6.2831853f;
+    float bpm = 92.f, spb = 60.f / bpm;
+    struct N { float b; int m; float l; };
+    static const N MEL[] = { {0,62,1},{1,66,1},{2,69,2}, {4,71,1.5f},{5.5f,69,.5f},{6,66,2}, {8,67,1},{9,71,1},{10,74,1.5f},{11.5f,73,.5f}, {12,71,2},{14,69,2},
+        {16,74,1},{17,73,1},{18,71,1},{19,69,1}, {20,67,1.5f},{21.5f,66,.5f},{22,64,2}, {24,66,1},{25,69,1},{26,74,1},{27,78,1}, {28,76,4},
+        {32,78,1.5f},{33.5f,76,.5f},{34,74,2}, {36,71,1},{37,74,1},{38,69,2}, {40,67,1},{41,71,1},{42,76,1.5f},{43.5f,74,.5f}, {44,73,2},{46,69,2},
+        {48,74,1},{49,76,1},{50,78,1},{51,79,1}, {52,81,1.5f},{53.5f,78,.5f},{54,74,2}, {56,71,1},{57,79,1},{58,78,1},{59,76,1}, {60,74,4} };
+    // accords par demi-mesure : fondamentale (MIDI de basse) et mode (0 majeur, 1 mineur)
+    static const int ROOT[32] = { 38,38, 43,38, 43,43, 38,45, 38,45, 40,45, 38,38, 45,45, 38,38, 43,38, 40,40, 45,45, 38,38, 38,38, 43,45, 38,38 };
+    static const int MIN[32] = { 0,0, 0,0, 0,0, 0,0, 0,0, 1,0, 0,0, 0,0, 0,0, 0,0, 1,1, 0,0, 0,0, 0,0, 0,0, 0,0 };
+    float total = 64.f + 4.f;
+    int n = (int)(total * spb * SR);
+    std::vector<float> v(n, 0.f);
+    auto at = [&](float b) { return (int)(b * spb * SR); };
+    for (auto& x : MEL) { addBrass(v, at(x.b), at(x.l), midiHz((float)x.m), 1.f); addBrass(v, at(x.b), at(x.l), midiHz((float)x.m - 12), 0.4f); }
+    for (int h = 0; h < 32; h++) {
+        int r = ROOT[h];
+        addBass(v, at(h * 2.f), at(2.f), midiHz((float)r), 1.f);
+        int third = MIN[h] ? 3 : 4;
+        for (int q : { 12, 12 + third, 19 }) addString(v, at(h * 2.f), at(2.f), midiHz((float)(r + q + 12)), 0.9f);
+    }
+    for (int bar = 0; bar < 16; bar++) {      // timbales et caisse claire de marche
+        int i0 = at(bar * 4.f);
+        for (int k = 0; k < SR / 2 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += std::sin(PI2 * (55.f + 25 * std::exp(-t * 20)) * t) * std::exp(-t * 6) * 0.13f; }
+        for (int bt : { 1, 3 }) { int j0 = at(bar * 4.f + bt); for (int k = 0; k < SR / 6 && j0 + k < n; k++) { float t = (float)k / SR; v[j0 + k] += frand() * std::exp(-t * 24) * 0.035f; } }
+    }
+    for (float cb : { 48.f, 60.f }) { int i0 = at(cb); for (int k = 0; k < SR * 2 && i0 + k < n; k++) { float t = (float)k / SR; v[i0 + k] += frand() * std::exp(-t * 1.8f) * 0.09f; } }
+    {   // réverbération de stade
+        static const int D[4] = { 1557, 1617, 1491, 1422 };
+        std::vector<float> wet(n, 0.f);
+        for (int c = 0; c < 4; c++) { std::vector<float> buf(D[c], 0.f); int bi = 0; for (int k = 0; k < n; k++) { float o = buf[bi]; buf[bi] = v[k] + o * 0.78f; bi = (bi + 1) % D[c]; wet[k] += o * 0.25f; } }
+        for (int k = 0; k < n; k++) v[k] = v[k] * 0.8f + wet[k] * 0.3f;
+    }
+    normalize(v, 0.85f, 0.02f);
+    return v;
+}
+// le public chante « Aux armes, citoyens ! » (refrain de La Marseillaise, d'après la partition)
+static void chantMarseillaise(std::vector<float>& v) {
+    const float spb = 60.f / 100.f, start = 75.75f;
+    const Vowel* VW[5] = { &V_O, &V_A, &V_E, &V_I, &V_OU };
+    std::vector<Syll> song;
+    int nm = (int)(sizeof MARS_MEL / sizeof MARS_MEL[0]), k = 0;
+    for (int i = 0; i < nm; i++) {
+        if (MARS_MEL[i].beat < start) continue;
+        float t0 = 0.2f + (MARS_MEL[i].beat - start) * spb;
+        if (t0 > (float)v.size() / SR - 1.f) break;
+        song.push_back({ t0, MARS_MEL[i].len * spb * 0.95f, MARS_MEL[i].midi - 70, VW[(k++) % 5], MARS_MEL[i].len >= 2 ? 1.f : 0.9f, k % 4 == 0 ? 's' : 0 });
+    }
+    addChoir(v, song, midiHz(70.f), 34, 1.35f, 91);
+}
+static Sound g_entrance; static bool g_entranceOk = false;
+void audioEntranceMusic(bool on) {
+    if (!g_ok) return;
+    if (on && g_enabled) {
+        if (!g_entranceOk) { g_entrance = makeSound(renderEntrance()); g_entranceOk = true; }
+        if (!IsSoundPlaying(g_entrance)) { SetSoundVolume(g_entrance, 0.7f); PlaySound(g_entrance); }
+    } else if (g_entranceOk && IsSoundPlaying(g_entrance)) StopSound(g_entrance);
+}
 static int realAnthemIndex(const std::string& code) {
     for (int i = 0; i < NUM_REAL_ANTHEMS; i++) {
         std::string cs = REAL_ANTHEMS[i].codes; size_t p = 0;
@@ -1310,18 +1399,21 @@ static void jinglePlay(int j) {
 }
 
 // chants en boucle selon l'humeur du public ; un court silence entre deux reprises, comme dans un vrai stade
+static bool g_frenchCrowd = false;
+void audioSetFrenchCrowd(bool on) { g_frenchCrowd = on; }
 void audioSupporters(int state, float strength) {
     if (!g_ok || !g_enabled) return;
     static float rest = 0; static int last = -1, playing = -1, rot = 0;
     int mood = state == CH_WHISTLES ? 1 : state == CH_PROTEST ? 2 : state == CH_ENCOURAGE ? 3 : state == CH_CELEBRATE ? 4 : 0;
     // chaque humeur a son répertoire : les chants s'enchaînent sans se répéter
-    static const int REP[5][5] = { { 0, 9, 5, 10, 7 }, { 1, 1, 1, 1, 1 }, { 2, 2, 2, 2, 2 }, { 3, 9, 6, 11, 3 }, { 4, 10, 8, 11, 9 } };
+    static const int REP[5][6] = { { 0, 9, 5, 12, 10, 7 }, { 1, 1, 1, 1, 1, 1 }, { 2, 2, 2, 2, 2, 2 }, { 3, 9, 6, 12, 11, 3 }, { 4, 10, 8, 12, 11, 9 } };
     if (state == CH_TENSE || strength <= 0) { for (auto& sound : g_fanVoice) StopSound(sound); last = playing = -1; return; }
     if (mood != last) { for (auto& sound : g_fanVoice) StopSound(sound); playing = -1; rest = 0; }
     float volume = std::min(0.85f, std::clamp(strength, 0.f, 1.f) * 1.7f * (state == CH_NORMAL ? .16f : state == CH_LOUD ? .3f : state == CH_ENCOURAGE ? .3f : state == CH_WHISTLES ? .34f : .42f));   // chants nettement plus présents
     if (playing >= 0 && IsSoundPlaying(g_fanVoice[playing])) { SetSoundVolume(g_fanVoice[playing], volume); rest = (state == CH_NORMAL ? 2.5f : 0.6f); last = mood; return; }
     if (last == mood && rest > 0) { rest -= GetFrameTime(); return; }
-    playing = REP[mood][rot++ % 5];
+    playing = REP[mood][rot++ % 6];
+    if (g_frenchCrowd && mood != 1 && mood != 2 && rot % 4 == 0) playing = 13;      // match de l'équipe de France : le public entonne La Marseillaise
     SetSoundVolume(g_fanVoice[playing], volume);
     PlaySound(g_fanVoice[playing]); last = mood;
 }
@@ -1339,7 +1431,7 @@ static const char* SFX_NAMES[NUM_SFX] = { "Passe", "Coup de sifflet", "Sifflet l
     "Coup de sifflet final", "Coup de poing (bagarre)", "Huées", "Tonnerre", "Sifflets du public", "Applaudissements", "La ola",
     "Frappe", "Filet", "Tacle", "Prise du gardien", "Parade du gardien", "Menu : déplacement", "Menu : validation", "Menu : retour", "Menu : réglage" };
 static const char* CHANT_NAMES[NUM_CHANTS] = { "« Allez ! »", "Sifflets et huées", "« Démission ! »", "Encouragements rythmés (clap clap)", "« Olé ! »", "Chant du club (écharpes)",
-    "Clapping viking", "Batucada", "« Et un, et deux... »", "« Aux armes ! »", "« Oh oh oh oh oh ohhh »", "« Qui ne saute pas... »" };
+    "Clapping viking", "Batucada", "« Et un, et deux... »", "« Aux armes ! »", "« Oh oh oh oh oh ohhh »", "« Qui ne saute pas... »", "« When the Saints Go Marching In »", "La Marseillaise (refrain du public)" };
 static const char* JINGLE_NAMES[9] = { "Victoire", "Générique TV", "Trophée", "Hymne des étoiles (coupe d'Europe)", "Podium", "Publicité 1", "Publicité 2", "Publicité 3", "Sono du stade : but" };
 int audioPreviewCount(int cat) { switch (cat) { case 0: return NUM_SFX; case 1: return NUM_CHANTS + 1; case 2: return NUM_TRACKS; case 3: return 9; case 4: return audioAnthemListCount(); default: return 0; } }
 std::string audioPreviewName(int cat, int i) {

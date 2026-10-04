@@ -2000,6 +2000,15 @@ void renderMatch(const Match& m, bool radar) {
             int rdir = showCard ? 0 : dirOf(m.refFace);
             drawPlayerSprite(rx, ry, rk, rs, rh, rdir, rframe, showCard ? PS_CELEB : PS_NORMAL, false, 0, 1);
             g_sprLongHair = false; g_sprHairStyle = -1;
+            if (!replay && !showCard && m.refTalkT > 0 && m.refTalkFor >= 0) {   // avertissement oral : doigt levé, bulle
+                DrawRectangle(rx + 2, ry - 17, 1, 6, hexc(rk.shirt)); DrawPixel(rx + 2, ry - 18, Color{ 230, 190, 150, 255 });
+                static const char* TXT[3] = { "Attention !", "Dernier avertissement !", "Calmez-vous !" };
+                const char* tx = TXT[(m.refTalkFor + (int)m.clock) % 3];
+                int w = textWidth(tx, 5) + 6, bx = rx - w / 2, by = ry - 30;
+                DrawRectangle(bx, by, w, 8, WHITE); DrawRectangleLines(bx, by, w, 8, Color{ 30, 30, 40, 255 });
+                DrawTriangle(Vector2{ (float)rx - 2, (float)by + 8 }, Vector2{ (float)rx, (float)by + 11 }, Vector2{ (float)rx + 2, (float)by + 8 }, WHITE);
+                drawTextPx(tx, bx + 3, by + 1, 5, Color{ 20, 20, 30, 255 });
+            }
             if (!showCard && rdir == 0) {                       // écusson de la fédération et sifflet au cou
                 DrawPixel(rx - 2, ry - 7, Color{ 250, 210, 60, 255 });
                 DrawPixel(rx + 1, ry - 7, Color{ 205, 210, 220, 255 });
@@ -2110,6 +2119,8 @@ void renderMatch(const Match& m, bool radar) {
         Kit wk = m.kit[p.team];
         if (!replay && p.shirtOf >= 0 && p.shirtOf != p.team) { const Kit& o = m.kit[p.shirtOf]; wk.shirt = o.shirt; wk.shirt2 = o.shirt2; wk.pattern = o.pattern; }   // maillot échangé
         drawPlayerSprite(sx, sy, wk, skin, hair, dir, frame, state == PS_HAND ? PS_NORMAL : state, p.gk, m.gkShirt[p.team], 1);
+        if (!replay && m.ceremony && (m.cerPhase == 10 || m.cerPhase == 11) && m.anthOn && p.team == m.anthemTeamNow() && dir == 0 && ((int)(GetTime() * 4) + i) % 3)
+            DrawRectangle(sx, sy - 9, 1, 1, Color{ 90, 30, 34, 255 });          // ils chantent leur hymne
         g_sprPose = POSE_NONE;
         g_sprLongHair = false;
         if (heart) {   // cœur formé avec les mains au-dessus de la tête
@@ -2139,6 +2150,12 @@ void renderMatch(const Match& m, bool radar) {
                 if (m.trLift || state == PS_THROW) drawTrophy(sx, sy - 12 - (int)(std::fabs(std::sin(GetTime() * 5)) * 2), m.trophyStyle, 1);
                 else drawTrophy(sx + 3, sy - 4, m.trophyStyle, 1);
             }
+        }
+        // crampe : bulle au-dessus du joueur à terre
+        if (!replay && i == m.crampP && ((int)(GetTime() * 2)) % 2) {
+            const char* tx = "Crampe !"; int w = textWidth(tx, 5) + 6;
+            DrawRectangle(sx - w / 2, sy - 18, w, 8, WHITE); DrawRectangleLines(sx - w / 2, sy - 18, w, 8, Color{ 200, 40, 40, 255 });
+            drawTextPx(tx, sx - w / 2 + 3, sy - 17, 5, Color{ 200, 30, 30, 255 });
         }
         // joueur fatigué : gouttes de sueur
         if (!replay && p.onPitch && p.stamina < 0.55f && !p.gk && state == PS_NORMAL) {
@@ -2242,6 +2259,23 @@ void renderMatch(const Match& m, bool radar) {
         drawPlayerSprite(SX(w.pos.x), SY(w.pos.y), m.kit[w.team], w.skin, w.hair, dir, (int)(w.anim * 2.2f), PS_NORMAL, w.gk, w.gkShirt, 1);
         if (w.red && w.age < 6.f && ((int)(GetTime() * 3)) % 2) { DrawRectangle(SX(w.pos.x) - 1, SY(w.pos.y) - 19, 3, 4, Color{ 230, 30, 30, 255 }); }   // expulsé : tête basse, carton rouge au-dessus
     }
+    // échange des fanions : chaque capitaine tient le fanion de sa fédération, puis celui de l'adversaire
+    if (!replay && m.ceremony && m.cerPhase == 13 && m.captain[0] >= 0 && m.captain[1] >= 0) {
+        bool swapped = m.cerT > 2.3f;
+        for (int k = 0; k < 2; k++) {
+            const MPlayer& c = m.pl[m.captain[k]];
+            int owner = swapped ? 1 - k : k;
+            int hx = SX(c.pos.x) + (k == 0 ? 3 : -3), hy = SY(c.pos.y) - 9;
+            if (m.cerT > 1.6f && m.cerT < 2.3f) hx = (SX(m.pl[m.captain[0]].pos.x) + SX(m.pl[m.captain[1]].pos.x)) / 2 + (k ? 1 : -1);   // les fanions passent de main en main
+            Color f1 = hexc(m.kit[owner].shirt), f2 = hexc(m.kit[owner].shirt2 != m.kit[owner].shirt ? m.kit[owner].shirt2 : 0xF2F2F2);
+            DrawRectangle(hx, hy - 6, 1, 8, Color{ 200, 170, 60, 255 });
+            Vector2 a{ (float)hx + 1, (float)hy - 6 }, b{ (float)hx + 1, (float)hy }, cc{ (float)hx + (k == 0 ? 6.f : -6.f), (float)hy - 3 };
+            if (k == 0) DrawTriangle(a, b, cc, f1); else DrawTriangle(a, cc, b, f1);
+            DrawPixel(hx + (k == 0 ? 2 : 0), hy - 3, f2);
+            DrawRectangle(hx - (k ? 1 : 0), hy - 7, 2, 1, Color{ 230, 200, 80, 255 });
+        }
+        if (((int)(m.cerT * 5)) % 4 == 0 && m.cerT > 2.5f) DrawCircle(SX(PITCH_W / 2), SY(PITCH_L / 2) - 8, 10, Color{ 255, 255, 255, 60 });   // flash des photographes
+    }
     // photo officielle : photographes accroupis face aux équipes, flashs
     if (!replay && m.ceremony && m.cerPhase == 0) {
         for (int k = 0; k < 9; k++) {
@@ -2311,6 +2345,23 @@ void renderMatch(const Match& m, bool radar) {
         }
     }
 
+    // corner / six mètres : point de chute du centre selon la puissance dosée (premier ou second poteau)
+    if (!replay && m.state == MS_SETPIECE && m.spReady && m.spKicker >= 0 && m.pl[m.spKicker].human >= 0 && (m.sp == SP_CORNER || m.sp == SP_GOALKICK) && m.spPower > 0) {
+        float pw = m.spPower;
+        float dist = m.sp == SP_CORNER ? 16.f + pw * 28.f : 22.f + pw * 40.f;
+        float vz = m.sp == SP_CORNER ? 6.f + pw * 2.5f : 7.f + pw * 6.f, T = 2 * vz / 10.8f;
+        V2 q = m.ball.pos, v = m.spAim * (dist / T); float spin = m.sp == SP_CORNER ? m.spCurl * 5.5f : 0.f;
+        const float dtp = 0.02f;
+        for (float tt = 0; tt < T; tt += dtp) { v += v.norm().perp() * (spin * dtp); spin *= (1 - 0.9f * dtp); q += v * dtp; }
+        float pulse = 2.5f + std::sin((float)GetTime() * 8.f) * 0.8f;
+        DrawEllipseLines(SX(q.x), SY(q.y), pulse * 1.6f, pulse, Color{ 0, 0, 0, 180 });
+        DrawEllipseLines(SX(q.x), SY(q.y), pulse * 1.6f - 1, pulse - 1, WHITE);
+        DrawLine(SX(q.x) - 2, SY(q.y), SX(q.x) + 2, SY(q.y), WHITE); DrawLine(SX(q.x), SY(q.y) - 2, SX(q.x), SY(q.y) + 2, WHITE);
+        int kx = SX(m.pl[m.spKicker].pos.x), ky = SY(m.pl[m.spKicker].pos.y) - 22;
+        DrawRectangle(kx - 9, ky, 18, 4, Color{ 0, 0, 0, 190 });
+        DrawRectangle(kx - 8, ky + 1, (int)(16 * pw), 2, pw < 0.5f ? Color{ 120, 230, 120, 255 } : pw < 0.8f ? Color{ 250, 220, 60, 255 } : Color{ 250, 100, 60, 255 });
+        if (m.sp == SP_CORNER) { const char* lab = pw < 0.38f ? "1er POTEAU" : pw < 0.7f ? "AU POINT DE PENALTY" : "2nd POTEAU"; int w = textWidth(lab, 5) + 4; DrawRectangle(kx - w / 2, ky - 8, w, 7, Color{ 0, 0, 0, 170 }); drawTextPx(lab, kx - w / 2 + 2, ky - 7, 5, WHITE); }
+    }
     // fête : confettis et fontaines pyrotechniques après le trophée soulevé
     if (!replay && m.trophyActive && m.trLift) {
         float tt = (float)GetTime();
@@ -2402,6 +2453,31 @@ void renderMatch(const Match& m, bool radar) {
     if (Z != 1.f) { rlDrawRenderBatchActive(); rlPopMatrix(); rlPushMatrix(); rlScalef(2, 2, 1); }
     if (!replay) drawMatchScenes(m);
     if (!replay) drawCardScene(m, (float)GetTime());
+    // hymnes : gros plan sur le visage des joueurs de l'équipe dont on joue l'hymne (le travelling passe de l'un à l'autre)
+    if (!replay && m.ceremony && (m.cerPhase == 10 || m.cerPhase == 11) && m.anthOn) {
+        int tt = m.anthemTeamNow();
+        float u = std::min(1.f, std::max(0.f, (m.cerT - m.anthStart - 0.5f) / std::max(6.f, m.anthemDur - 3.f)));
+        int slot = std::min(10, (int)(u * 11.f));
+        int idx = -1; for (int i = tt * 11; i < tt * 11 + 11; i++) if (m.pl[i].onPitch && m.pl[i].slot == slot) idx = i;
+        if (idx < 0) idx = tt * 11 + slot;
+        const MPlayer& p = m.pl[idx];
+        const Team& T = m.team(tt);
+        if (p.squad >= 0 && p.squad < (int)T.squad.size()) {
+            const Player& P = T.squad[p.squad];
+            float local = u * 11.f - slot;                                         // fondu au changement de joueur
+            float a = std::min(1.f, std::min(local, 1.f - local) * 8.f + 0.2f);
+            int sz = 64, x = MW - sz - 8, y = MH - sz - 34;
+            DrawRectangle(x - 2, y - 2, sz + 4, sz + 4, Color{ 230, 230, 240, 255 });
+            drawPortrait(x, y, sz, P.skin, P.hair, P.gender, m.kit[tt], (unsigned)P.id);
+            float uu = sz / 32.f;
+            float open = std::fabs(std::sin((float)GetTime() * 5.f + idx));            // il chante : la bouche s'ouvre en rythme
+            DrawRectangle(x + (int)(14 * uu), y + (int)(19 * uu), (int)(4 * uu), std::max(1, (int)((0.6f + open * 2.f) * uu)), Color{ 70, 20, 26, 255 });
+            if (a < 1.f) DrawRectangle(x, y, sz, sz, Color{ 0, 0, 0, (unsigned char)(255 * (1 - a)) });
+            DrawRectangle(x - 2, y + sz + 2, sz + 4, 20, Color{ 10, 14, 34, 230 }); DrawRectangle(x - 2, y + sz + 2, 3, 20, hexc(m.kit[tt].shirt));
+            drawTextPx(fitText(fmt("%d %s", P.num, P.name.c_str()), sz, 5), x + 3, y + sz + 4, 5, WHITE);
+            drawTextPx(fitText(T.shortName, sz, 5), x + 3, y + sz + 12, 5, Color{ 255, 220, 90, 255 });
+        }
+    }
     // ---------------- HUD
     const Team& H = m.team(0); const Team& A = m.team(1);
     int mins = (int)m.clock;

@@ -365,7 +365,7 @@ void Match::updateCeremony(float dt) {
         if (cerPhase == 12) { f = V2(vipOn ? vipPos.x : PITCH_W / 2, anthemSpot(0, 0).y + 1.f); }
         else if (anth) {   // hymnes : travelling le long de la ligne des joueurs, caméra rapprochée
             int tt = anthemTeamNow();
-            float u = std::min(1.f, std::max(0.f, (cerT - 0.8f) / 8.5f));
+            float u = anthOn ? std::min(1.f, std::max(0.f, (cerT - anthStart - 0.5f) / std::max(6.f, anthemDur - 3.f))) : 0.f;   // travelling calé sur la durée de l'hymne
             float xa = anthemSpot(tt, 0).x, xb = anthemSpot(tt, 10).x;
             f = V2(xa + u * (xb - xa), anthemSpot(tt, 0).y + 1.f);
         }
@@ -426,18 +426,28 @@ void Match::updateCeremony(float dt) {
     }
     case 10: case 11: {   // hymnes nationaux : chaque équipe en ligne, travelling sur les joueurs (protocole : l'hymne des visiteurs d'abord)
         int tt = anthemTeamNow();
-        for (int k = 0; k < 22; k++) { int t2 = k / 11; walkTo(pl[k], anthemSpot(t2, k % 11), 3.f); pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
+        bool aligned = true;
+        for (int k = 0; k < 22; k++) { int t2 = k / 11; if (!walkTo(pl[k], anthemSpot(t2, k % 11), 3.f)) aligned = false; pl[k].face = V2(0, 1.f); pl[k].state = PS_NORMAL; }
         refMove(V2(PITCH_W / 2, PITCH_L / 2 - 1.5f), 3.4f, V2(0, 1), dt);
-        if (t < dt * 1.5f) {
+        if (t < dt * 1.5f) { anthOn = false; anthClap = -1; }
+        // l'hymne ne commence que lorsque tout le monde est aligné et immobile
+        if (!anthOn && ((aligned && t > 0.6f) || t > 7.f)) {
+            anthOn = true; anthStart = t;
             anthemReq = tt; anthemDur = 10.5f; msg = "HYMNE NATIONAL"; msgT = 3.f;
             if (!S.anthemOnly.empty()) { msg2 = "La Marseillaise"; say("Le stade se lève : les deux équipes et le public entonnent La Marseillaise.", 4.5f, true); }
             else { msg2 = team(tt).name; say("Les joueurs de " + team(tt).name + " entonnent leur hymne national.", 4.f, true); }
         }
-        if (t > 1.f && t < 1.f + dt * 1.5f && !anthemName.empty()) { msg2 = (S.anthemOnly.empty() ? team(tt).name + " - " : std::string()) + anthemName; msgT = 3.f; }
-        if (t > anthemDur) {
-            cerT = 0;
-            if (cerPhase == 10 && S.anthemOnly.empty()) cerPhase = 11;
-            else { anthemReq = -2; cerPhase = S.president ? 12 : S.cupPhoto ? 0 : 1; }
+        if (anthOn && t - anthStart > 1.f && t - anthStart < 1.f + dt * 1.5f && !anthemName.empty()) { msg2 = (S.anthemOnly.empty() ? team(tt).name + " - " : std::string()) + anthemName; msgT = 3.f; }
+        // fin : dès la dernière note (la queue de réverbération ne bloque plus la suite), puis applaudissements du stade
+        if (anthOn && anthClap < 0 && t - anthStart > anthemDur - 1.6f) { anthClap = 0; playSfx(SFX_CLAPS); playSfx(SFX_GOAL); }
+        if (anthClap >= 0) {
+            anthClap += dt;
+            if (anthClap > 1.2f && anthClap < 1.2f + dt * 1.5f) playSfx(SFX_CLAPS);
+            if (anthClap > 2.4f) {
+                cerT = 0; anthOn = false; anthClap = -1;
+                if (cerPhase == 10 && S.anthemOnly.empty()) cerPhase = 11;
+                else { anthemReq = -2; cerPhase = S.president ? 12 : (S.cupPhoto || S.anthems) ? 0 : 1; }
+            }
         }
         if (skip && t > 0.3f) toToss();
         break;
@@ -459,7 +469,7 @@ void Match::updateCeremony(float dt) {
         V2 d = tg - vipPos; float l = d.len();
         if (l > 0.05f) vipPos += d * (std::min(l, (t < walkIn ? 4.5f : t < walkIn + 22 * per ? 6.f : 4.f) * dt) / l);
         for (int k = 0; k < 22; k++) if (std::fabs(pl[k].pos.x - vipPos.x) < 0.7f && t >= walkIn && t < walkIn + 22 * per) pl[k].state = PS_HAND;
-        if (t > walkIn + 22 * per + 2.5f || (skip && t > 0.3f)) { vipOn = false; cerPhase = S.cupPhoto ? 0 : 1; cerT = 0; }
+        if (t > walkIn + 22 * per + 2.5f || (skip && t > 0.3f)) { vipOn = false; cerPhase = (S.cupPhoto || S.anthems) ? 0 : 1; cerT = 0; }
         break;
     }
     case 0: {   // photo officielle : deux rangées par équipe, flashs des photographes
@@ -474,7 +484,7 @@ void Match::updateCeremony(float dt) {
             pl[k].state = PS_NORMAL;
         }
         refMove(V2(PITCH_W / 2, PITCH_L / 2 - 3.f), 3.6f, V2(0, 1), dt);
-        if (t > 1.2f && t < 1.3f) { msg = "PHOTO OFFICIELLE"; msg2 = team(0).name + " - " + team(1).name; msgT = 3.f; say("Les deux équipes posent pour la photo officielle avant cette rencontre de coupe.", 3.5f, true); }
+        if (t > 1.2f && t < 1.3f) { msg = "PHOTO OFFICIELLE"; msg2 = team(0).name + " - " + team(1).name; msgT = 3.f; say(S.anthems ? "Après les hymnes, les deux sélections posent pour la photo officielle." : "Les deux équipes posent pour la photo officielle avant cette rencontre de coupe.", 3.5f, true); }
         if (t > 5.5f) { cerPhase = 1; cerT = 0; }
         if (skip && t > 0.3f) toToss();
         break;
@@ -563,10 +573,22 @@ void Match::updateCeremony(float dt) {
                     sideFlip = (tossSideTeam == 0) ? !up : up;
                     tossUI = 5;
                     say(team(tossSideTeam).shortName + " choisit son côté ; " + team(firstKickoff).shortName + " donnera le coup d'envoi.", 2.8f, true);
-                    cerPhase = 5; cerT = 0;
+                    cerPhase = (S.anthems || S.cupPhoto) ? 13 : 5; cerT = 0;
                 }
             }
         }
+        break;
+    }
+    case 13: {  // échange des fanions entre les capitaines, poignée de main, photo avec l'arbitre
+        V2 c(PITCH_W / 2, PITCH_L / 2);
+        walkTo(pl[captain[0]], c + V2(-0.8f, 0.4f), 2.f); pl[captain[0]].face = V2(1, 0);
+        walkTo(pl[captain[1]], c + V2(0.8f, 0.4f), 2.f); pl[captain[1]].face = V2(-1, 0);
+        refMove(c + V2(0, -0.8f), 3.f, V2(0, 1), dt);
+        bool shake = t > 1.4f && t < 3.2f;
+        pl[captain[0]].state = pl[captain[1]].state = shake ? PS_HAND : PS_NORMAL;
+        if (t > 1.6f) tossUI = 0;
+        if (t < dt * 1.5f) { msg = "ÉCHANGE DES FANIONS"; msg2 = team(0).shortName + " - " + team(1).shortName; msgT = 2.4f; say("Les deux capitaines échangent les fanions de leur fédération.", 3.f, true); }
+        if (t > 3.8f || (skip && t > 0.3f)) { pl[captain[0]].state = pl[captain[1]].state = PS_NORMAL; cerPhase = 5; cerT = 0; }
         break;
     }
     default: break;
@@ -1352,8 +1374,12 @@ void Match::updateBall(float dt) {
             reach += S.difficulty == 0 ? 0.0f : S.difficulty == 2 ? 0.1f : 0.04f;
         // frappe de loin (le ballon file, le gardien doit s'étirer) ou à bout portant (réflexe) : allonge réduite, le but reste possible
         if (p.gk && i != penGk && b.lastTeam != p.team && lastShooter >= 0 && lastShotAge < 2.f && b.owner < 0) {
-            if (lastShotDist > 20.f) reach *= 0.76f + std::max(0.f, 30.f - lastShotDist) * 0.006f;
-            else if (lastShotDist < 9.f) reach *= 0.68f + lastShotDist * 0.02f;
+            // niveau : amateur = les frappes de loin et à bout portant passent facilement, semi-pro = moyennement,
+            // pro = il faut construire le jeu (le but reste possible) ; seulement pour les frappes d'un joueur humain
+            float lvl = 1.f;
+            if (pl[lastShooter].human >= 0 && p.human < 0) lvl = S.difficulty == 0 ? 0.86f : S.difficulty == 2 ? 1.12f : 1.f;
+            if (lastShotDist > 20.f) reach *= (0.76f + std::max(0.f, 30.f - lastShotDist) * 0.006f) * lvl;
+            else if (lastShotDist < 9.f) reach *= (0.68f + lastShotDist * 0.02f) * lvl;
         }
         if (i == penGk && p.gk) reach = p.state == PS_DIVE ? 0.7f + p.keep / 330.f : 0.55f + p.keep / 500.f;    // penalty : réflexe à 11 m
         float zmax = gkCatch ? (p.state == PS_DIVE ? 2.2f : 2.6f) : 0.95f;
@@ -1406,6 +1432,7 @@ void Match::updateBall(float dt) {
         MPlayer& g = pl[best];
         float rel = (b.vel - g.vel).len();
         float pf = (lastShotDist > 20.f ? 0.17f : 0.24f) * clampf((rel - 13.f) / 10.f, 0.f, 1.f) * clampf(1.25f - g.keep / 100.f, 0.3f, 1.f);
+        if (pl[lastShooter].human >= 0 && g.human < 0) pf *= S.difficulty == 0 ? 1.7f : S.difficulty == 2 ? 0.55f : 1.f;   // amateur / semi-pro / pro
         if (R.chance(pf)) {
             g.cool = 0.6f;                                                      // il ne peut pas la reprendre tout de suite
             b.vel = rot(b.vel, R.frange(-0.08f, 0.08f)) * 0.88f;                 // légère déviation, le ballon continue
@@ -1527,6 +1554,9 @@ void Match::checkOut() {
             return;
         }
         playSfx(SFX_WHISTLE);
+        // ambiance : « Ooooh ! » sur une frappe qui frôle le poteau, encouragements du public local sur un corner obtenu
+        if (!S.training && lastShotAge < 2.5f && std::fabs(b.pos.x - PITCH_W / 2) < GOAL_W / 2 + 4.f) playSfx(SFX_CROWD_OOH);
+        else if (!S.training && !S.neutral && lt == def && att == 0) playSfx(SFX_CLAPS);
         state = MS_STOP; stateT = 0.5f;
         if (lt == def) {
             nextSp = SP_CORNER; nextSpTeam = att;
@@ -1764,6 +1794,13 @@ void Match::foul(int off, int vic, bool fromBehind) {
     bool fightRisk = !pl[vic].gk && !humanSide(v.team) && pl[vic].anger >= 0.6f && R.chance(0.5f);
     // la sanction n'est pas immédiate : l'arbitre va vers le joueur à l'arrêt de jeu (suspense)
     if (r < red + yel && pendCardOff < 0) { pendCardOff = off; pendCardType = r < red ? 2 : 1; pendCardT = 0; pendCardSaid = false; }
+    else if (pendCardOff < 0 && !S.training && R.chance(fromBehind ? 0.6f : 0.25f)) {
+        // pas de carton... mais l'arbitre appelle le joueur et le sermonne ; les avertissements oraux répétés finissent en jaune
+        o.warnings++;
+        bool upgrade = o.warnings >= (fromBehind ? 2 : 3) && o.yellow == 0;
+        pendCardOff = off; pendCardType = upgrade ? 1 : 0; pendCardT = 0; pendCardSaid = false;
+        if (upgrade) pendCardWarn = true;
+    }
     if (!v.injured && R.chance(0.04f)) {
         // blessure : signalée au public, le joueur est remplacé au prochain arrêt de jeu
         v.injured = true; v.speed *= 0.8f;
@@ -1857,6 +1894,7 @@ void Match::updatePending(float dt) {
         k++;
     }
     if (subBoardT > 0) subBoardT -= dt;
+    if (refTalkT > 0) refTalkT -= dt;
     // remplacement : le panneau reste levé tant que le joueur remplacé n'est pas sorti et que le remplaçant n'est pas entré
     if (state == MS_STOP && subBoardT > 0) {
         bool busy = subOutWalking();
@@ -1867,8 +1905,20 @@ void Match::updatePending(float dt) {
     bool stopped = state == MS_STOP || state == MS_GOAL;
     if (pendCardOff >= 0 && stopped && fightT <= 0) {
         pendCardT += dt;
+        if (pendCardType == 0) {   // avertissement oral : l'arbitre parle au joueur, doigt levé
+            if (!pendCardSaid && pendCardT > 0.3f) {
+                pendCardSaid = true;
+                static const char* ORAL[] = { "L'arbitre sermonne %s : dernier avertissement !", "%s est rappelé à l'ordre par l'arbitre.", "Pas de carton, mais l'arbitre a un mot pour %s." };
+                say(fmt(ORAL[R.range(0, 2)], playerName(pendCardOff).c_str()), 2.6f, true);
+            }
+            float dist = (refPos - pl[pendCardOff].pos).len();
+            if (dist < 2.6f && refTalkT <= 0 && pendCardT > 0.6f) { refTalkT = 2.0f; refTalkFor = pendCardOff; msg = "AVERTISSEMENT ORAL"; msg2 = playerTag(pendCardOff) + fmt(" - %d%s", pl[pendCardOff].warnings, pl[pendCardOff].warnings > 1 ? "e rappel" : "er rappel"); msgT = 2.f; }
+            if ((refTalkT > 0 && refTalkT < 0.2f) || pendCardT > 4.5f) { pendCardOff = -1; refTalkT = 0; if (state == MS_STOP) stateT = std::min(stateT, 0.4f); }
+            return;
+        }
         if (!pendCardSaid && pendCardT > 0.3f) {
             pendCardSaid = true;
+            if (pendCardWarn) { pendCardWarn = false; say(playerName(pendCardOff) + " avait déjà été averti oralement : cette fois, c'est le carton jaune !", 3.f, true); }
             static const char* SUS[] = { "L'arbitre se dirige vers %s... Va-t-il sortir un carton ?", "%s est appelé par l'arbitre...", "L'arbitre met la main à la poche... %s craint le pire." };
             say(fmt(SUS[R.range(0, 2)], playerName(pendCardOff).c_str()), 2.4f, true);
             msg = "L'ARBITRE S'APPROCHE..."; msg2 = playerTag(pendCardOff); msgT = 1.6f;
@@ -1884,6 +1934,53 @@ void Match::updatePending(float dt) {
         PendSub q = pendSubs.front(); pendSubs.erase(pendSubs.begin());
         doSub(q.team, q.slot, q.incoming, true);
         stateT = 0;
+    }
+}
+
+void Match::updateCramps(float dt) {
+    if (S.training || shootout || finished) { crampP = -1; return; }
+    if (crampP < 0) {
+        if (state != MS_PLAY) return;
+        float end = S.halfMinutes * 2.f;
+        bool et = period >= 2, late = clock > end * 0.86f && period == 1;
+        if (!et && !late) return;
+        float rate = period == 3 ? 0.014f : period == 2 ? 0.007f : 0.0025f;
+        if (!R.chance(rate * dt)) return;
+        int best = -1; float bs = 0.62f;
+        for (int i = 0; i < 22; i++) { const MPlayer& p = pl[i]; if (!p.onPitch || p.gk || ball.owner == i || p.state != PS_NORMAL) continue; if (p.stamina < bs) { bs = p.stamina; best = i; } }
+        if (best < 0) return;
+        crampP = best; crampHelp = -1; crampT = 0; crampFix = 0;
+        pl[best].state = PS_DOWN; pl[best].st = 0; pl[best].vel = V2();
+        msg = "CRAMPE"; msg2 = playerTag(best); msgT = 2.f;
+        say(playerName(best) + " s'écroule, victime de crampes ! Les organismes sont à bout.", 3.f, true);
+        return;
+    }
+    MPlayer& c = pl[crampP];
+    if (!c.onPitch) { crampP = -1; return; }
+    crampT += dt;
+    c.state = PS_DOWN; c.vel = V2(); c.st = 0;
+    if (ball.owner == crampP) ball.owner = -1;
+    if (state == MS_PLAY && crampT > 10.f) {   // le jeu ne s'arrête pas : il se relève en boitant
+        c.state = PS_NORMAL; c.speed *= 0.92f; crampP = -1; return;
+    }
+    if (state == MS_STOP) {
+        if (crampHelp < 0) {   // fair-play : l'adversaire le plus proche vient lui étirer la jambe (sinon un coéquipier)
+            float bd = 1e9f;
+            for (int i = 0; i < 22; i++) { if (i == crampP || !pl[i].onPitch || pl[i].gk) continue; float d = (pl[i].pos - c.pos).len() + (pl[i].team == c.team ? 6.f : 0.f); if (d < bd) { bd = d; crampHelp = i; } }
+            if (crampHelp >= 0) say(playerName(crampHelp) + " vient étirer la jambe de " + playerName(crampP) + ". Beau geste.", 2.8f, true);
+        }
+        if (crampHelp >= 0) {
+            MPlayer& h = pl[crampHelp];
+            V2 tg = c.pos + V2(c.pos.x < PITCH_W / 2 ? 1.0f : -1.0f, 0.2f), d = tg - h.pos;
+            if (d.len() > 0.15f) { h.vel = d.norm() * std::min(4.f, d.len() * 3.f); h.pos += h.vel * dt; h.anim += h.vel.len() * dt; h.face = d.norm(); h.state = PS_NORMAL; }
+            else { h.vel = V2(); h.face = (c.pos - h.pos).norm(); h.state = PS_HAND; crampFix += dt; }
+            stateT = std::min(stateT, 1.2f);
+            if (crampFix > 3.2f) {
+                h.state = PS_NORMAL; c.state = PS_NORMAL; c.speed *= 0.93f; c.stamina = std::max(c.stamina, 0.3f);
+                say(playerName(crampP) + " se relève, il va pouvoir continuer.", 2.2f, true);
+                crampP = -1; crampHelp = -1;
+            }
+        }
     }
 }
 
@@ -1947,7 +2044,7 @@ void Match::beginSetPiece(int type, int t, V2 spot) {
     if(!shootout&&!S.training&&t>=0&&t<2){if(type==SP_THROWIN)throws[t]++;if(type==SP_FREEKICK||type==SP_INDIRECT)freeKicks[t]++;if(type==SP_GOALKICK)goalKicks[t]++;if(type==SP_PENALTY)penalties[t]++;}
     if (type == SP_CORNER && !S.training && t >= 0 && t < 2) corners[t]++;
     state = MS_SETPIECE; stateT = 0; autoSubDone = false;
-    sp = type; spTeam = t; spPos = spot; spT = 0; spReady = false; spCurl = 0;
+    sp = type; spTeam = t; spPos = spot; spT = 0; spReady = false; spCurl = 0; spPower = 0;
     ball = Ball();
     ball.pos = spot;
     ball.lastTeam = t;
@@ -2163,6 +2260,13 @@ void Match::updateSetPiece(float dt) {
         if (snapped) {
             if (!spReady) p.pos = p.target;
             p.vel = V2();
+            // corner : ça bouge dans la surface pendant que le tireur prépare son centre (marquage, petits pas, appels)
+            if (sp == SP_CORNER && spReady && i != spKicker && !p.gk && std::fabs(p.target.y - spPos.y) < 22.f) {
+                float a = spT * (1.3f + (i % 4) * 0.25f) + i * 1.7f;
+                V2 np = p.target + V2(std::sin(a) * 0.8f, std::cos(a * 0.8f) * 0.55f);
+                p.vel = (np - p.pos) * (1.f / std::max(dt, 1e-3f));
+                p.pos = np; p.face = (ball.pos - p.pos).norm();
+            }
         } else {
             float l = d.len();
             float sp2 = std::min(l / dt, sp == SP_SHOOTOUT ? 6.5f : 10.f);
@@ -2363,6 +2467,31 @@ void Match::updateSetPiece(float dt) {
             }
             if (!penalty && passP) { doKick(0); return; }
             if (!penalty && longP) { doKick(1); return; }
+            return;
+        }
+        // corner et six mètres : centre / dégagement dosé — appui long sur Lob (ou Tir) : plus fort, plus loin
+        // (corner : du premier au second poteau, point de chute affiché ; L2 / R2 : effet)
+        if (sp == SP_CORNER || sp == SP_GOALKICK) {
+            bool hold = lobHeld || shootHeld, rel = lobRel || shootRel;
+            const float cmax = 0.9f;
+            if (hold) { p.charging = true; p.chargeKind = 1; p.charge += dt; spPower = std::min(1.f, p.charge / cmax); if (p.charge > cmax + 0.3f) rel = true; }
+            if (rel && p.charging) {
+                float pw = std::min(1.f, p.charge / cmax);
+                p.charging = false; p.charge = 0; p.chargeKind = 0;
+                if (pw < 0.08f) { doKick(1); spPower = 0; return; }
+                float dist = sp == SP_CORNER ? 16.f + pw * 28.f : 22.f + pw * 40.f;
+                float vz = sp == SP_CORNER ? 6.f + pw * 2.5f : 7.f + pw * 6.f, T = 2 * vz / GRAV;
+                float vh = dist / T;
+                kickBall(k, spAim, vh, vz, true, false);
+                if (sp == SP_CORNER && std::fabs(spCurl) > 0.02f) ball.spin = spCurl * 5.5f;
+                if (sp == SP_CORNER || sp == SP_GOALKICK) offsideReset(OR_EXEMPT_RESTART);
+                p.cool = 0.35f; ball.backpass = !p.gk; spPower = 0;
+                state = MS_PLAY; stateT = 0;
+                return;
+            }
+            if (passP && !p.charging) { doKick(0); return; }
+            if (longP && !p.charging) { doKick(1); return; }
+            if (!snes && c.f1p && !p.charging) { doKick(0); return; }
             return;
         }
         if (snes) { if (c.f1p) doKick(0); else if (c.f2p || c.f3p || c.f4p) doKick(1); }
@@ -3606,6 +3735,9 @@ void Match::updateShootUI(float dt) {
 
 void Match::finishMatch() {
     if (shootout || abandoned) playSfx(SFX_WHISTLE_FINAL);
+    // plus de remplacement après le coup de sifflet final (le panneau du 4e arbitre restait affiché)
+    subBoardT = 0; pendSubs.clear(); pendCardOff = -1; refTalkT = 0; crampP = -1;
+    for (auto& w : walkers) if (w.sub) w.pos = w.target;
     finished = true; walkT = 0;
     state = MS_END; stateT = 0;
     if (shootout) { resultPH = pens[0]; resultPA = pens[1]; }
@@ -3635,6 +3767,13 @@ void Match::startReplay() {
     int n = std::min(rpCount, 420);
     rpPos = (rpHead - n + REPLAY_N) % REPLAY_N;
     repEndHold = 0;
+    if (!S.training && goalClips.size() < 24) {   // garde la séquence pour le résumé des buts
+        GoalClip c; c.n = n; c.team = lastScorerTeam;
+        for (auto it = events.rbegin(); it != events.rend(); ++it) if (it->type == 0 || it->type == 3) { c.who = it->player + (it->type == 3 ? " (csc)" : it->pen ? " (pen.)" : ""); c.minute = it->minute; break; }
+        c.s.resize((size_t)n * 22); c.b.resize(n);
+        for (int k = 0; k < n; k++) { int f = (rpPos + k) % REPLAY_N; for (int i = 0; i < 22; i++) c.s[(size_t)k * 22 + i] = rp[(size_t)f * 22 + i]; c.b[k] = rb[f]; }
+        goalClips.push_back(std::move(c));
+    }
 }
 
 void Match::update(float dt) {
@@ -3684,7 +3823,7 @@ void Match::update(float dt) {
     }
     if (msgT > 0) msgT -= dt;
     if (S.training && trainingUpdate(dt)) return;
-    if (!ceremony && state != MS_REPLAY) updatePending(dt);
+    if (!ceremony && state != MS_REPLAY) { updatePending(dt); updateCramps(dt); }
     float rate = S.training ? 0.f : (float)S.halfMinutes / std::max(20.f, S.halfSeconds);
     switch (state) {
     case MS_SETPIECE:
@@ -3849,7 +3988,7 @@ void Match::update(float dt) {
         if (ball.z > 0) { ball.vz -= GRAV * dt; ball.z = std::max(0.f, ball.z + ball.vz * dt); }
         for (auto& p : pl) if (p.onPitch && p.pos.x < 0 && subBoardT > 0 && !subOutWalking()) { V2 d = p.target - p.pos; if (d.len() > 0.3f) { p.vel = d.norm() * 3.f; p.pos += p.vel * dt; p.anim += 3.f * dt; } }
         if (stateT > 0.6f && !autoSubDone && nextSp != SP_SHOOTOUT) { autoSubDone = true; autoSubs(0); autoSubs(1); }
-        if (stateT > 1.6f && pendCardOff < 0 && subBoardT <= 0 && pendSubs.empty() && !redWalking()) {
+        if (stateT > 1.6f && pendCardOff < 0 && subBoardT <= 0 && pendSubs.empty() && !redWalking() && !crampBusy()) {
             if (nextSp == SP_SHOOTOUT) { shootoutNext(); break; }
             beginSetPiece(nextSp, nextSpTeam, nextSpPos);
             if (nextSp == SP_PENALTY) playSfx(SFX_CROWD_OOH);

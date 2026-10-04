@@ -189,6 +189,8 @@ static void screenHtInterview(float dt) {
     if (!g_match) { g_screen = SC_MAIN; return; }
     Match& m = *g_match;
     g_itwT += dt;
+    audioCrowd(true, 0.09f);                                  // l'ambiance du stade continue derrière l'interview
+    audioSupporters(CH_NORMAL, 0.45f);
     float t = (float)GetTime();
     int tm = g_itwIdx;                                   // 0 : joueur de l'équipe qui reçoit, 1 : visiteur
     bool scored = false;
@@ -309,17 +311,21 @@ static void screenTunnel(float dt) {
     // la lumière du stade envahit l'écran à la sortie
     if (T > WALK) { float a = std::min(1.f, (T - WALK) / (END - WALK)); DrawRectangle(0, 0, VW, VH, Color{ 255, 255, 240, (unsigned char)(255 * a * a) }); }
     audioCrowd(true, 0.05f + std::min(0.12f, T * 0.015f));          // la rumeur du stade monte
+    audioEntranceMusic(true);                                          // fanfare d'entrée (musique originale du jeu)
     tvLogo(10, 8, g_tv.channel, t); tvLive(VW - 10, 12, t);
     DrawRectangle(20, VH - 46, 300, 20, Color{ 10, 14, 34, 220 }); DrawRectangle(20, VH - 46, 4, 20, C_HI);
     drawTextPx(T < GO ? "Dans le tunnel, les joueurs attendent le signal..." : "Les deux équipes entrent sur la pelouse !", 28, VH - 41, 10, WHITE);
     drawFooter("OK : passer");
-    if (T > END || IN.ok || IN.start || IN.click || IN.back) { audioCrowd(false, 0); launchMatch(); }
+    if (T > END || IN.ok || IN.start || IN.click || IN.back) { audioCrowd(false, 0); g_tunnelPending = false; g_screen = g_match ? SC_MATCH : SC_MAIN; }
 }
 
 // fin des présentations TV : tunnel pour les matchs de sélections, sinon coup d'envoi
+// ordre réel : vestiaire (si l'option est active), puis le tunnel, puis l'entrée sur la pelouse
 static void tvLaunch() {
-    if (g_setup.tv && g_setup.anthems && !g_setup.training) openTunnel();
-    else launchMatch();
+    bool tun = g_setup.tv && g_setup.anthems && !g_setup.training;
+    g_tunnelPending = tun;
+    launchMatch();                                  // ouvre le vestiaire d'avant-match s'il est demandé
+    if (tun && g_screen != SC_LOCKER) openTunnel();
 }
 
 static void drawStar5(float cx, float cy, float r, Color c) {
@@ -361,4 +367,91 @@ static void drawMatchRating(const Match& m) {
     bar("Spectacle", spectacle, y + 26); bar("Suspense", suspense, y + 42); bar("Intensité", intens, y + 58);
     const char* verdict = note >= 8.5f ? "Un match fou, de ceux qu'on n'oublie pas !" : note >= 7 ? "Une très belle affiche." : note >= 5.5f ? "Un match correct." : note >= 4 ? "Un match fermé, peu d'occasions." : "Un match à vite oublier...";
     drawTextPx(fitText(verdict, w - 120, 10), x + 112, y + 78, 10, Color{ 220, 228, 255, 255 });
+}
+
+// ---------------- résumé des buts (mi-temps, avant la prolongation, fin du match) : rejoue la séquence de chaque but
+static std::unique_ptr<Match> g_recapM;
+static int g_recapIdx = 0, g_recapNext = 0;      // 0 mi-temps (puis interview), 1 avant la prolongation (retour au match), 2 fin du match (mot de la fin)
+static float g_recapT = 0, g_recapAcc = 0, g_recapHold = 0;
+static bool g_recapET = false, g_recapFinal = false;
+static void openTvOutro();
+static void recapProceed() {
+    g_recapM.reset();
+    if (g_recapNext == 0) openHtInterview();
+    else if (g_recapNext == 1) g_screen = SC_MATCH;
+    else openTvOutro();
+}
+static void recapLoad(int i) {
+    Match& M = *g_recapM; const Match::GoalClip& c = g_match->goalClips[i];
+    M.rp.assign((size_t)Match::REPLAY_N * 22, Snap{}); M.rb.assign(Match::REPLAY_N, BallSnap{});
+    for (int k = 0; k < c.n && k < Match::REPLAY_N; k++) { for (int j = 0; j < 22; j++) M.rp[(size_t)k * 22 + j] = c.s[(size_t)k * 22 + j]; M.rb[k] = c.b[k]; }
+    M.rpCount = c.n; M.rpHead = c.n % Match::REPLAY_N; M.rpPos = 0;
+    M.state = MS_REPLAY; M.offReplay = false; M.lastScorerTeam = c.team; M.repEndHold = 0; M.stateT = 0; M.msgT = 0; M.comT = 0;
+    g_recapT = 0; g_recapAcc = 0; g_recapHold = 0;
+}
+static void openRecap(int next) {
+    g_recapNext = next;
+    if (!g_match || g_match->goalClips.empty() || !g_match->S.tv || g_match->S.training) { recapProceed(); return; }
+    g_recapM.reset(new Match(*g_match));
+    g_recapIdx = 0; recapLoad(0);
+    g_screen = SC_RECAP;
+}
+static void screenRecap(float dt) {
+    if (!g_recapM || !g_match) { recapProceed(); return; }
+    Match& M = *g_recapM;
+    const Match::GoalClip& c = g_match->goalClips[g_recapIdx];
+    g_recapT += dt; g_recapAcc += dt;
+    while (g_recapAcc >= 1.f / 60) { g_recapAcc -= 1.f / 60; if (M.rpPos < c.n - 1) M.rpPos++; else g_recapHold += 1.f / 60; }
+    M.stateT = g_recapT;
+    audioCrowd(true, 0.08f);
+    renderMatch(M, false);
+    float t = (float)GetTime();
+    // habillage : bandeau « RÉSUMÉ », numéro du but, minute et buteur
+    const char* ttl = g_recapNext == 0 ? "LES BUTS DE LA PREMIÈRE PÉRIODE" : g_recapNext == 1 ? "AVANT LA PROLONGATION : LES BUTS" : "RÉSUMÉ : TOUS LES BUTS DU MATCH";
+    (void)t; DrawRectangle(0, 52, VW, 18, Color{ 190, 30, 40, 220 }); drawTextCentered(ttl, VW / 2, 56, 10, WHITE, false);
+    int bw = 360, bx = VW / 2 - bw / 2, by = VH - 64;
+    DrawRectangle(bx + 3, by + 3, bw, 34, Color{ 0, 0, 0, 120 });
+    DrawRectangleGradientV(bx, by, bw, 34, Color{ 18, 28, 64, 240 }, Color{ 8, 12, 30, 240 });
+    DrawRectangle(bx, by, 4, 34, c.team >= 0 ? hexc(g_match->kit[c.team].shirt) : C_HI);
+    drawTextPx(fmt("BUT %d/%d", g_recapIdx + 1, (int)g_match->goalClips.size()), bx + 10, by + 4, 10, C_HI);
+    drawTextPx(fitText(fmt("%d'  ", (int)c.minute + 1) + c.who + (c.team >= 0 ? "  (" + g_match->team(c.team).shortName + ")" : ""), bw - 20, 10), bx + 10, by + 18, 10, WHITE);
+    std::string sc = fmt("%s %d - %d %s", g_match->team(0).shortName.c_str(), g_match->score[0], g_match->score[1], g_match->team(1).shortName.c_str());
+    drawTextPx(sc, bx + bw - 10 - textWidth(sc, 10), by + 4, 10, C_DIM);
+    drawFooter("OK : but suivant   Entrée : passer le résumé");
+    if (IN.start || IN.back) { recapProceed(); return; }
+    if (g_recapHold > 0.8f || IN.ok || IN.click) {
+        IN.ok = IN.click = false;
+        if (++g_recapIdx >= (int)g_match->goalClips.size()) { recapProceed(); return; }
+        recapLoad(g_recapIdx);
+    }
+}
+
+// ---------------- mot de la fin : les commentateurs concluent et rendent l'antenne
+static float g_outroT = 0;
+static void openTvOutro() {
+    if (!g_match || !g_match->S.tv) { finishMatchToResult(); return; }
+    g_outroT = 0; g_screen = SC_TVOUTRO;
+}
+static void screenTvOutro(float dt) {
+    if (!g_match) { g_screen = SC_MAIN; return; }
+    Match& m = *g_match;
+    g_outroT += dt;
+    float t = g_outroT;
+    const Team& H = m.team(0); const Team& A = m.team(1);
+    int d = m.score[0] - m.score[1];
+    std::string winner = d > 0 ? H.name : d < 0 ? A.name : "";
+    std::vector<std::string> lines;
+    lines.push_back(fmt("C'est terminé : %s %d - %d %s", H.name.c_str(), m.score[0], m.score[1], A.name.c_str()) + (m.shootout ? fmt(" (%d-%d aux tirs au but)", m.pens[0], m.pens[1]) : std::string("")) + ".");
+    lines.push_back(winner.empty() ? std::string("Un partage des points au terme d'un match disputé.") : "Victoire méritée de " + winner + (std::abs(d) >= 3 ? ", qui a fait le spectacle ce soir." : ", au bout de l'effort."));
+    lines.push_back("Merci de nous avoir suivis, et merci à " + g_tv.com2 + " pour ses analyses.");
+    lines.push_back("Merci à toi, " + g_tv.com1 + ". Belle soirée de football, à très bientôt !");
+    lines.push_back("C'était " + g_tv.com1 + ", en direct du " + (m.S.stadium.empty() ? std::string("stade") : m.S.stadium) + ". Nous vous rendons l'antenne, bonne soirée sur " + (g_tv.channel.empty() ? std::string("la chaîne") : g_tv.channel) + " !");
+    audioCrowd(true, 0.06f);
+    drawCommentaryBooth(t, &lines);
+    // score final en surimpression
+    DrawRectangle(VW / 2 - 100, 4, 200, 20, Color{ 10, 14, 34, 235 }); DrawRectangle(VW / 2 - 100, 22, 200, 2, C_HI);
+    drawTextCentered(fmt("%s  %d - %d  %s", H.shortName.c_str(), m.score[0], m.score[1], A.shortName.c_str()), VW / 2, 8, 10, WHITE, false);
+    if (t > 15.6f) { float a = std::min(1.f, (t - 15.6f) / 1.2f); DrawRectangle(0, 0, VW, VH, Color{ 0, 0, 0, (unsigned char)(255 * a) }); }
+    drawFooter("OK : terminer");
+    if (t > 16.8f || IN.ok || IN.start || IN.click || IN.back) { audioCrowd(false, 0); finishMatchToResult(); }
 }

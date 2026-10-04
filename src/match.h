@@ -45,6 +45,7 @@ enum PState { PS_NORMAL = 0, PS_SLIDE, PS_DOWN, PS_DIVE, PS_GKHOLD, PS_THROW, PS
 struct MPlayer {
     int team = 0;
     int slot = 0;           // 0 = gardien, 1..10
+    int warnings = 0;       // avertissements oraux de l'arbitre
     int squad = 0;          // index dans l'effectif
     int chargeKind = 0;     // jauge en cours : 0 frappe, 1 lob
     int shirtOf = -1;       // fin de match : maillot échangé (équipe dont il porte le maillot)
@@ -271,7 +272,10 @@ struct Match {
     std::vector<EndPair> endPairs;
     bool refCarry = false;
     // ralenti du hors-jeu : lignes de détection (avant-dernier défenseur / attaquant) au moment de la passe
-    float repEndHold = 0;   // ralenti du but : arrêt sur la dernière image avant de reprendre
+    float repEndHold = 0;
+    float refTalkT = 0; int refTalkFor = -1; bool pendCardWarn = false;   // avertissement oral (l'arbitre parle au joueur)
+    float spPower = 0;      // corner / six mètres : puissance en cours de dosage (point de chute affiché)
+    bool anthOn = false; float anthStart = 0, anthClap = -1;   // hymne : démarre quand tous sont alignés ; applaudissements après la dernière note   // ralenti du but : arrêt sur la dernière image avant de reprendre
     int offRpIdx = -1; bool offReplay = false; float offLineY = 0, offAttY = 0, offRepMargin = 0, offRepHold = 0; int offRepPlayer = -1;
     void updateEndScene(float dt);
     V2 pedestal;
@@ -288,6 +292,9 @@ struct Match {
     std::vector<Snap> rp;           // REPLAY_N * 22
     std::vector<BallSnap> rb;
     int rpHead = 0, rpCount = 0, rpPos = 0;
+    // résumé des buts (mode TV : mi-temps, avant la prolongation, fin du match) : séquence de chaque but
+    struct GoalClip { std::vector<Snap> s; std::vector<BallSnap> b; int n = 0, team = -1; std::string who; float minute = 0; };
+    std::vector<GoalClip> goalClips;
     // caméra
     V2 cam;
     // contrôleurs humains -> joueur
@@ -451,6 +458,10 @@ struct Match {
     void setCelebration(int type);         // choisit la célébration du buteur et sa destination
     void doSub(int team, int slot, int incoming, bool anim);
     void updatePending(float dt);
+    // crampes (fin de match intense, prolongations) : le joueur s'écroule ; à l'arrêt de jeu, un adversaire lui étire la jambe
+    int crampP = -1, crampHelp = -1; float crampT = 0, crampFix = 0;
+    void updateCramps(float dt);
+    bool crampBusy() const { return crampP >= 0 && crampHelp >= 0 && crampFix < 3.2f; }
     // temps additionnel : panneau du 4e arbitre
     bool boardDone = false; float boardT = 0; int boardN = 0; int subsPeriod = 0;
     // entraînement

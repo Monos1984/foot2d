@@ -3,7 +3,9 @@ void audioInit();
 void audioShutdown();
 void audioPlay(int sfx);
 void audioJingleForce(int j);
-void audioApplause(float vol);   // applaudissements en boucle sans couture (à appeler chaque image ; 0 = arrêt)   // publicité : joue même si la musique est coupée
+void audioApplause(float vol);
+void audioEntranceMusic(bool on);
+void audioSetFrenchCrowd(bool on);   // public de l'équipe de France : le refrain de La Marseillaise fait partie des chants  // fanfare d'entrée des équipes (composition originale) : tunnel des sélections   // applaudissements en boucle sans couture (à appeler chaque image ; 0 = arrêt)   // publicité : joue même si la musique est coupée
 void audioCrowd(bool on, float vol);
 void audioSetEnabled(bool sfx);
 void audioMusic(bool on);

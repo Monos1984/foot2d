@@ -185,7 +185,7 @@ static void tvBackdrop(float t) {
 
 // ---------------- présentation télévisée
 // cabine des commentateurs : vue sur le stade, les deux voix de la chaîne présentent l'affiche
-static void drawCommentaryBooth(float t) {
+static void drawCommentaryBooth(float t, const std::vector<std::string>* say = nullptr) {
     const Team& H = g_world.teams[g_setup.home]; const Team& A = g_world.teams[g_setup.away];
     MatchSetup tmp = g_setup; Kit kits[2]; matchKits(tmp, kits);
     // la baie vitrée : tribunes, pelouse, joueurs à l'échauffement
@@ -206,13 +206,13 @@ static void drawCommentaryBooth(float t) {
         int cx = k ? VW - 190 : 190;
         TvPerson lk = tvLook(k ? g_tv.com2 : g_tv.com1, k ? g_tv.c2gender : 0);
         DrawRectangleGradientV(cx - 40, 140, 80, 80, Color{ 70, 100, 160, 255 }, Color{ 24, 34, 60, 255 });
-        bool talk = ((int)(t / 2.2f)) % 2 == k;
+        bool talk = (say && !say->empty() ? ((int)(t / 3.2f)) % 2 : ((int)(t / 2.2f)) % 2) == k;
         drawBust(cx - 40, 140, 80, lk.skin, lk.hair, lk.gender, lk.outfit, tvLookHash(k ? g_tv.com2 : g_tv.com1), talk);
         DrawRectangleLines(cx - 40, 140, 80, 80, Color{ 240, 200, 60, 200 });
         // casque et micro
         DrawRectangle(cx - 30, 138, 60, 5, Color{ 30, 30, 34, 255 }); DrawRectangle(cx - 34, 160, 8, 18, Color{ 30, 30, 34, 255 }); DrawRectangle(cx + 26, 160, 8, 18, Color{ 30, 30, 34, 255 });
         DrawLine(cx + 30, 176, cx + 10, 196, Color{ 30, 30, 34, 255 }); DrawCircle(cx + 9, 197, 4, Color{ 40, 40, 44, 255 });
-        bool speaking = ((int)(t / 2.2f)) % 2 == k;
+        bool speaking = (say && !say->empty() ? ((int)(t / 3.2f)) % 2 : ((int)(t / 2.2f)) % 2) == k;
         if (speaking) DrawRectangle(cx - 6, 196, 12, 3 + (int)(std::fabs(std::sin(t * 14)) * 3), Color{ 60, 20, 20, 255 });
         DrawRectangle(cx - 50, 222, 100, 30, Color{ 20, 24, 34, 255 }); DrawRectangle(cx - 46, 226, 92, 22, Color{ 40, 90, 160, 255 });
         drawTextCentered(k ? fmt("%s", A.shortName.c_str()) : fmt("%s", H.shortName.c_str()), cx, 232, 10, WHITE, false);
@@ -227,6 +227,7 @@ static void drawCommentaryBooth(float t) {
     std::string l1 = "Bonsoir à tous et bienvenue " + std::string(g_setup.stadium.empty() ? "au stade" : "au " + g_setup.stadium) + " pour " + H.name + " - " + A.name + " !";
     std::string l2 = (g_setup.title.empty() ? std::string("Une belle affiche") : g_setup.title) + fmt(" : %d spectateurs attendus, ambiance %s.", g_setup.attendance, g_setup.supporterAtmosphere >= 70 ? "électrique" : g_setup.supporterAtmosphere >= 45 ? "chaleureuse" : "calme");
     std::string line = ((int)(t / 2.2f)) % 2 == 0 ? l1 : l2;
+    if (say && !say->empty()) line = (*say)[std::min((int)say->size() - 1, (int)(t / 3.2f))];
     DrawRectangle(20, 304, VW - 40, 34, Color{ 0, 0, 0, 170 });
     int ly = 308; for (auto& l : wrapText(line, VW - 60)) { if (ly > 330) break; drawTextPx(l, 30, ly, 10, WHITE); ly += 12; }
 }

@@ -1,6 +1,8 @@
 // Scènes de vestiaire : avant le match, à la mi-temps et après le match (équipe dirigée par le joueur).
 // Le discours choisi a un effet léger et annoncé (mentalité, récupération) ; après le match, il est purement narratif.
 static int g_lockerPhase = 0, g_lockerTalk = -1, g_lockerSide = -1;
+static bool g_tunnelPending = false;      // mode TV, sélections : le tunnel suit le vestiaire d'avant-match
+static void openTunnel();
 static float g_lockerT = 0;
 static void postContinue();
 static float colorBrightUI(unsigned c) { return (((c >> 16) & 255) * 0.3f + ((c >> 8) & 255) * 0.59f + (c & 255) * 0.11f) / 255.f; }
@@ -207,11 +209,11 @@ static void screenLocker() {
         if (go || ((IN.ok || IN.start) && g_lockerT > 0.2f)) {
             effect.clear();
             audioSupporters(CH_TENSE, 0); audioCrowd(false, 0);
-            if (g_lockerPhase == 2) postContinue(); else g_screen = SC_MATCH;
+            if (g_lockerPhase == 2) postContinue(); else if (g_lockerPhase == 0 && g_tunnelPending) openTunnel(); else g_screen = SC_MATCH;
             return;
         }
     }
-    if (IN.back) { effect.clear(); audioSupporters(CH_TENSE, 0); audioCrowd(false, 0); if (g_lockerPhase == 2) postContinue(); else g_screen = SC_MATCH; return; }
+    if (IN.back) { effect.clear(); audioSupporters(CH_TENSE, 0); audioCrowd(false, 0); if (g_lockerPhase == 2) postContinue(); else if (g_lockerPhase == 0 && g_tunnelPending) openTunnel(); else g_screen = SC_MATCH; return; }
     // le stade gronde derrière les murs ; chants des joueurs après une victoire
     audioCrowd(true, g_lockerPhase == 2 ? 0.04f : 0.07f);
     audioSupporters(party ? CH_CELEBRATE : CH_NORMAL, party ? 0.3f : 0.12f);

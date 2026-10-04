@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS, SC_SOUNDTEST, SC_FRIENDLYVS, SC_HTITW, SC_TUNNEL };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS, SC_SOUNDTEST, SC_FRIENDLYVS, SC_HTITW, SC_TUNNEL, SC_RECAP, SC_TVOUTRO };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -918,11 +918,13 @@ static void startSetup(int home, int away, bool career, int comp, int match) {
 }
 
 static const char* PITCH_NAMES[] = { "Normal", "Sec", "Humide", "Boueux", "Gelé", "Aléatoire" };
-static const char* DIFF_NAMES[] = { "Facile", "Normal", "Difficile" };
+static const char* DIFF_NAMES[] = { "Amateur", "Semi-pro", "Pro" };
 
 static bool g_trophyChecked = false, g_trophyShown = false, g_podiumMusic = false, g_htShown = false;
 static void openTvAds(int phase, Screen next);
 static void openHtInterview();
+static void openRecap(int next);
+static bool g_recapETShown = false;
 static void drawMatchRating(const Match& m);
 static void loadCustomAds();
 static std::string walkMusicFor(const std::string& comp);
@@ -944,7 +946,7 @@ static void launchMatch() {
     g_match->init(s);
     g_screen = SC_MATCH;
     g_htStudio = g_ftStudio = false;
-    g_trophyChecked = false; g_trophyShown = false; g_podiumMusic = false; g_htShown = false;
+    g_trophyChecked = false; g_trophyShown = false; g_podiumMusic = false; g_htShown = false; g_recapETShown = false;
     openLocker(0);
 }
 
@@ -1556,6 +1558,7 @@ static void screenMatch(float dt) {
             if (audioWalkoutPlaying() && (!m.ceremony || m.anthemReq >= 0 || m.cerPhase >= 10)) audioWalkoutFade();
         }
         // hymnes nationaux
+        if (!(m.ceremony && m.cerPhase == -1)) audioEntranceMusic(false);    // la fanfare d'entrée s'arrête quand les hymnes commencent
         if (m.anthemReq >= 0) {
             std::string code = m.S.anthemOnly;
             if (code.empty()) { const Team& AT = g_world.teams[m.anthemReq == 0 ? m.S.home : m.S.away]; code = AT.nation >= 0 && AT.nation < NUM_NATIONS ? NATIONS[AT.nation].code : "FRA"; }
@@ -1587,6 +1590,7 @@ static void screenMatch(float dt) {
             if (wv >= 0 && lastWave < 0) audioPlay(SFX_OLA);
             lastWave = wv;
         }
+        { const Team& HT = m.team(0); audioSetFrenchCrowd(!m.S.neutral && HT.kind == TK_NATION && HT.nation >= 0 && HT.nation < NUM_NATIONS && !strcmp(NATIONS[HT.nation].code, "FRA")); }
         if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||(m.state==MS_REPLAY&&!m.offReplay))&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;else if(m.finished){int d=m.S.neutral?0:m.score[0]-m.score[1];chant=d>0?CH_CELEBRATE:d==0?CH_ENCOURAGE:d>=-2?CH_ENCOURAGE:CH_WHISTLES;}audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
     } else { audioCrowd(false, 0); audioApplause(0); }
     if (m.finished && !g_trophyChecked && !g_paused) {
@@ -1604,8 +1608,9 @@ static void screenMatch(float dt) {
     }
     if (m.trophyActive && m.trLift && !g_podiumMusic) { g_podiumMusic = true; audioJingle(4); }     // hymne de la victoire
     // mi-temps : écran récapitulatif, puis plateau TV éventuel, puis reprise
+    if (m.S.tv && !m.S.training && m.state == MS_BREAK && m.nextSp == 2 && m.stateT > 1.f && !g_recapETShown && !g_paused) { g_recapETShown = true; openRecap(1); return; }   // avant la prolongation
     if (m.htWaiting && !m.htGo && !g_paused) {
-        if (!g_htShown) { g_htShown = true; if (m.S.tv && !m.S.training) openHtInterview(); else g_screen = SC_HALFTIME; return; }
+        if (!g_htShown) { g_htShown = true; if (m.S.tv && !m.S.training) openRecap(0); else g_screen = SC_HALFTIME; return; }
         if (m.S.studio && !g_htStudio) { g_htStudio = true; g_studioPhase = 1; g_studioT = 0; g_screen = SC_STUDIO; return; }
         m.htGo = true;
     }
@@ -1666,7 +1671,11 @@ static void screenMatch(float dt) {
         if (m.invasion && !(IN.start || IN.back)) { m.stateT = 0; if (m.invT < 1.f) audioSupporters(CH_CELEBRATE, 1.f); return; }
         if (m.invasion) m.invasion = false;
         // les joueurs se serrent la main et rentrent au vestiaire (OK pour passer)
-        if (m.stateT > (g_trophyShown ? 2.5f : m.S.training ? 5.0f : 18.0f) || IN.ok || IN.click) { audioCrowd(false, 0); finishMatchToResult(); }
+        if (m.stateT > (g_trophyShown ? 2.5f : m.S.training ? 5.0f : 18.0f) || IN.ok || IN.click) {
+            audioCrowd(false, 0);
+            if (m.S.tv && !m.S.training && !m.abandoned && !g_trophyShown) openRecap(2);     // résumé des buts puis mot de la fin des commentateurs
+            else finishMatchToResult();
+        }
         m.stateT += dt;
         return;
     }
@@ -4619,8 +4628,9 @@ void appFrame(float dt) {
         if ((int)g_screen != markScreen) { crashMark("écran %d", (int)g_screen); markScreen = (int)g_screen; }
     }
     g_noBackBtn = g_screen == SC_MAIN || g_screen == SC_JOBS || g_screen == SC_SPLASH;
-    if (g_screen != SC_MATCH) audioApplause(0);     // la boucle d'applaudissements ne survit pas hors du match
-    audioMusic(g_screen != SC_MATCH && g_screen != SC_HALFTIME && g_screen != SC_LOCKER && g_screen != SC_TVADS && g_screen != SC_TVINTRO && g_screen != SC_SETUP && g_screen != SC_STUDIO && g_screen != SC_HTITW && g_screen != SC_TUNNEL);
+    if (g_screen != SC_MATCH) audioApplause(0);
+    if (g_screen != SC_MATCH && g_screen != SC_TUNNEL) audioEntranceMusic(false);     // la boucle d'applaudissements ne survit pas hors du match
+    audioMusic(g_screen != SC_MATCH && g_screen != SC_HALFTIME && g_screen != SC_LOCKER && g_screen != SC_TVADS && g_screen != SC_TVINTRO && g_screen != SC_SETUP && g_screen != SC_STUDIO && g_screen != SC_HTITW && g_screen != SC_TUNNEL && g_screen != SC_RECAP && g_screen != SC_TVOUTRO);
     switch (g_screen) {
     case SC_SPLASH: screenSplash(dt); break;
     case SC_LIFENEW: screenLifeNew(); break;
@@ -4634,6 +4644,8 @@ void appFrame(float dt) {
     case SC_FRIENDLYVS: screenFriendlyVs(); break;
     case SC_HTITW: screenHtInterview(dt); break;
     case SC_TUNNEL: screenTunnel(dt); break;
+    case SC_RECAP: screenRecap(dt); break;
+    case SC_TVOUTRO: screenTvOutro(dt); break;
     case SC_SETUP: if(g_mctx.career&&g_career.sportingMode())launchMatch();else screenSetup(); break;
     case SC_MATCH: screenMatch(dt); break;
     case SC_POST: screenPost(); break;
@@ -4869,11 +4881,20 @@ void appTestStart(const char* mode) {
     } else if (m == "setup") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("BRA"), false, -1, -1);
     } else if (m == "soundtest") { g_screen = SC_SOUNDTEST;
+    } else if (m == "recap" || m == "outro") {
+        startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("ARG"), false, -1, -1);
+        for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;
+        g_setup.tv = true; setFriendlyTv(0);
+        launchMatch(); Match& M = *g_match; M.ceremony = false; M.startPeriod(0);
+        for (int f = 0; f < 60 * 8; f++) { M.update(1.f / 60); M.sfxN = 0; M.rumbleN = 0; }
+        { int f = 10; M.ball.pos = V2(PITCH_W / 2, 3); M.pl[f].pos = V2(PITCH_W / 2 + 3, 8); M.ball.lastTouch = f; M.ball.lastTeam = 0; M.attackDir[0] = -1; M.goalScored(0); }
+        for (int f = 0; f < 60 * 10 && M.goalClips.empty(); f++) { M.update(1.f / 60); M.sfxN = 0; M.rumbleN = 0; }   // jusqu'au ralenti du but
+        if (m == "recap") openRecap(2); else openTvOutro();
     } else if (m == "tunnel" || m == "htitw" || m == "tvopen") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("ARG"), false, -1, -1);
         for (int i = 0; i < NUM_INPUTS; i++) g_setup.side[i] = -1;
         g_setup.tv = true; g_setup.anthems = true; setFriendlyTv(0);
-        if (m == "tunnel") openTunnel();
+        if (m == "tunnel") { launchMatch(); openTunnel(); }
         else if (m == "tvopen") { g_tvOpenPhase = getenv("FOOT_TVPH") ? atoi(getenv("FOOT_TVPH")) : 0; g_screen = SC_TVINTRO; }
         else { launchMatch(); Match& M = *g_match; M.ceremony = false; M.startPeriod(0); M.score[0] = 1; MatchEvent e; e.type = 0; e.team = 0; e.minute = 20; e.player = M.team(0).squad[M.pl[9].squad].name; M.events.push_back(e); openHtInterview(); if (getenv("FOOT_ITW")) g_itwIdx = 1; }
     } else if (m == "friendlyvs") { g_friendlyHome = g_world.nationIndex("FRA"); g_friendlyAway = g_world.nationIndex("BRA"); frStartVs(); if (getenv("FOOT_FRROW")) g_frVsLW.cur = atoi(getenv("FOOT_FRROW"));
