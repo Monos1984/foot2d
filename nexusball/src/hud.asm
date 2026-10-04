@@ -22,13 +22,23 @@ hud_draw_static:
     jsr fill_tiles
     lda #HUD_TEAMA
     sta t0
+    lda #0
+    jsr team_rec
+    tya
+    clc
+    adc #T_SHORT
+    tay
     ldx #TPOS(1, 1)
-    ldy #.loword(team_short)
     jsr print
     lda #HUD_TEAMB
     sta t0
+    lda #1
+    jsr team_rec
+    tya
+    clc
+    adc #T_SHORT
+    tay
     ldx #TPOS(13, 1)
-    ldy #.loword(team_short + 4)
     jsr print
     lda #HUD_ATTR
     sta t0
@@ -37,12 +47,13 @@ hud_draw_static:
     sta bg3_map,x
     ldx #TPOS(27, 1)
     lda m_half
-    cmp #2
-    beq :+
-    ldy #.loword(str_1st)
-    bra :++
-:   ldy #.loword(str_2nd)
-:   jsr print
+    dec a
+    and #$0003
+    asl a
+    tay
+    lda half_names,y
+    tay
+    jsr print
     lda #$FFFF
     sta hud_cache
     sta hud_cache+2
@@ -186,13 +197,23 @@ hud_full_time:
     jsr fill_tiles
     lda #HUD_TEAMA
     sta t0
+    lda #0
+    jsr team_rec
+    tya
+    clc
+    adc #T_SHORT
+    tay
     ldx #TPOS(9, MSG_ROW + 1)
-    ldy #.loword(team_short)
     jsr print
     lda #HUD_TEAMB
     sta t0
+    lda #1
+    jsr team_rec
+    tya
+    clc
+    adc #T_SHORT
+    tay
     ldx #TPOS(20, MSG_ROW + 1)
-    ldy #.loword(team_short + 4)
     jsr print
     lda #HUD_ATTR
     sta t0
@@ -208,7 +229,27 @@ hud_full_time:
     ldx #TPOS(10, MSG_ROW + 2)
     ldy #.loword(str_press_start)
     jsr print
-    rts
+    ; resultat des tirs au but
+    lda so_active
+    beq @d
+    ldx #TPOS(8, MSG_ROW + 3)
+    ldy #16
+    lda #HUD_ATTR
+    jsr fill_tiles
+    lda #HUD_ATTR
+    sta t0
+    ldx #TPOS(9, MSG_ROW + 3)
+    ldy #.loword(str_so_res)
+    jsr print
+    lda so_goals
+    ldx #TPOS(19, MSG_ROW + 3)
+    jsr print_digit
+    lda #('-' - 32 + HUD_ATTR)
+    sta bg3_map + TPOS(20, MSG_ROW + 3)
+    lda so_goals+2
+    ldx #TPOS(21, MSG_ROW + 3)
+    jsr print_digit
+@d: rts
 
 ; -----------------------------------------------------------------------------
 ;  crowd_update : rotation des 3 couleurs du public (plus rapide apres un
@@ -251,6 +292,10 @@ crowd_update:
 .segment "RODATA"
 str_1st:        .byte "1ST", 0
 str_2nd:        .byte "2ND", 0
+str_ot:         .byte "OT ", 0
+str_so:         .byte "SO ", 0
+half_names:     .word .loword(str_1st), .loword(str_2nd), .loword(str_ot), .loword(str_so)
+str_so_res:     .byte "SHOOTOUT", 0
 str_fulltime:   .byte "FULL TIME", 0
 str_press_start: .byte "PRESS START", 0
 .segment "CODE"

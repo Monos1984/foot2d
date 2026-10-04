@@ -8,7 +8,9 @@ usage: lrtest.py core.so rom.sfc script out_prefix
      p BTN[+BTN] N  maintenir des boutons pendant N frames (B Y SEL STA U D L R A X L1 R1)
      p2 ...       idem manette 2
      s NAME       capture -> out_prefix_NAME.png
-     m ADDR LEN   affiche LEN octets de WRAM a ADDR (hex)
+     m ADDR LEN   affiche LEN octets de WRAM a ADDR (hex ou symbole)
+     k ADDR VAL   ecrit un mot en WRAM
+     t N ADDR     N frames, compte les changements de l'octet ADDR
 """
 import ctypes as C
 import os
@@ -166,6 +168,11 @@ def main():
                     hist[v] = hist.get(v, 0) + 1
                     prev = v
             print("trace %04X:" % addr, dict(sorted(hist.items())))
+        elif a[0] == "k":
+            # k ADDR VALEUR : ecrit un mot en WRAM
+            ptr = core.retro_get_memory_data(2)
+            v = int(a[2], 0)
+            C.memmove(ptr + addr_of(a[1]), bytes((v & 255, v >> 8)), 2)
         elif a[0] == "m":
             ptr = core.retro_get_memory_data(2)  # SYSTEM_RAM
             addr, ln = addr_of(a[1]), int(a[2])

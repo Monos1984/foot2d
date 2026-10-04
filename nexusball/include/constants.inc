@@ -68,6 +68,7 @@ MS_GOAL     = 2
 MS_HALF     = 3
 MS_END      = 4
 MS_FOUL     = 5
+MS_SHOOT    = 6
 
 ; ---- types de tir (points)
 SHOT_NONE   = 0

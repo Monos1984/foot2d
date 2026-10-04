@@ -224,6 +224,12 @@ draw_cursors:
     cmp #MS_END
     beq @n
     lda ctrl,y
+    asl a
+    tax
+    lda p_state,x
+    cmp #PS_OUT
+    beq @n
+    lda ctrl,y
     cmp b_owner
     bne @show
     lda b_carry

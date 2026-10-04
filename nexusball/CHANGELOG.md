@@ -1,5 +1,20 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.2.0 — règles complètes et tactique (Milestones 4 et 5)
+
+- 16 équipes officielles générées (tools/teams.py) : effectif de 12 (2 GK, 4 DF, 3 MF, 3 FW),
+  styles SPEED / POWER / PASSING / DEFENSIVE / OFFENSIVE / COUNTER / BALANCED / TECHNICAL,
+  maillots domicile / extérieur (extérieur automatique si couleurs proches).
+- Écran MATCH SETUP : équipes, tactiques des deux équipes, difficulté, règle d'égalité.
+- 6 formations, 6 tactiques réellement utilisées par l'IA (placement, pressing, passes,
+  couloir d'attaque, rythme), difficulté appliquée aux équipes CPU (réaction, charges).
+- Composition et remplacements illimités (avant match et menu pause), fatigue par joueur,
+  récupération à la mi-temps.
+- Prolongation 2 min avec but en or, tirs au but (3 tentatives, mort subite, fin anticipée).
+- Duel de charge : POWER + CONTROL contre POWER + DEFENSE ; l'IA évite les charges par
+  derrière et ne charge plus le gardien dans sa zone.
+- Corrections : signe perdu dans la division signée (tirs), gardien qui captait tous les tirs.
+
 ## 0.1.0 — prototype jouable (Milestones 0 à 3, début du 4)
 
 - Boot : FastROM HiROM 256 Kio, SRAM 32 Kio, effacement WRAM/VRAM, détection PAL/NTSC.

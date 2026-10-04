@@ -74,6 +74,17 @@ FastReset:
     .i16
     lda #$ACE1
     sta rng
+    ; equipes et reglages par defaut
+    lda #6                      ; EUROPA ICE
+    sta team_id
+    stz team_id+2               ; ORION STARS
+    lda #0
+    jsr team_defaults
+    lda #1
+    jsr team_defaults
+    lda #1
+    sta difficulty
+    stz draw_rule
     jmp title_screen
 
 ; -----------------------------------------------------------------------------

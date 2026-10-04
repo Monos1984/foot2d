@@ -5,8 +5,9 @@ Jeu de sport futuriste (héritier du football et du rugby) pour **Super Nintendo
 Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges_v0.2.md).
 
 ![Titre](docs/screen_title.png) ![Match](docs/screen_match.png) ![Fin](docs/screen_fulltime.png)
+![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png)
 
-## État : prototype jouable (Milestones 0 → 3, début du 4)
+## État : Milestones 0 → 5 (gameplay, règles complètes, tactique)
 
 | Élément | État |
 |---|---|
@@ -28,9 +29,14 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | 1P vs CPU, 1P vs 2P, CPU vs CPU | ✅ |
 | Horloge, mi-temps avec changement de côté, fin de match | ✅ |
 | HUD compact, mini-radar ON/OFF sauvegardé en SRAM (signature, version, checksum) | ✅ |
-| Menu pause (RESUME / RADAR / QUIT MATCH), crédits | ✅ |
+| Menu pause (RESUME / TEAM SETUP / RADAR / QUIT MATCH), crédits | ✅ |
 | Public animé (cycle de palette, s'emballe sur les actions) | ✅ |
-| Formations / tactiques multiples, remplacements, overtime, shootout | ⏳ Milestones 4–5 |
+| 16 équipes officielles (nom, monde, style, niveau, maillots domicile/extérieur, 12 joueurs) | ✅ |
+| Choix des équipes, difficulté (EASY → EXPERT), règle d'égalité | ✅ |
+| 6 formations (2-2-1, 2-1-2, 1-3-1, 1-2-2, 3-1-1, 3-2-0) | ✅ |
+| Tactiques MENTALITY / PASSING / PRESSURE / DEF LINE / ATTACK / TEMPO, utilisées par l'IA | ✅ |
+| Composition et remplacements illimités (avant match et menu pause), fatigue par joueur | ✅ |
+| Prolongation 2 min en but en or, puis tirs au but (3 + mort subite) | ✅ |
 | Championship, Cup, Custom Competition, éditeurs, plusieurs stades, audio SPC700 | ⏳ Milestones 6–8 |
 
 Graphismes temporaires générés (lisibles, contraste bleu/orange) — les graphismes finaux viendront au milestone 6.
@@ -66,9 +72,9 @@ Les ROMs construites sont aussi versionnées dans `build/` pour être testées d
 ```
 include/   registres, constantes, constantes de région (region.inc), carte mémoire, macros
 src/       main.asm (inclut tous les modules), boot, nmi, video, input, math, region, text,
-           save, menu, match, formation, player, ball, goalkeeper, ai, rules, camera, hud,
-           sprites, teams
-tools/     gfx.py (génère tiles/tilemap/palettes/tables), checksum.py,
+           save, menu, ui, match, shootout, formation, player, ball, goalkeeper, ai, rules,
+           camera, hud, sprites, teams
+tools/     gfx.py (génère tiles/tilemap/palettes/tables), teams.py (équipes), checksum.py,
            lrtest.py (banc de test headless libretro), fixbranch.py (outil de dev)
 data/gen/  données générées (non versionnées)
 docs/      cahier des charges, référence visuelle, captures

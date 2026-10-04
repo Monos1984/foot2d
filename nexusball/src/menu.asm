@@ -107,7 +107,7 @@ title_screen:
     cmp #5
     beq @credits
     sta game_mode
-    jmp start_match
+    jmp match_setup
 @credits:
     jmp credits_screen
 @radar:

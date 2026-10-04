@@ -56,7 +56,7 @@ menu_len:   .res 2          ; 0..3 -> 2..5 minutes par periode
 pause_sel:  .res 2
 sort_buf:   .res 14
 sort_key:   .res (NUM_PLAYERS + 1) * 2
-pause_save: .res 256
+pause_save: .res 320
 b_gkdone:   .res 2          ; le gardien a deja tente l'arret sur ce tir
 near_tmp:   .res 6
 gk_best:    .res 2
@@ -145,3 +145,28 @@ sent_t:     .res 2
 cam_x:      .res 2          ; camera (12.4)
 cam_y:      .res 2
 ai_phase:   .res 2
+
+; ---- equipes, effectifs, tactiques
+team_id:    .res 4          ; equipe choisie (0..15) par cote
+kit_away:   .res 4          ; 1 = maillot exterieur
+form_id:    .res 4          ; formation (0..5)
+tact:       .res 2*6*2      ; tactiques : equipe*12 + parametre*2 (0..2)
+lineup:     .res 2*6*2      ; index dans l'effectif (0..11) : equipe*12 + slot*2
+r_fat:      .res 2*12*2     ; fatigue des 12 joueurs de chaque effectif
+difficulty: .res 2          ; 0 EASY .. 3 EXPERT
+draw_rule:  .res 2          ; 0 egalite possible, 1 prolongation + tirs au but
+near2_team: .res 4          ; deuxieme joueur le plus proche du ballon
+near2_dist: .res 4
+ui_sel:     .res 2
+ui_team:    .res 2
+ui_pick:    .res 2
+ui_back:    .res 2
+
+; ---- prolongation / tirs au but
+so_active:  .res 2
+so_team:    .res 2
+so_goals:   .res 4
+so_taken:   .res 4
+so_phase:   .res 2
+so_shooter: .res 2
+str_buf:    .res 34

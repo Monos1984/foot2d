@@ -190,6 +190,8 @@ ball_update:
     lda m_state
     cmp #MS_PLAY
     beq :+
+    cmp #MS_SHOOT
+    beq :+
     cmp #MS_FOUL
     jne @nogoal
 :   lda b_x
@@ -241,8 +243,11 @@ ball_update:
     sta b_vx
 @pick:
     lda m_state
+    cmp #MS_SHOOT
+    beq :+
     cmp #MS_PLAY
     bne @nogoal
+:
     jsr gk_saves
     lda b_owner
     cmp #NO_OWNER

@@ -39,6 +39,8 @@
 .include "hud.asm"
 .include "sprites.asm"
 .include "teams.asm"
+.include "ui.asm"
+.include "shootout.asm"
 
 ; -----------------------------------------------------------------------------
 ;  donnees graphiques (banque $C1)

@@ -30,6 +30,7 @@ start_match:
     sta team_dir+2
     stz score
     stz score+2
+    stz so_active
     lda #1
     sta m_half
     ; duree : (menu_len + 2) minutes
@@ -54,6 +55,14 @@ start_match:
     sta kick_team
     sta first_kick
 
+    ; fatigue de tous les effectifs a zero
+    ldx #0
+:   stz r_fat,x
+    inx
+    inx
+    cpx #48
+    bne :-
+    jsr load_kits
     jsr setup_teams
     jsr bg3_clear
     jsr hud_init
@@ -124,6 +133,7 @@ match_frame:
 state_tab:
     .word .loword(st_kickoff), .loword(st_play), .loword(st_goal)
     .word .loword(st_half), .loword(st_end), .loword(st_foul)
+    .word .loword(st_shoot)
 
 ; --- coup d'envoi : les joueurs attendent le signal
 st_kickoff:
@@ -165,8 +175,19 @@ st_goal:
     jsr ball_update
     lda m_timer
     bne @w
+    lda m_half
+    cmp #3
+    beq @golden
     jsr new_kickoff
 @w: clc
+    rts
+@golden:
+    ; but en or : fin du match
+    lda #MS_END
+    sta m_state
+    jsr freeze_players
+    jsr hud_full_time
+    clc
     rts
 
 ; --- mi-temps
@@ -184,14 +205,48 @@ st_half:
     lda first_kick
     eor #1
     sta kick_team
-    lda #2
-    sta m_half
+    jsr halftime_rest
+    inc m_half
     lda m_len
-    sta m_sec
+    ldy m_half
+    cpy #3
+    bne :+
+    lda #120                    ; prolongation : 2 minutes, but en or
+:   sta m_sec
     stz m_acc
     jsr hud_draw_static
     jsr new_kickoff
 @w: clc
+    rts
+
+; halftime_rest : a la pause, toute la fatigue des effectifs est divisee par 2
+halftime_rest:
+    .a16
+    .i16
+    ldx #0
+@sv:
+    stx cp
+    jsr save_slot_fatigue
+    ldx cp
+    inx
+    inx
+    cpx #NUM_PLAYERS*2
+    bne @sv
+    ldx #0
+@h: lsr r_fat,x
+    inx
+    inx
+    cpx #48
+    bne @h
+    ldx #0
+@ld:
+    stx cp
+    jsr load_slot_stats
+    ldx cp
+    inx
+    inx
+    cpx #NUM_PLAYERS*2
+    bne @ld
     rts
 
 ; --- fin du match : START pour revenir au titre
@@ -268,8 +323,26 @@ period_over:
     lda #T_GOAL
     sta m_timer
     lda m_half
-    cmp #2
+    cmp #3
+    bne :+
+    jmp start_shootout          ; prolongation terminee sans but
+:   cmp #2
+    bne @half
+    ; egalite et regle de coupe : prolongation
+    lda draw_rule
     beq @full
+    lda score
+    cmp score+2
+    bne @full
+    lda #MS_HALF
+    sta m_state
+    ldy #.loword(str_overtime)
+    jsr show_msg
+    lda #T_GOAL
+    sta msg_time
+    jsr freeze_players
+    rts
+@half:
     lda #MS_HALF
     sta m_state
     ldy #.loword(str_half)
@@ -310,7 +383,11 @@ freeze_players:
 goal_scored:
     .a16
     .i16
-    sta t0
+    ldx m_state
+    cpx #MS_SHOOT
+    bne :+
+    jmp so_goal
+:   sta t0
     asl a
     tax
     lda score,x
@@ -373,33 +450,52 @@ goal_scored:
 ; -----------------------------------------------------------------------------
 ;  pause_menu : RESUME / RADAR / QUIT MATCH. Carry = 1 pour quitter.
 ; -----------------------------------------------------------------------------
+;  pause_menu : RESUME / TEAM SETUP / RADAR / QUIT MATCH. Carry = 1 pour quitter.
+; -----------------------------------------------------------------------------
+PAUSE_ITEMS = 4
+
 pause_menu:
     .a16
     .i16
     stz pause_sel
-    ; sauvegarde des 4 lignes utilisees
+    ; equipe de la manette qui a mis en pause (equipe 1 par defaut)
+    stz ui_team
+    lda joy_new+2
+    and #JOY_START
+    beq :+
+    lda pad_team+2
+    cmp #NO_OWNER
+    beq :+
+    sta ui_team
+:   ; sauvegarde des lignes utilisees
     ldx #0
 @sv:
     lda bg3_map + 10*64,x
     sta pause_save,x
     inx
     inx
-    cpx #(4*64)
+    cpx #(5*64)
     bne @sv
 @draw:
-    ldx #TPOS(10, 10)
+    lda #10
+@fill:
+    pha
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #10 * 2
+    tax
     ldy #12
     lda #TXT_ATTR + TXT_PANEL
     jsr fill_tiles
-    ldx #TPOS(10, 11)
-    ldy #12
-    jsr fill_tiles
-    ldx #TPOS(10, 12)
-    ldy #12
-    jsr fill_tiles
-    ldx #TPOS(10, 13)
-    ldy #12
-    jsr fill_tiles
+    pla
+    inc a
+    cmp #15
+    bne @fill
     ldx #TPOS(13, 10)
     ldy #.loword(str_pause)
     jsr print_panel
@@ -407,12 +503,15 @@ pause_menu:
     ldy #.loword(str_resume)
     jsr print_panel
     ldx #TPOS(12, 12)
+    ldy #.loword(str_teamset)
+    jsr print_panel
+    ldx #TPOS(12, 13)
     ldy #.loword(str_radar_on)
     lda opt_radar
     bne :+
     ldy #.loword(str_radar_off)
 :   jsr print_panel
-    ldx #TPOS(12, 13)
+    ldx #TPOS(12, 14)
     ldy #.loword(str_quit)
     jsr print_panel
     ; curseur
@@ -436,22 +535,14 @@ pause_menu:
     lda joy_new
     ora joy_new+2
     sta t7
-    bit #JOY_DOWN
-    beq :+
+    beq @wait
     lda pause_sel
-    inc a
-    cmp #3
-    bcc @set
-    lda #0
-    bra @set
-:   lda t7
-    bit #JOY_UP
+    ldy #PAUSE_ITEMS
+    jsr ui_updown
+    cmp pause_sel
     beq :+
-    lda pause_sel
-    dec a
-    bpl @set
-    lda #2
-    bra @set
+    sta pause_sel
+    jmp @draw
 :   lda t7
     bit #JOY_START
     bne @resume
@@ -462,23 +553,42 @@ pause_menu:
     lda pause_sel
     beq @resume
     cmp #1
+    beq @team
+    cmp #2
     beq @radar
     ; quitter
     jsr pause_restore
     sec
     rts
+@team:
+    lda #1
+    sta ui_back
+    jsr team_screen
+    jsr bg3_clear
+    jsr hud_draw_static
+    jsr hud_update
+    jsr pause_restore_clear
+    jmp @draw
 @radar:
     lda opt_radar
     eor #1
     sta opt_radar
     jsr save_options
     jmp @draw
-@set:
-    sta pause_sel
-    jmp @draw
 @resume:
     jsr pause_restore
     clc
+    rts
+
+; pause_restore_clear : apres un ecran plein, la zone sauvegardee devient vide
+pause_restore_clear:
+    .a16
+    ldx #0
+@l: stz pause_save,x
+    inx
+    inx
+    cpx #(5*64)
+    bne @l
     rts
 
 pause_restore:
@@ -488,7 +598,7 @@ pause_restore:
     sta bg3_map + 10*64,x
     inx
     inx
-    cpx #(4*64)
+    cpx #(5*64)
     bne @l
     lda #1
     sta bg3_dirty
@@ -498,6 +608,7 @@ pause_restore:
 str_ready:  .byte "READY", 0
 str_go:     .byte "GO!", 0
 str_half:   .byte "HALF TIME", 0
+str_overtime: .byte "OVERTIME - GOLDEN SCORE", 0
 str_goal1:  .byte "SCORE! +1", 0
 str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
@@ -505,4 +616,5 @@ str_resume: .byte "RESUME", 0
 str_radar_on:  .byte "RADAR ON ", 0
 str_radar_off: .byte "RADAR OFF", 0
 str_quit:   .byte "QUIT MATCH", 0
+str_teamset: .byte "TEAM SETUP", 0
 .segment "CODE"

@@ -21,6 +21,11 @@ compute_nearest:
     lda #$7FFF
     sta near_dist
     sta near_dist+2
+    sta near2_dist
+    sta near2_dist+2
+    lda #NO_OWNER
+    sta near2_team
+    sta near2_team+2
     ldx #0
 @l: lda p_role,x
     beq @n
@@ -36,11 +41,25 @@ compute_nearest:
     tay
     lda t3
     cmp near_dist,y
-    bcs @n
+    bcs @second
+    ; l'ancien premier devient deuxieme
+    lda near_dist,y
+    sta near2_dist,y
+    lda near_team,y
+    sta near2_team,y
+    lda t3
     sta near_dist,y
     txa
     lsr a
     sta near_team,y
+    bra @n
+@second:
+    cmp near2_dist,y
+    bcs @n
+    sta near2_dist,y
+    txa
+    lsr a
+    sta near2_team,y
 @n: inx
     inx
     cpx #NUM_PLAYERS*2
@@ -72,10 +91,7 @@ ai_update:
     bpl :+
     jsr ai_think
     ldx cp
-    jsr rand
-    and #$000F
-    clc
-    adc #T_AI_THINK
+    jsr think_period
     sta p_think,x
     lda p_act,x
     and #JOY_A
@@ -208,18 +224,31 @@ ai_think:
 ai_carrier:
     .a16
     .i16
+    stz p_act,x
+    lda #TACT_TEMPO
+    jsr get_tact
+    beq :+                      ; tempo lent : pas de sprint
     lda #JOY_R
-    sta p_act,x                 ; sprint
-    ; port trop long : se debarrasser du ballon
+    sta p_act,x
+:   ; port trop long (selon le tempo) : se debarrasser du ballon
+    lda #TACT_TEMPO
+    jsr get_tact
+    asl a
+    tay
     lda b_carry
-    cmp #T_CARRY_WARN - 60
+    cmp carry_limit,y
     bcc @nolimit
+    lda #TACT_PASS
+    jsr get_tact
+    cmp #2
+    beq @long                   ; jeu long : au pied d'abord
     jsr find_hand_target
     cmp #NO_OWNER
-    beq :+
+    beq @long
     lda #JOY_B
     brl @act
-:   lda #JOY_X
+@long:
+    lda #JOY_X
     brl @act
 @nolimit:
     jsr opp_goal_x
@@ -259,7 +288,15 @@ ai_carrier:
 @run:
     ; adversaire au contact ?
     jsr nearest_opp_dist
-    cmp #22
+    ldy #22
+    pha
+    lda #TACT_PASS
+    jsr get_tact
+    bne :+
+    ldy #27                     ; jeu court : on passe plus tot
+:   sty t4
+    pla
+    cmp t4
     bcs @go
     jsr rand
     and #$0003
@@ -289,10 +326,33 @@ ai_carrier:
 :   clc
     adc #44
 :   sta p_tx,x
+    ; couloir selon ATTACK : centre, cotes, mixte
     lda p_homey,x
     sec
     sbc #FIELD_CY
+    sta t4
+    lda #TACT_ATT
+    jsr get_tact
+    beq @center
+    cmp #1
+    beq @sides
+    lda t4
     ASR_A 1
+    bra @lane
+@center:
+    lda t4
+    ASR_A 3
+    bra @lane
+@sides:
+    lda t4
+    asl a
+    cmp #.loword(-90)
+    bpl :+
+    lda #.loword(-90)
+:   cmp #90
+    bmi @lane
+    lda #90
+@lane:
     clc
     adc #FIELD_CY
     sta p_ty,x
@@ -314,8 +374,12 @@ ai_support:
     lda p_role,x
     cmp #ROLE_FW
     bne @mf
-    ; attaquant : devant, dans l'autre couloir
-    lda #70
+    ; attaquant : devant (selon MENTALITY), dans l'autre couloir
+    lda #TACT_MENT
+    jsr get_tact
+    asl a
+    tay
+    lda fw_ahead,y
     jsr signed_t5
     clc
     adc t0
@@ -350,8 +414,12 @@ ai_support:
 :   sta t3
     bra @clamp
 @df:
-    ; defenseur : couverture
-    lda #.loword(-100)
+    ; defenseur : couverture (selon DEF LINE)
+    lda #TACT_LINE
+    jsr get_tact
+    asl a
+    tay
+    lda df_behind,y
     jsr signed_t5
     clc
     adc t0
@@ -396,8 +464,31 @@ ai_defend:
     txa
     lsr a
     cmp near_team,y
-    beq :+
+    beq @presser
+    ; pressing fort : le deuxieme plus proche harcele aussi
+    cmp near2_team,y
+    bne @zone
+    lda #TACT_PRESS
+    jsr get_tact
+    cmp #2
+    bne @zone
+    bra @presser
+@zone:
     jmp ai_zone
+@presser:
+    ; pressing faible : on attend le porteur dans sa moitie
+    lda #TACT_PRESS
+    jsr get_tact
+    bne :+
+    jsr attack_sign
+    sta t5
+    lda b_x
+    ASR_A 4
+    sec
+    sbc #FIELD_CX
+    jsr signed_t5
+    cmp #0
+    bpl @zone                   ; ballon dans la moitie adverse
 :   ; gardien protege dans sa zone : on se replace
     lda b_owner
     asl a
@@ -411,10 +502,10 @@ ai_defend:
     lda #JOY_R
     sta p_act,x
     lda p_cd,x
-    bne @no
+    jne @no
     jsr dist_to_ball
     cmp #22
-    bcs @no
+    jcs @no
     ; direction vers le porteur
     lda b_x
     sec
@@ -453,7 +544,13 @@ ai_defend:
     and #$003F
     bne @no                     ; rarement, l'IA commet la faute
 @tackle:
-    ldy t3
+    ; IA facile : hesite une fois sur deux
+    jsr cpu_level
+    bne :+
+    jsr rand
+    and #$0001
+    bne @no
+:   ldy t3
     lda dir8_pad,y
     and #$00FF
     xba
@@ -477,18 +574,40 @@ ai_zone:
     clc
     adc t2
     sta t2
-    ; repli si l'adversaire a le ballon
+    jsr attack_sign
+    sta t5
+    ; MENTALITY (tous) et DEF LINE (defenseurs)
+    lda #TACT_MENT
+    jsr get_tact
+    asl a
+    tay
+    lda tact_shift,y
+    sta t4
+    lda p_role,x
+    cmp #ROLE_DF
+    bne :+
+    lda #TACT_LINE
+    jsr get_tact
+    asl a
+    tay
+    lda tact_shift,y
+    clc
+    adc t4
+    sta t4
+:   ; repli si l'adversaire a le ballon
     lda b_owner
     cmp #NO_OWNER
     beq :+
-    jsr attack_sign
-    sta t5
-    lda #.loword(-20)
+    lda t4
+    sec
+    sbc #20
+    sta t4
+:   lda t4
     jsr signed_t5
     clc
     adc t2
     sta t2
-:   lda b_y
+    lda b_y
     ASR_A 4
     sec
     sbc #FIELD_CY
@@ -502,6 +621,80 @@ ai_zone:
     lda t3
     sta p_ty,x
     rts
+
+; -----------------------------------------------------------------------------
+;  tactiques et difficulte
+; -----------------------------------------------------------------------------
+TACT_MENT  = 0
+TACT_PASS  = 1
+TACT_PRESS = 2
+TACT_LINE  = 3
+TACT_ATT   = 4
+TACT_TEMPO = 5
+
+; get_tact : A = parametre, X = joueur*2 -> A = valeur (0..2). Preserve X, Y. Z positionne.
+get_tact:
+    .a16
+    .i16
+    phy
+    asl a
+    ldy p_team,x
+    beq :+
+    clc
+    adc #12
+:   tay
+    lda tact,y
+    ply
+    cmp #0
+    rts
+
+; cpu_level : X = joueur*2 -> A = difficulte (0..3) si son equipe est jouee par
+; le CPU, sinon 1 (coequipiers d'un humain : NORMAL). Z positionne.
+cpu_level:
+    .a16
+    .i16
+    lda p_team,x
+    cmp pad_team
+    beq @hum
+    cmp pad_team+2
+    beq @hum
+    lda difficulty
+    rts
+@hum:
+    lda #1
+    rts
+
+; think_period : X = joueur*2 -> A = delai avant la prochaine decision (tu)
+think_period:
+    .a16
+    .i16
+    jsr rand
+    and #$000F
+    clc
+    adc #T_AI_THINK
+    sta t4
+    lda #TACT_TEMPO
+    jsr get_tact
+    asl a
+    tay
+    lda tempo_think,y
+    clc
+    adc t4
+    sta t4
+    jsr cpu_level
+    asl a
+    tay
+    lda diff_think,y
+    clc
+    adc t4
+    rts
+
+tempo_think:  .word 20, 0, .loword(-12)
+diff_think:   .word 45, 12, 0, .loword(-12)
+carry_limit:  .word T_CARRY_WARN - 30, T_CARRY_WARN - 60, T_CARRY_WARN - 200
+fw_ahead:     .word 50, 70, 92
+df_behind:    .word .loword(-122), .loword(-100), .loword(-78)
+tact_shift:   .word .loword(-24), 0, 24
 
 ; direction 0..7 -> bits manette (octet haut)
 dir8_pad:
