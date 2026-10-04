@@ -366,9 +366,18 @@ ball_pickup:
     bne :+
     lda b_nograb_t
     jne @n
-:   ; gardien qui a deja manque son arret sur ce tir
+:   ; gardien qui a deja manque son arret sur ce tir (seulement tant que le tir file)
     lda p_role,x
     bne :+
+    lda b_vx
+    ABS_A
+    sta t0
+    lda b_vy
+    ABS_A
+    clc
+    adc t0
+    cmp #32
+    bcc :+                      ; ballon lent ou arrete : le gardien peut le ramasser
     lda p_team,x
     inc a
     and b_gkdone

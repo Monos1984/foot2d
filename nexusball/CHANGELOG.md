@@ -1,5 +1,12 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.6 — gardien et ballon au sol
+
+- Correction : après un arrêt manqué, le gardien ne pouvait plus ramasser le ballon tant que
+  personne d'autre ne l'avait touché (drapeau « tentative déjà faite sur ce tir »). Ce blocage ne
+  s'applique plus que tant que le tir file : un ballon lent ou arrêté dans la raquette est
+  toujours ramassé par le gardien.
+
 ## 0.11.5 — règle des 4 secondes en raquette
 
 - Le ballon ne peut pas rester 4 secondes dans une raquette (porté par le gardien ou libre).
