@@ -485,7 +485,7 @@ goal_scored:
     sta b_owner
     lda #SFX_GOAL
     jsr sfx_play
-    lda #SFX_WHISTLE
+    lda #SFX_HORN               ; corne de but
     jsr sfx_play
     ldy #.loword(str_goal1)
     lda b_points

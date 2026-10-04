@@ -268,6 +268,8 @@ resolve_tackle:
     lda cp
     lsr a
     jsr take_ball
+    lda #SFX_CHEER              ; le public salue le ballon arrache
+    jsr sfx_play
     lda #T_GOAL / 4
     sta crowd_fast
     rts
@@ -347,6 +349,8 @@ call_foul:
     inc a
     sta st_fouls,y
     lda #SFX_BUZZER
+    jsr sfx_play
+    lda #SFX_BOO                ; sifflets du public
     jsr sfx_play
     ldx cp
     lda #PS_DOWN

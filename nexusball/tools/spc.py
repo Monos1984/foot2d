@@ -141,18 +141,27 @@ def gen_samples():
     click = [int(12000 * math.exp(-i / 30) * (rng.random() * 2 - 1)) for i in range(256)]
     s["click"] = (click, False)
     # buzzer : dent de scie + carre (riche en harmoniques), boucle de 64 echantillons
+    # impact metallique (mur de l'arene) : partiels inharmoniques amortis
+    clang = []
+    for i in range(1600):
+        v = 0.0
+        for f, tau, a in ((610, 520, 0.5), (1430, 380, 0.35), (2290, 260, 0.25), (3370, 180, 0.15)):
+            v += a * math.exp(-i / tau) * math.sin(2 * math.pi * f * i / 32000)
+        v += 0.4 * math.exp(-i / 40) * (rng.random() * 2 - 1)
+        clang.append(int(15000 * v))
+    s["clang"] = (clang, False)
     s["buzz"] = ([int(6000 * (2 * (i / 64) - 1) + (5000 if (i // 8) % 2 else -5000)) for i in range(64)], True)
     return s
 
 
-SAMPLE_ORDER = ["square", "sine", "thump", "click", "buzz"]
-SQUARE, SINE, THUMP, CLICK, BUZZ = range(5)
+SAMPLE_ORDER = ["square", "sine", "thump", "click", "buzz", "clang"]
+SQUARE, SINE, THUMP, CLICK, BUZZ, CLANG = range(6)
 
 # effets : nom -> (voix, echantillon, pitch, volume, adsr1, adsr2)
 SFX = [
-    ("KICK",    6, THUMP, 0x1000, 0x70, 0x8F, 0xE0),
-    ("PASS",    6, CLICK, 0x1400, 0x48, 0x8F, 0xE0),
-    ("BOUNCE",  7, THUMP, 0x1C00, 0x30, 0x8F, 0xE0),
+    ("KICK",    6, THUMP, 0x0E00, 0x7F, 0x8F, 0xE0),
+    ("PASS",    6, CLICK, 0x1000, 0x68, 0x8F, 0xE0),
+    ("BOUNCE",  7, THUMP, 0x1A00, 0x48, 0x8F, 0xE0),
     ("WHISTLE", 5, SINE,  0x299A, 0x2C, 0x8F, 0xD3),
     ("GOAL",    3, SINE,  0x1000, 0x58, 0x89, 0xEB),   # voix 3 = bruit : clameur
     ("TACKLE",  7, THUMP, 0x0B00, 0x68, 0x8F, 0xE0),
@@ -162,6 +171,11 @@ SFX = [
     ("OOH",     3, SINE,  0x1000, 0x30, 0x88, 0xE9),
     ("BUZZER",  5, BUZZ,  0x0700, 0x60, 0x8F, 0xF1),   # fautes
     ("BUZZLONG", 5, BUZZ, 0x0680, 0x70, 0x8F, 0xEB),   # fin de periode : buzzer long
+    ("WALL",    7, CLANG, 0x1000, 0x58, 0x8F, 0xE0),   # ballon contre un mur
+    ("CATCH",   6, THUMP, 0x2400, 0x40, 0x8F, 0xE0),   # reception
+    ("BOO",     3, SINE,  0x1000, 0x38, 0x84, 0xEC),   # sifflets du public (faute)
+    ("HORN",    5, BUZZ,  0x0B00, 0x58, 0x8F, 0xEE),   # corne de but
+    ("CHEER",   3, SINE,  0x1000, 0x40, 0x8C, 0xED),   # clameur (beau geste)
 ]
 
 # ----------------------------------------------------------------- musique

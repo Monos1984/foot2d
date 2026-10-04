@@ -35,7 +35,14 @@ ball_reset:
 take_ball:
     .a16
     .i16
-    sta b_owner
+    ldx m_state
+    cpx #MS_PLAY
+    bne :+
+    pha
+    lda #SFX_CATCH
+    jsr sfx_play
+    pla
+:   sta b_owner
     sta b_last
     asl a
     tax
@@ -144,7 +151,12 @@ ball_update:
     lda b_vz
     cmp #.loword(-48)
     bpl @stop
-    eor #$FFFF
+    cmp #.loword(-110)
+    bpl :+
+    lda #SFX_BOUNCE             ; rebond au sol
+    jsr sfx_play
+    lda b_vz
+:   eor #$FFFF
     inc a
     lsr a                       ; rebond : moitie de la vitesse
     sta b_vz
@@ -218,6 +230,7 @@ ball_update:
     rts
 @bl:
     inc dbg_ringmiss
+    jsr near_miss
     lda #FIELD_L * FP
     sta b_x
     lda b_vx
@@ -244,6 +257,7 @@ ball_update:
     rts
 @br:
     inc dbg_ringmiss
+    jsr near_miss
     lda #(FIELD_R + 1) * FP
     sta b_x
     lda b_vx
@@ -272,9 +286,9 @@ wall_bounce:
     .a16
     pha
     ABS_A
-    cmp #28
+    cmp #12
     bcc :+
-    lda #SFX_BOUNCE
+    lda #SFX_WALL               ; impact metallique contre le mur
     jsr sfx_play
 :   pla
     eor #$FFFF
@@ -487,3 +501,24 @@ goal_valid:
 .segment "RODATA"
 str_ownhalf:    .byte "NO SCORE FROM OWN HALF", 0
 .segment "CODE"
+
+; near_miss : ballon sur le mur du fond pres de l'anneau -> "ooh" du public (une fois par tir)
+near_miss:
+    .a16
+    lda b_shot
+    cmp #SHOT_NONE
+    beq @d
+    lda b_y
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    ABS_A
+    cmp #RING_R + 18
+    bcs @d
+    lda #SHOT_NONE
+    sta b_shot
+    lda #SFX_OOH
+    jsr sfx_play
+    lda #T_GOAL / 4
+    sta crowd_fast
+@d: rts

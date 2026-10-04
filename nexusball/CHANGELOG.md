@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.3 — bruitages
+
+- Nouvel échantillon « impact métallique » : le ballon qui touche un mur de l'arène sonne
+  (dès une vitesse faible).
+- Rebond au sol audible, réception du ballon (« pop »), passes et frappes plus fortes.
+- Ambiance du public : « ooh » sur un tir qui frôle l'anneau, sifflets sur une faute, clameur
+  quand un ballon est arraché, corne de but à chaque point.
+
 ## 0.11.2 — curseurs des menus
 
 - Correction : curseur et barre de sélection absents ou mal placés dans CREATE PLAYER,
