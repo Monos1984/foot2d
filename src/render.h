@@ -38,4 +38,6 @@ extern const char* HAIR_NAMES[NUM_HAIRS];
 void drawPortrait(int x, int y, int size, int skin, int hair, int gender, const Kit& kit, unsigned seed);
 std::string fitText(const std::string& s, int maxw, int size);
 void drawBust(int x, int y, int size, int skin, int hair, int gender, unsigned outfit, unsigned seed, bool talking);
+unsigned skinColorOf(int s);   // teintes des sprites (portraits plein écran)
+unsigned hairColorOf(int h);
 void drawFanGirl(int x, int y, int size, int skin, int hair, int style, Color c1, Color c2, float t, int mood);

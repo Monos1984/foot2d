@@ -3,7 +3,7 @@
 static int g_adsSpots[3] = { 0, 1, 2 }, g_adsIdx = 0, g_adsCount = 3;
 static float g_adsT = 0;
 static Screen g_adsNext = SC_MATCH;
-static const int NUM_AD_SPOTS = 13;
+static const int NUM_AD_SPOTS = 18;
 static const float AD_LEN = 4.2f;
 static void openTvAds(int phase, Screen next) {
     g_adsNext = next; g_adsIdx = 0; g_adsT = 0; g_adsCount = phase == 0 ? 3 : 2;
@@ -16,14 +16,29 @@ static void openTvAds(int phase, Screen next) {
     if (nCustom > 0) { seed = seed * 1103515245u + 12345u; int c = NUM_AD_SPOTS + (int)((seed >> 16) % (unsigned)nCustom); auto it = std::find(pool.begin(), pool.end(), c); std::iter_swap(pool.begin(), it); }
     for (int i = 0; i < 3; i++) g_adsSpots[i] = pool[i];
     g_screen = SC_TVADS;
-    audioJingle(5 + g_adsSpots[0] % 3);
+    audioJingleForce(5 + g_adsSpots[0] % 3);
 }
 
 static void adSlogan(const std::string& brand, const std::string& slogan, Color bc, Color sc, float t) {
+    // bandeau de marque : cartouche sombre qui s'ouvre, reflet qui balaie, nom en grand, slogan en dessous
     float pop = std::min(1.f, t * 3.f);
     int size = pop < 1.f ? 20 : 40;
-    drawTextCentered(brand, VW / 2, 236, size, bc);
-    if (t > 0.8f) drawTextCentered(slogan, VW / 2, 284, 10, sc);
+    int bw = (int)((std::min(VW - 40, textWidth(brand, 40) + 60)) * (1 - (1 - pop) * (1 - pop)));
+    int bx = VW / 2 - bw / 2, by = 226;
+    DrawRectangle(bx + 4, by + 4, bw, 50, Color{ 0, 0, 0, 110 });
+    DrawRectangleGradientV(bx, by, bw, 50, Color{ 20, 20, 30, 210 }, Color{ 0, 0, 0, 230 });
+    DrawRectangle(bx, by, bw, 2, bc); DrawRectangle(bx, by + 48, bw, 2, bc);
+    int sx = (int)std::fmod(t * 260.f, (float)bw + 80) - 40;
+    for (int k = 0; k < 18; k++) if (sx + k > 0 && sx + k < bw) DrawRectangle(bx + sx + k, by + 2, 1, 46, Color{ 255, 255, 255, (unsigned char)(34 - std::abs(k - 9) * 3) });
+    drawTextCentered(brand, VW / 2, by + (size == 40 ? 6 : 16), size, bc);
+    if (t > 0.8f) {
+        float a = std::min(1.f, (t - 0.8f) * 3.f);
+        int sw = textWidth(slogan, 10) + 16;
+        DrawRectangle(VW / 2 - sw / 2, 282, sw, 14, Color{ 0, 0, 0, (unsigned char)(150 * a) });
+        drawTextCentered(slogan, VW / 2, 284, 10, Color{ sc.r, sc.g, sc.b, (unsigned char)(255 * a) });
+    }
+    // vignettage façon écran cathodique
+    for (int k = 0; k < 6; k++) { DrawRectangle(0, k * 3, VW, 3, Color{ 0, 0, 0, (unsigned char)(60 - k * 10) }); DrawRectangle(0, VH - (k + 1) * 3, VW, 3, Color{ 0, 0, 0, (unsigned char)(60 - k * 10) }); }
 }
 static void drawAdSpot(int spot, float t) {
     const Team& H = g_world.teams[g_setup.home]; const Team& A = g_world.teams[g_setup.away];
@@ -184,6 +199,68 @@ static void drawAdSpot(int spot, float t) {
         adSlogan("BANQUE DU BUT", "Votre épargne au fond des filets. Taux garanti même en cas de défaite.", Color{ 250, 215, 80, 255 }, WHITE, t);
         break;
     }
+    case 12: {  // PIXEL BURGER : burger qui s'empile étage par étage
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ 255, 190, 40, 255 }, Color{ 230, 90, 20, 255 });
+        for (int k = 0; k < 12; k++) { float a = k * 0.5236f + t * 0.4f; DrawTriangle(Vector2{ VW / 2.f, 120.f }, Vector2{ VW / 2.f + std::cos(a + 0.2f) * 500, 120.f + std::sin(a + 0.2f) * 500 }, Vector2{ VW / 2.f + std::cos(a) * 500, 120.f + std::sin(a) * 500 }, Color{ 255, 210, 80, 120 }); }
+        int cx = VW / 2, base = 190;
+        struct L { int h, w; Color c; } LY[] = { { 14, 120, Color{ 200, 130, 50, 255 } }, { 10, 130, Color{ 110, 60, 30, 255 } }, { 5, 134, Color{ 250, 210, 40, 255 } }, { 6, 128, Color{ 80, 180, 60, 255 } }, { 6, 120, Color{ 220, 50, 40, 255 } }, { 26, 124, Color{ 215, 140, 55, 255 } } };
+        int n = std::min(6, (int)(t * 4.f) + 1), yy = base;
+        for (int k = 0; k < n; k++) {
+            int drop = k == n - 1 ? (int)(std::max(0.f, 1.f - std::fmod(t * 4.f, 1.f)) * 30) : 0;
+            yy -= LY[k].h;
+            if (k == 5) DrawEllipse(cx, yy + 14 - drop, LY[k].w / 2.f, 16, LY[k].c); else DrawRectangle(cx - LY[k].w / 2, yy - drop, LY[k].w, LY[k].h, LY[k].c);
+            if (k == 5) for (int q = 0; q < 9; q++) DrawRectangle(cx - 40 + q * 10, yy + 4 - drop + (q % 2) * 3, 3, 2, Color{ 255, 240, 200, 255 });
+        }
+        adSlogan("PIXEL BURGER", "Double steak, triple fromage, zéro polygone. Menu Mi-temps à 4,99.", Color{ 255, 240, 120, 255 }, WHITE, t);
+        break;
+    }
+    case 13: {  // HEXA MOBILE : smartphone, notification « BUT ! », réseau 16G
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ 30, 10, 70, 255 }, Color{ 0, 60, 110, 255 });
+        for (int k = 0; k < 5; k++) { float r = std::fmod(t * 90.f + k * 40.f, 200.f); DrawCircleLines(VW / 2 + 60, 60, r, Color{ 120, 200, 255, (unsigned char)(160 * (1 - r / 200.f)) }); }
+        int px = VW / 2 - 40, py = 30 + (int)(std::sin(t * 2) * 3);
+        DrawRectangleRounded(Rectangle{ (float)px, (float)py, 80, 150 }, 0.15f, 6, Color{ 20, 20, 26, 255 });
+        DrawRectangle(px + 6, py + 12, 68, 124, Color{ 40, 140, 70, 255 });
+        DrawRectangle(px + 6, py + 12, 68, 2, WHITE); DrawRectangle(px + 38, py + 12, 2, 124, Color{ 255, 255, 255, 120 });
+        if (t > 0.6f) { float a = std::min(1.f, (t - 0.6f) * 4); DrawRectangle(px + 8, py + 20, 64, 22, Color{ 250, 250, 250, (unsigned char)(240 * a) }); drawTextPx("BUT !", px + 14, py + 22, 10, Color{ 200, 30, 40, (unsigned char)(255 * a) }); drawTextPx("en direct", px + 14, py + 31, 5, Color{ 60, 60, 60, (unsigned char)(255 * a) }); }
+        adSlogan("HEXA MOBILE", "Le réseau 16G : vous voyez le but avant même qu'il soit marqué.", Color{ 120, 220, 255, 255 }, WHITE, t);
+        break;
+    }
+    case 14: {  // SPRITE VOYAGES : avion au-dessus de la mer, soleil couchant
+        DrawRectangleGradientV(0, 0, VW, 150, Color{ 250, 120, 80, 255 }, Color{ 255, 210, 120, 255 });
+        DrawCircle(VW / 2, 150, 50, Color{ 255, 240, 160, 255 });
+        DrawRectangleGradientV(0, 150, VW, VH - 150, Color{ 30, 110, 170, 255 }, Color{ 10, 40, 90, 255 });
+        for (int k = 0; k < 12; k++) DrawRectangle((int)std::fmod(k * 83 + t * 30, (float)VW), 160 + k * 6, 40 - k * 2, 1, Color{ 255, 230, 160, 120 });
+        int ax = (int)std::fmod(t * 160.f, (float)VW + 200) - 100, ay = 70 - (int)(t * 6);
+        DrawRectangle(ax, ay, 60, 10, WHITE); DrawTriangle(Vector2{ (float)ax + 60, (float)ay }, Vector2{ (float)ax + 60, (float)ay + 10 }, Vector2{ (float)ax + 72, (float)ay + 6 }, WHITE);
+        DrawTriangle(Vector2{ (float)ax + 22, (float)ay + 4 }, Vector2{ (float)ax + 40, (float)ay + 4 }, Vector2{ (float)ax + 18, (float)ay + 26 }, Color{ 220, 220, 230, 255 });
+        DrawTriangle(Vector2{ (float)ax, (float)ay }, Vector2{ (float)ax + 8, (float)ay }, Vector2{ (float)ax, (float)ay - 12 }, Color{ 200, 40, 50, 255 });
+        for (int k = 0; k < 6; k++) DrawRectangle(ax + 12 + k * 7, ay + 3, 3, 3, Color{ 60, 120, 200, 255 });
+        adSlogan("SPRITE VOYAGES", "Suivez votre équipe à l'extérieur : vols charters, hôtel 3 étoiles... et demie.", Color{ 255, 250, 200, 255 }, WHITE, t);
+        break;
+    }
+    case 15: {  // GAZON PRO : tondeuse qui trace des bandes sur la pelouse
+        for (int k = 0; k < 12; k++) DrawRectangle(0, k * 30, VW, 30, k % 2 ? Color{ 60, 150, 60, 255 } : Color{ 70, 168, 70, 255 });
+        float mx = std::fmod(t * 180.f, (float)VW + 120) - 60;
+        DrawRectangle(0, 120, (int)mx, 30, Color{ 110, 200, 90, 255 });
+        int x = (int)mx, y = 112;
+        DrawRectangle(x - 30, y, 50, 26, Color{ 220, 40, 30, 255 }); DrawRectangle(x - 26, y + 4, 42, 6, Color{ 255, 120, 90, 255 });
+        DrawCircle(x - 22, y + 30, 7, Color{ 30, 30, 30, 255 }); DrawCircle(x + 12, y + 30, 7, Color{ 30, 30, 30, 255 });
+        DrawLine(x - 30, y + 2, x - 60, y - 30, Color{ 60, 60, 60, 255 }); DrawRectangle(x - 66, y - 34, 14, 4, Color{ 60, 60, 60, 255 });
+        for (int k = 0; k < 10; k++) DrawRectangle(x - 34 - (k * 7) % 30, y + 20 - (k * 5) % 16, 2, 2, Color{ 140, 230, 110, 220 });
+        adSlogan("GAZON PRO", "Le gazon des pros, pour votre jardin. Rayures de stade garanties.", Color{ 230, 255, 200, 255 }, WHITE, t);
+        break;
+    }
+    case 16: {  // CAFÉ CORNER : tasse fumante en forme de drapeau de corner
+        DrawRectangleGradientV(0, 0, VW, VH, Color{ 70, 40, 25, 255 }, Color{ 25, 14, 8, 255 });
+        int cx = VW / 2, cy = 140;
+        DrawRectangle(cx - 46, cy - 40, 92, 70, Color{ 240, 236, 228, 255 }); DrawRectangle(cx - 46, cy - 40, 92, 8, Color{ 90, 50, 25, 255 });
+        DrawRing(Vector2{ (float)cx + 50, (float)cy - 8 }, 10, 16, -90, 90, 12, Color{ 240, 236, 228, 255 });
+        DrawEllipse(cx, cy + 34, 70, 8, Color{ 220, 216, 206, 255 });
+        for (int k = 0; k < 3; k++) for (int q = 0; q < 8; q++) { float yy = cy - 50 - q * 9 - std::fmod(t * 20, 9.f); DrawCircle(cx - 20 + k * 20 + (int)(std::sin(yy * 0.1f + k + t * 2) * 5), (int)yy, 3, Color{ 255, 255, 255, (unsigned char)(90 - q * 10) }); }
+        DrawRectangle(cx - 2, cy - 30, 2, 50, Color{ 200, 200, 200, 255 }); DrawTriangle(Vector2{ (float)cx, (float)cy - 30 }, Vector2{ (float)cx, (float)cy - 16 }, Vector2{ (float)cx + 18, (float)cy - 23 }, Color{ 230, 40, 40, 255 });
+        adSlogan("CAFÉ CORNER", "Le petit noir des supporters. Serré comme un score de finale.", Color{ 255, 220, 160, 255 }, WHITE, t);
+        break;
+    }
     default: {  // auto-promotion de la chaîne : prochain grand rendez-vous
         DrawRectangle(0, 0, VW, VH, Color{ 10, 14, 30, 255 });
         fxSpotlights(40, 0, VW - 80, 200, t, 4, Color{ 200, 220, 255, 255 });
@@ -217,7 +294,7 @@ static void screenTvAds() {
         else g_adsIdx++;
         g_adsT = 0;
         if (g_adsIdx >= g_adsCount) { g_screen = g_adsNext; if (g_adsNext == SC_TVINTRO) audioJingle(1); return; }
-        audioJingle(5 + g_adsSpots[g_adsIdx] % 3);
+        audioJingleForce(5 + g_adsSpots[g_adsIdx] % 3);
     }
 }
 

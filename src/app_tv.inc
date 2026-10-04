@@ -233,16 +233,20 @@ static void drawCommentaryBooth(float t) {
 
 static std::string formOf(int team);
 static std::string starOf(int team);
+static bool tvOpening(float dt);
+static void tvOpeningReset();
+static void tvLaunch();
 static void screenTvIntro(float dt) {
     static float t = 0; t += dt;
     static int phase = 0; static float pt = 0;
+    if (phase == 0 && pt == 0 && tvOpening(dt)) return;      // générique, vue du stade, supporters
     const Team& H = g_world.teams[g_setup.home]; const Team& A = g_world.teams[g_setup.away];
     if (phase == 0) {   // la cabine des commentateurs, puis les compositions
         pt += dt;
         drawCommentaryBooth(t);
         drawFooter("OK : compositions   Retour : avant-match");
         if (pt > 6.5f || IN.ok || IN.start || IN.click) { phase = 1; pt = 0; IN.ok = IN.start = IN.click = false; }
-        if (IN.back) { phase = 0; pt = 0; g_screen = SC_SETUP; }
+        if (IN.back) { phase = 0; pt = 0; tvOpeningReset(); g_screen = SC_SETUP; }
         return;
     }
     // plateau TV : présentation de l'affiche et des compositions
@@ -353,10 +357,11 @@ static void screenTvIntro(float dt) {
     drawFooter("OK : coup d'envoi   Retour : avant-match");
     if (IN.ok || IN.start || IN.click) {
         t = 0; phase = 0; pt = 0;
+        tvOpeningReset();
         if (g_setup.studio) { g_studioPhase = 0; g_studioT = 0; g_screen = SC_STUDIO; audioJingle(3); }
-        else launchMatch();
+        else tvLaunch();
     }
-    if (IN.back) { phase = 0; pt = 0; g_screen = SC_SETUP; }
+    if (IN.back) { phase = 0; pt = 0; tvOpeningReset(); g_screen = SC_SETUP; }
 }
 
 // ---------------- plateau TV (avant-match, mi-temps, fin de match)
@@ -550,7 +555,7 @@ static void screenStudio(float dt) {
     drawFooter(g_studioPhase == 0 ? "OK : coup d'envoi" : g_studioPhase == 1 ? "OK : seconde période" : "OK : résultat");
     if (IN.ok || IN.start || IN.click) {
         if (shown < (int)L.size()) { g_studioT = 99; return; }
-        if (g_studioPhase == 0) launchMatch();
+        if (g_studioPhase == 0) tvLaunch();
         else if (g_studioPhase == 1) g_screen = SC_MATCH;
         else { g_screen = SC_MATCH; finishMatchToResult(); }
     }

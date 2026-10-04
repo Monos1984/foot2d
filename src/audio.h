@@ -2,6 +2,8 @@
 void audioInit();
 void audioShutdown();
 void audioPlay(int sfx);
+void audioJingleForce(int j);
+void audioApplause(float vol);   // applaudissements en boucle sans couture (à appeler chaque image ; 0 = arrêt)   // publicité : joue même si la musique est coupée
 void audioCrowd(bool on, float vol);
 void audioSetEnabled(bool sfx);
 void audioMusic(bool on);

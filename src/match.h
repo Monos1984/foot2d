@@ -58,6 +58,8 @@ struct MPlayer {
     float anim = 0;
     float speed = 7, shoot = 50, pass = 50, tackle = 50, keep = 50;
     float stamina = 1;
+    float breath = 1;     // souffle (court terme) : la course le vide, la marche le recharge ; à bout de souffle le joueur ralentit nettement
+    float fatigueMul() const { float b = std::min(1.f, breath / 0.45f); return (0.82f + 0.18f * stamina) * (0.70f + 0.30f * b); }
     float dribble = 50, heading = 50, endur = 0.6f;
     float posi = 50, compo = 50;   // placement, sang-froid
     float personalityStress=1,personalityFoul=1,personalityEngagement=1;
@@ -269,6 +271,7 @@ struct Match {
     std::vector<EndPair> endPairs;
     bool refCarry = false;
     // ralenti du hors-jeu : lignes de détection (avant-dernier défenseur / attaquant) au moment de la passe
+    float repEndHold = 0;   // ralenti du but : arrêt sur la dernière image avant de reprendre
     int offRpIdx = -1; bool offReplay = false; float offLineY = 0, offAttY = 0, offRepMargin = 0, offRepHold = 0; int offRepPlayer = -1;
     void updateEndScene(float dt);
     V2 pedestal;
@@ -376,6 +379,8 @@ struct Match {
     bool hotPhase() const;                 // temps fort (mode Full Manager)
     bool lateSubDone[2] = { false, false };
     std::string playerName(int i) const;
+    int anthemTeamNow() const { return S.anthemOnly.empty() ? (cerPhase == 10 ? 1 : 0) : 0; }   // hymnes : visiteurs puis équipe qui reçoit
+    std::string playerTag(int i) const { return i >= 0 && i < 22 ? playerName(i) + " (" + team(pl[i].team).shortName + ")" : playerName(i); }   // nom + équipe (bandeaux)
     const Team& team(int t) const { return g_world.teams[t == 0 ? S.home : S.away]; }
     // gestion
     void substitute(int team, int fieldSlot, int benchIdx);
@@ -437,9 +442,11 @@ struct Match {
     std::vector<PendSub> pendSubs;
     float subBoardT = 0; int subBoardTeam = 0, subBoardOut = 0, subBoardIn = 0; std::string subBoardOutName, subBoardInName;
     bool autoSubDone = false;
-    struct Walker { V2 pos, target; int team; int skin, hair; bool gk; unsigned gkShirt; float anim; bool sub = false; };
+    struct Walker { V2 pos, target; int team; int skin, hair; bool gk; unsigned gkShirt; float anim; bool sub = false, red = false; float age = 0; };
     std::vector<Walker> walkers;
-    bool subOutWalking() const { for (auto& w : walkers) if (w.sub) return true; return false; }
+    static bool walkerOnPitch(const Walker& w) { return w.pos.x > -0.3f && w.pos.x < PITCH_W + 0.3f && w.pos.y > -0.3f && w.pos.y < PITCH_L + 0.3f; }
+    bool subOutWalking() const { for (auto& w : walkers) if (w.sub && walkerOnPitch(w)) return true; return false; }        // le remplacé n'a pas encore quitté la pelouse
+    bool redWalking() const { for (auto& w : walkers) if (w.red && walkerOnPitch(w) && w.age < 9.f) return true; return false; }   // l'expulsé quitte la pelouse (reprise après)
     int celebScorer = -1, celebType = 0; V2 celebTarget; bool celebSfx = false;
     void setCelebration(int type);         // choisit la célébration du buteur et sa destination
     void doSub(int team, int slot, int incoming, bool anim);

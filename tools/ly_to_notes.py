@@ -86,10 +86,15 @@ def parse_voice(name):
             if peek()[0] == '{': nxt(); t = seq(t)
             st['scale'] = old; return t
         if k == 'repeat':
-            n = tok[2]; start = pos[0]
+            # LilyPond lit le corps répété une seule fois (hauteurs relatives fixées), puis le recopie :
+            # on duplique donc les événements au lieu de les relire (sinon chaque reprise monte d'une octave)
+            n = tok[2]
             if peek()[0] != '{': return t
-            for _ in range(n): pos[0] = start; nxt(); t = seq(t)
-            return t
+            nxt(); e0 = len(ev); t0 = t; t = seq(t); span = t - t0
+            body_ev = [list(e) for e in ev[e0:]]
+            for r in range(1, n):
+                for e in body_ev: ev.append([e[0] + span * r, list(e[1]), e[2]])
+            return t0 + span * n
         if k == '<<':
             ref0 = st['ref']; ends = []; firstRef = None
             while peek() is not None and peek()[0] != '>>':
@@ -134,12 +139,20 @@ out = ['// Généré par tools/ly_to_notes.py à partir de tools/marseillaise/ma
        '// Partition piano et chant d\'Alexis Jeandeau, CC0 1.0 (https://github.com/jeandeaual/lilypond-piano-la-marseillaise).',
        '// Temps en noires, notes MIDI transposées en si bémol majeur.', '']
 out.append('static const RNote MARS_MEL[] = { %s };' % ', '.join('{ %s, %d, %s }' % (F(e[0]), e[1][0] + TRANSPOSE, F(e[2])) for e in mel))
-out.append('static const RNote MARS_BASS[] = { %s };' % ', '.join('{ %s, %d, %s }' % (F(e[0]), min(e[1]) + TRANSPOSE, F(e[2])) for e in lh))
 # main droite : jusqu'à 4 notes par accord
 rows = []
+# garde-fou de registre : quelques constructions LilyPond (<< >> en mode relatif) font dériver l'octave de la main droite ;
+# chaque accord est ramené autour du médium (sous le chant), comme les cordes d'une fanfare
+for e in rh:
+    while e[1] and sum(e[1]) / len(e[1]) > 72: e[1] = [m - 12 for m in e[1]]
+    while e[1] and sum(e[1]) / len(e[1]) < 55: e[1] = [m + 12 for m in e[1]]
+for e in lh:
+    while e[1] and min(e[1]) > 55: e[1] = [m - 12 for m in e[1]]
+    while e[1] and min(e[1]) < 31: e[1] = [m + 12 for m in e[1]]
 for e in rh:
     ns = sorted(set(m + TRANSPOSE for m in e[1]))[:4] + [0, 0, 0, 0]
     rows.append('{ %s, { %d, %d, %d, %d }, %s }' % (F(e[0]), ns[0], ns[1], ns[2], ns[3], F(e[2])))
+out.append('static const RNote MARS_BASS[] = { %s };' % ', '.join('{ %s, %d, %s }' % (F(e[0]), min(e[1]) + TRANSPOSE, F(e[2])) for e in lh))
 out.append('static const RChord4 MARS_RH[] = { %s };' % ', '.join(rows))
 out.append('static const float MARS_LENGTH = %s;' % F(mend))
 open(OUT, 'w', encoding='utf-8').write('\n'.join(out) + '\n')

@@ -225,7 +225,7 @@ void Match::offsideWhistle() {
     offsideReset(OR_SANCTIONED);
     playSfx(SFX_WHISTLE);
     if (pl[i].team == 0 && !S.neutral && !S.training) playSfx(SFX_FANS_WHISTLE);   // le public local conteste le hors-jeu
-    msg = "HORS-JEU"; msg2 = playerName(i); msgT = 2.0f; offsides[pl[i].team]++;
+    msg = "HORS-JEU"; msg2 = playerTag(i); msgT = 2.0f; offsides[pl[i].team]++;
     offFlagT = 2.0f;
     static const char* WHY[] = { "", "", " (il dispute le ballon)", " (il gêne le gardien)", " (il masque la vue du gardien)", " (il profite du rebond)" };
     std::string why = WHY[std::max(0, std::min(5, offPendType))];
@@ -280,7 +280,7 @@ bool Match::offsideGoalCheck(int t) {
     offsideReset(OR_SANCTIONED);
     playSfx(SFX_WHISTLE);
     msg = "BUT REFUSÉ"; msgT = 3.f; offsides[t]++; offFlagAR = offsideAssistantFor(t); offFlagT = 2.5f;
-    msg2 = "Hors-jeu : " + playerName(j) + (type == OI_BLOCKING_VISION || type == OI_INTERFERING ? " gêne le gardien" : "");
+    msg2 = "Hors-jeu : " + playerTag(j) + (type == OI_BLOCKING_VISION || type == OI_INTERFERING ? " gêne le gardien" : "");
     if (type == OI_BLOCKING_VISION || type == OI_INTERFERING) say("Le but est refusé ! " + playerName(j) + ", en position de hors-jeu, gênait le gardien.", 4.f, true);
     else say(std::string("Le but est refusé ! Le drapeau de l'arbitre assistant était levé") + (std::fabs(margin) < OFFSIDE_TIGHT ? " : hors-jeu très serré." : " : hors-jeu de " + playerName(j) + "."), 4.f, true);
     state = MS_STOP; stateT = 0; nextSp = SP_INDIRECT; nextSpTeam = 1 - t;

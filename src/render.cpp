@@ -142,11 +142,13 @@ static void buildPitch(int type, uint64_t key) {
                                  "OFFGAME", "DOUBLE SIDE", "BEURTON", "ELEC. DREAMS", "BALLON D'OR", "CRAMPONS+", "STADE TV", "AMIGOAL",
                                  "GAMOPAT", "ONIROMANCIE", "ATARI", "SEGA", "NINTENDO", "SONY", "SIGAMES", "EA", "AMSTRAD", "COMMODORE", "ORIC", "CAPCOM",
                                  "TURBO FIBRE", "BANQUE DU BUT", "VOLT AUTO", "PIZZA PENALTY", "8-BIT ENERGY", "LUCARNE", "HEXA MOBILE", "CAFE CORNER",
-                                 "SPRITE VOYAGES", "GAZON PRO", "PIXEL BURGER", "ARCADE BANK" };
+                                 "SPRITE VOYAGES", "GAZON PRO", "PIXEL BURGER", "ARCADE BANK", "FRITES DU STADE", "MUTUELLE SUPPORTER", "PAD & STICK", "DRIBBLE SHOP",
+                                 "CORNER BIO", "TELE PIXEL", "ULTRA LAIT", "BUS DU STADE", "TACLE ASSURANCES", "16 BITS FM", "LIGNE DE BUT", "VAR OPTIQUE" };
     static const unsigned ADC[] = { 0xD62828, 0x1D3557, 0xF77F00, 0x2A9D8F, 0x6A4C93, 0x3A7D44, 0x264653, 0xE63946,
                                     0xB02020, 0x5A189A, 0x8C6D1F, 0x0077B6, 0x1D3557, 0x2A9D8F, 0xE9C46A, 0xE63946,
                                     0x3D5A80, 0x6A0572, 0xC1121F, 0x0B3D91, 0xE60012, 0x111111, 0x2B2D42, 0x1B1B1B, 0x8D0801, 0x33415C, 0x7B2CBF, 0x1F4E9E,
-                                    0x00A6A6, 0x14532D, 0x0EA5E9, 0xB91C1C, 0x65A30D, 0x7C3AED, 0xF97316, 0x6B3E26, 0x0891B2, 0x15803D, 0xDC2626, 0x4338CA };
+                                    0x00A6A6, 0x14532D, 0x0EA5E9, 0xB91C1C, 0x65A30D, 0x7C3AED, 0xF97316, 0x6B3E26, 0x0891B2, 0x15803D, 0xDC2626, 0x4338CA,
+                                    0xE0A800, 0x0F766E, 0x9D174D, 0x1E3A8A, 0x4D7C0F, 0x0369A1, 0x0E7490, 0x92400E, 0x1F2937, 0xBE123C, 0x166534, 0x312E81 };
     const int NADS = (int)(sizeof ADS / sizeof ADS[0]);
     float bd = 4.0f; // distance du terrain
     int adi = 0;
@@ -201,9 +203,22 @@ static void buildPitch(int type, uint64_t key) {
         ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, h, bc);
         if (horiz) { ImageDrawRectangle(&img, (int)a.x, (int)a.y, w, std::max(1, h / 3), mix(bc, 28)); ImageDrawRectangle(&img, (int)a.x, (int)a.y + h - 2, w, 2, mix(bc, -40)); }
         else { ImageDrawRectangle(&img, (int)a.x, (int)a.y, std::max(1, w / 3), h, mix(bc, 28)); ImageDrawRectangle(&img, (int)a.x + w - 2, (int)a.y, 2, h, mix(bc, -40)); }
+        // logo : pastille de couleur claire (rond ou losange), bandeau d'accent, nom avec contour sombre
+        int ai = (adi + ado) % NADS;
+        Color acc = (ai % 3 == 0) ? Color{ 255, 214, 60, 255 } : (ai % 3 == 1) ? Color{ 255, 255, 255, 255 } : mix(bc, 90);
+        if (horiz) {
+            ImageDrawRectangle(&img, (int)a.x + w - 10, (int)a.y + 1, 3, h - 2, acc); ImageDrawRectangle(&img, (int)a.x + w - 6, (int)a.y + 1, 2, h - 2, mix(acc, -60));
+            int lx = (int)a.x + 3, ly = (int)a.y + h / 2;
+            if (ai % 2) ImageDrawCircle(&img, lx + 3, ly, std::max(2, h / 2 - 1), acc);
+            else { for (int d = 0; d < h / 2; d++) ImageDrawRectangle(&img, lx + 3 - d / 2, ly - h / 2 + 1 + d, d + 1, 1, acc); for (int d = 0; d < h / 2; d++) ImageDrawRectangle(&img, lx + 3 - (h / 2 - d) / 2, ly + d, h / 2 - d, 1, acc); }
+            const char* tx = ADS[ai]; int tx0 = lx + 10;
+            for (int ox = -1; ox <= 1; ox++) for (int oy = -1; oy <= 1; oy++) if (ox || oy) ImageDrawText(&img, tx, tx0 + ox, (int)a.y + oy, 10, Color{ 0, 0, 0, 150 });
+            ImageDrawText(&img, tx, tx0, (int)a.y, 10, WHITE);
+        } else {
+            for (int k = 4; k < h - 4; k += 9) ImageDrawRectangle(&img, (int)a.x + w / 2 - 1, (int)a.y + k, 2, 5, WHITE);
+            ImageDrawRectangle(&img, (int)a.x + 1, (int)a.y + 2, w - 2, 2, acc);
+        }
         ImageDrawRectangleLines(&img, Rectangle{ a.x, a.y, (float)w, (float)h }, 1, hexc(0x111111));
-        if (horiz) { ImageDrawText(&img, ADS[(adi + ado) % NADS], (int)a.x + 4, (int)a.y + 1, 10, Color{ 0, 0, 0, 140 }); ImageDrawText(&img, ADS[(adi + ado) % NADS], (int)a.x + 3, (int)a.y, 10, WHITE); }
-        else for (int k = 4; k < h - 4; k += 9) ImageDrawRectangle(&img, (int)a.x + w / 2 - 1, (int)a.y + k, 2, 5, WHITE);
         adi++;
     };
     for (float x = -8; x < PITCH_W + 8; x += 14) { board(x, -bd - 2.0f, x + 13.8f, -bd, true); board(x, PITCH_L + bd, x + 13.8f, PITCH_L + bd + 2.0f, true); }
@@ -321,6 +336,8 @@ static unsigned HAIR[NUM_HAIRS] = { 0x1A1A1A, 0x5A3A1A, 0xE8C35A, 0xB5502A, 0x3B
 const char* SKIN_NAMES[NUM_SKINS] = { "claire", "mate", "hâlée", "foncée", "très claire", "brune" };
 const char* HAIR_NAMES[NUM_HAIRS] = { "noirs", "châtains", "blonds", "roux", "bruns", "gris", "blancs" };
 
+unsigned skinColorOf(int s) { return SKIN[((s % NUM_SKINS) + NUM_SKINS) % NUM_SKINS]; }
+unsigned hairColorOf(int h) { return HAIR[((h % NUM_HAIRS) + NUM_HAIRS) % NUM_HAIRS]; }
 static float colorBright(unsigned c) { return (((c >> 16) & 255) * 0.3f + ((c >> 8) & 255) * 0.59f + (c & 255) * 0.11f) / 255.f; }
 static int g_bootCol = 0;          // couleur des chaussures du joueur en cours de dessin
 static Color pixelColor(char ch, int x, int y, const Kit& k, int skin, int hair, bool gk, unsigned gkShirt) {
@@ -394,6 +411,12 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     const char* const* src;
     bool mirror = false;
     int f = ((frame % 4) + 4) % 4;
+    // diagonales : seulement pour la course normale ; sinon ramenées vers la face / le dos
+    int diag = 0;                                   // 1 : trois-quarts face, 2 : trois-quarts dos
+    if (dir >= 4) {
+        if (state != PS_NORMAL || g_sprPose != POSE_NONE) dir = dir <= 5 ? 0 : 1;
+        else { diag = dir <= 5 ? 1 : 2; mirror = dir == 5 || dir == 7; dir = diag == 1 ? 0 : 1; }
+    }
     // léger rebond du corps pendant la course
 
     if (g_sprPose == POSE_ARMSOUT) src = SPR_CELEB2;
@@ -410,6 +433,17 @@ void drawPlayerSprite(int x, int y, const Kit& kit, int skin, int hair, int dir,
     // coiffure : courte, rasée ou longue (déterminée par le joueur)
     char buf[13][8] = {};
     for (int r = 0; r < 12; r++) { strncpy(buf[r], src[r], 7); buf[r][7] = 0; }
+    if (diag == 1) {         // trois-quarts face (vers la droite) : visage décalé, oreille côté gauche, épaule droite en avant
+        static const char* HD[4] = { "..HhH..", ".hhhhs.", ".hsese.", "..tss.." };
+        for (int r = 0; r < 4; r++) memcpy(buf[r], HD[r], 7);
+        if (buf[4][0] == 'S') buf[4][0] = '.';
+        if (buf[5][0] == 's') { buf[5][0] = '.'; buf[5][1] = buf[5][1] == 'S' ? 's' : buf[5][1]; }
+    } else if (diag == 2) {  // trois-quarts dos : nuque, joue droite visible, numéro décalé
+        static const char* HB[4] = { "..HhH..", ".hhhhh.", ".hhhhs.", "..hht.." };
+        for (int r = 0; r < 4; r++) memcpy(buf[r], HB[r], 7);
+        for (int r = 4; r < 9; r++) if (buf[r][3] == 'n') { buf[r][3] = 'S'; buf[r][2] = 'n'; }
+        if (buf[4][0] == 'S') buf[4][0] = '.';
+    }
     int style = g_sprHairStyle >= 0 ? g_sprHairStyle : (hair * 7 + skin * 3) % 7;
     if (style == 1 && dir != 1) { for (int c = 0; c < 7; c++) if (buf[0][c] == 'h') buf[0][c] = (c == 2 || c == 4) ? 's' : 'h'; }
     else if (style == 2) { if (buf[2][1] == '.') buf[2][1] = 'h'; if (buf[2][5] == '.') buf[2][5] = 'h'; }
@@ -513,6 +547,13 @@ static int dirOf(V2 f) {
     if (std::fabs(f.x) > std::fabs(f.y) * 1.1f) return f.x > 0 ? 2 : 3;
     return f.y > 0 ? 0 : 1;
 }
+// 8 directions (course) : 4 bas-droite, 5 bas-gauche, 6 haut-droite, 7 haut-gauche
+static int dirOf8(V2 f) {
+    if (f.len2() < 1e-4f) return 0;
+    float a = std::atan2(f.y, f.x);                 // y vers le bas de l'écran
+    int sct = (int)std::lround(a / 0.7853982f);     // -4..4
+    switch ((sct + 8) % 8) { case 0: return 2; case 1: return 4; case 2: return 0; case 3: return 5; case 4: return 3; case 5: return 7; case 6: return 1; default: return 6; }
+}
 
 // ------------------------------------------------------------------ rendu du match
 struct DrawItem { float y; int kind; int idx; };
@@ -544,12 +585,28 @@ static const Color CTRL_COL[NUM_INPUTS] = { { 255, 230, 40, 255 }, { 60, 220, 25
 
 
 // ------------------------------------------------------------------ tirage au sort : pièce, ballon, terrain (écran de choix)
+// pièce du tirage au sort selon la compétition : 0 or (amical), 1 argent (championnat), 2 cuivre (district / régional),
+// 3 bimétallique étoilée (coupe d'Europe), 4 tricolore (Coupe de France), 5 or « mondiale » (sélections)
+static int g_coinStyle = 0;
+static int coinStyleFor(const Match& m) {
+    std::string t = m.S.title;
+    auto has = [&](const char* k) { return t.find(k) != std::string::npos; };
+    if (m.S.studio || has("Europe") || has("Champions") || has("Europa") || has("Conference")) return 3;
+    if (has("Coupe de France")) return 4;
+    if (m.S.anthems || has("Coupe du Monde") || has("Euro") || has("Continents") || has("Nations")) return 5;
+    if (m.S.rolling || has("District") || has("Régional") || has("Régionale") || has("Départemental")) return 2;
+    if (has("Ligue") || has("Championnat") || has("National") || has("Division")) return 1;
+    return 0;
+}
+static const char* COIN_NAMES[6] = { "Pièce du match amical", "Pièce officielle du championnat", "Pièce de la ligue amateur", "Pièce officielle de la coupe d'Europe", "Pièce officielle de la Coupe de France", "Pièce officielle des sélections" };
 static void drawCoin(int cx, int cy, float r, float w, int face) {
-    // pièce en or avec relief : tranche visible pendant la rotation, listel cannelé, dégradé métallique, reflet mobile
+    // pièce en métal avec relief : tranche visible pendant la rotation, listel cannelé, dégradé métallique, reflet mobile
     // w : largeur apparente (0..1) ; face 0 = PILE (valeur), 1 = FACE (effigie)
     float aw = std::fabs(w);
     int rx = std::max(1, (int)(r * aw));
     Color edgeD = { 120, 84, 16, 255 }, dark = { 150, 108, 22, 255 }, mid = { 214, 168, 48, 255 }, gold = { 238, 196, 70, 255 }, light = { 255, 236, 150, 255 };
+    if (g_coinStyle == 1) { edgeD = { 90, 94, 104, 255 }; dark = { 120, 126, 138, 255 }; mid = { 180, 186, 198, 255 }; gold = { 212, 218, 228, 255 }; light = { 248, 250, 255, 255 }; }
+    else if (g_coinStyle == 2) { edgeD = { 100, 50, 24, 255 }; dark = { 140, 72, 36, 255 }; mid = { 190, 108, 60, 255 }; gold = { 214, 136, 80, 255 }; light = { 250, 196, 150, 255 }; }
     // ombre portée
     DrawEllipse(cx + 2, cy + 3, (float)rx + 1, r, Color{ 0, 0, 0, 80 });
     // tranche (épaisseur) : visible quand la pièce est presque de profil
@@ -566,6 +623,22 @@ static void drawCoin(int cx, int cy, float r, float w, int face) {
     DrawEllipse(cx - (int)(r * 0.08f * aw), cy - (int)(r * 0.08f), (float)std::max(1, (int)((r - 4) * aw)), r - 4, gold);
     if (rx < r * 0.3f) return;
     float k = (float)rx / r;
+    if (g_coinStyle == 3) {   // bimétallique : cœur argenté, anneau doré semé d'étoiles
+        DrawEllipse(cx, cy, std::max(1.f, (r - 6) * k), r - 6, Color{ 150, 156, 170, 255 });
+        DrawEllipse(cx - 1, cy - 1, std::max(1.f, (r - 7) * k), r - 7, Color{ 214, 220, 232, 255 });
+        dark = { 110, 116, 130, 255 }; light = { 250, 252, 255, 255 }; mid = { 170, 176, 190, 255 };
+    } else if (g_coinStyle == 4) {   // tricolore : anneau bleu-blanc-rouge émaillé
+        for (int i = 0; i < 48; i++) {
+            float a = i * 6.2832f / 48;
+            Color c = i % 16 < 5 ? Color{ 30, 70, 180, 255 } : i % 16 < 10 ? Color{ 245, 245, 245, 255 } : Color{ 210, 40, 50, 255 };
+            DrawPixel(cx + (int)(std::cos(a) * (r - 4.5f) * k), cy + (int)(std::sin(a) * (r - 4.5f)), c);
+            DrawPixel(cx + (int)(std::cos(a) * (r - 5.5f) * k), cy + (int)(std::sin(a) * (r - 5.5f)), c);
+        }
+    } else if (g_coinStyle == 5) {   // mondiale : globe gravé en fond
+        DrawEllipseLines(cx, cy, std::max(1.f, (r - 8) * k), r - 8, Color{ dark.r, dark.g, dark.b, 140 });
+        DrawEllipseLines(cx, cy, std::max(1.f, (r - 8) * k * 0.45f), r - 8, Color{ dark.r, dark.g, dark.b, 110 });
+        DrawRectangle(cx - (int)((r - 8) * k), cy, (int)(2 * (r - 8) * k), 1, Color{ dark.r, dark.g, dark.b, 110 });
+    }
     // listel cannelé
     for (int i = 0; i < 36; i++) {
         float a = i * 6.2832f / 36;
@@ -718,6 +791,8 @@ static void drawTossUI(const Match& m) {
         return V2((float)(cx + cw / 2), (float)(cy + 30));
     };
     auto hint = [&]() { std::string h = "< > : choisir    Tir : valider"; drawTextPx(h, px + pw / 2 - textWidth(h, 10) / 2, py + ph + 4, 10, WHITE); };
+    g_coinStyle = coinStyleFor(m);
+    if (m.tossUI == 1 || m.tossUI == 2) { std::string cn = COIN_NAMES[g_coinStyle]; drawTextPx(cn, px + pw / 2 - textWidth(cn, 5) / 2, py + ph - 9, 5, Color{ 255, 225, 110, 230 }); }
     switch (m.tossUI) {
     case 1: {
         title("PILE OU FACE ? - " + m.team(caller).shortName + " annonce");
@@ -1228,6 +1303,15 @@ static void drawShowEffects(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     }
 }
 
+// petit ballon tenu en main (ramasseurs, arbitre) : 4x4 arrondi, pentagones noirs, ombre en bas, sans cadre
+static void drawMiniBall(int x, int y) {
+    static const char* B[4] = { ".ww.", "wkws", "wswk", ".gg." };
+    for (int r = 0; r < 4; r++) for (int c = 0; c < 4; c++) {
+        char ch = B[r][c]; if (ch == '.') continue;
+        Color col = ch == 'w' ? Color{ 250, 250, 252, 255 } : ch == 's' ? Color{ 214, 218, 228, 255 } : ch == 'k' ? Color{ 30, 30, 40, 255 } : Color{ 160, 165, 180, 255 };
+        DrawPixel(x + c, y + r, col);
+    }
+}
 // ramasseurs de balles et stadiers
 static void drawPitchsideLive(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     if (m.S.training) return;
@@ -1246,7 +1330,8 @@ static void drawPitchsideLive(const Match& m, int ox, int oy, int MWZ, int MHZ) 
         bool up = bd < 12.f && (m.state == MS_SETPIECE || m.state == MS_STOP);
         int dir = k < 2 ? 0 : k < 4 ? 1 : 3;
         drawPosedSprite(x, y + (up ? 0 : 2), kid, (k * 2 + 1) % NUM_SKINS, (k * 3) % NUM_HAIRS, dir, (int)(t * 6), PS_NORMAL, up ? POSE_NONE : POSE_SIT, 1);
-        if (!up) { DrawRectangle(x + (k < 4 ? 4 : -6), y - 1, 3, 3, WHITE); DrawRectangle(x + (k < 4 ? 5 : -5), y, 1, 1, Color{ 30, 30, 30, 255 }); }   // ballon de réserve
+        if (!up) drawMiniBall(x + (k < 4 ? 4 : -7), y - 2);                  // ballon de réserve posé à côté
+        else drawMiniBall(x - 2, y - 9);                                        // debout : ballon tenu à deux mains, prêt à être lancé
     }
     // stadiers en chasuble fluo, dos au terrain, face aux tribunes
     Kit vest; vest.shirt = 0xF09020; vest.shirt2 = 0xE8F040; vest.shorts = 0x22242C; vest.socks = 0x111111; vest.pattern = KP_BAND;
@@ -1400,12 +1485,69 @@ static void drawSceneInset(const Match& m, int kind, float t, int x, int y, int 
     }
     (void)H;
 }
+// scénette du carton : gros plan de l'arbitre qui brandit le carton face au joueur sanctionné (mains sur la tête)
+static void drawCardScene(const Match& m, float t) {
+    bool second = m.refCardSecond;
+    bool show = second ? (m.refCardT > 0 && m.refCardT < 3.4f) : (m.refCardT > 0 && m.refCardT < 2.0f);
+    if (!show || m.refCardFor < 0 || m.refCardFor >= 22 || m.S.training) return;
+    float life = second ? 3.4f - m.refCardT : 2.0f - m.refCardT;
+    float in = std::min(1.f, life * 5.f), out = std::min(1.f, m.refCardT * 5.f);
+    int w = 96, h = 60, x = 4 - (int)((1.f - std::min(in, out)) * 120), y = 22;
+    int ct = second && m.refCardT > 1.75f ? 1 : m.refCardType;
+    DrawRectangle(x + 2, y + 2, w + 4, h + 14, Color{ 0, 0, 0, 120 });
+    DrawRectangle(x - 2, y - 2, w + 4, h + 4, Color{ 230, 230, 240, 255 });
+    fxCrowd(x, y, w, h - 14, Color{ 90, 90, 110, 255 }, hexc(m.kit[m.pl[m.refCardFor].team].shirt), t, 0.2f, 7, 3);
+    DrawRectangle(x, y, w, h, Color{ 0, 0, 0, 70 });
+    DrawRectangleGradientV(x, y + h - 16, w, 16, Color{ 50, 130, 60, 255 }, Color{ 34, 100, 44, 255 });
+    float u = 1.f;
+    auto R = [&](float a, float b, float ww, float hh, Color c) { DrawRectangle(x + (int)(a * u), y + (int)(b * u), std::max(1, (int)(ww * u + 0.5f)), std::max(1, (int)(hh * u + 0.5f)), c); };
+    auto dim = [](Color c, float f) { return Color{ (unsigned char)(c.r * f), (unsigned char)(c.g * f), (unsigned char)(c.b * f), 255 }; };
+    // joueur sanctionné (à gauche, de trois quarts) : mains sur la tête
+    const MPlayer& P = m.pl[m.refCardFor];
+    const Kit& pk = m.kit[P.team];
+    int pskin = 0, phair = 0;
+    { const Team& T = m.team(P.team); if (P.squad >= 0 && P.squad < (int)T.squad.size()) { pskin = T.squad[P.squad].skin; phair = T.squad[P.squad].hair; } }
+    Color psk = hexc(SKIN[pskin % NUM_SKINS]), phc = hexc(HAIR[phair % NUM_HAIRS]), psh = hexc(P.gk ? 0x30A050 : pk.shirt);
+    R(6, 38, 30, 22, psh); R(6, 38, 30, 2, hexc(pk.shirt2 != pk.shirt ? pk.shirt2 : 0xF2F2F2));
+    R(16, 33, 8, 6, dim(psk, 0.85f));
+    R(13, 18, 14, 16, psk); R(12, 16, 16, 5, phc); R(12, 20, 2, 5, phc);
+    R(16, 25, 2, 2, Color{ 30, 24, 24, 255 }); R(22, 25, 2, 2, Color{ 30, 24, 24, 255 });
+    R(17, 30, 6, 1, Color{ 120, 50, 50, 255 }); R(17, 31, 1, 1, Color{ 120, 50, 50, 255 }); R(22, 31, 1, 1, Color{ 120, 50, 50, 255 });   // bouche dépitée
+    R(6, 20, 6, 18, psh); R(28, 20, 6, 18, psh);   // bras levés
+    R(9, 14, 7, 5, psk); R(24, 14, 7, 5, psk);     // mains sur la tête
+    // arbitre (à droite, de face) : bras droit tendu vers le ciel, carton en main
+    Kit rk = refereeKit(m);
+    bool fem = m.S.referee >= 0 && m.S.referee < NUM_REFEREES && REFEREES[m.S.referee].female;
+    static const int MS[6][2] = { { 0, 0 }, { 0, 4 }, { 1, 3 }, { 2, 2 }, { 2, 6 }, { 3, 1 } };
+    int rs = fem ? 1 : MS[(m.S.referee + 6) % 6][0], rh = fem ? 3 : MS[(m.S.referee + 6) % 6][1];
+    Color rsk = hexc(SKIN[rs % NUM_SKINS]), rhc = hexc(HAIR[rh % NUM_HAIRS]), rsh = hexc(rk.shirt);
+    int bx = 54;
+    if (fem) R(bx + 3, 16, 22, 20, rhc);
+    R(bx, 38, 32, 22, rsh); R(bx, 38, 32, 2, Color{ 20, 20, 24, 255 });
+    R(bx + 3, 42, 4, 4, Color{ 250, 210, 60, 255 });                      // écusson
+    R(bx + 20, 41, 1, 7, Color{ 30, 30, 40, 255 }); R(bx + 19, 47, 3, 2, Color{ 205, 210, 220, 255 });   // sifflet au cordon
+    R(bx + 12, 33, 8, 6, dim(rsk, 0.85f));
+    R(bx + 9, 18, 14, 16, rsk); R(bx + 8, 16, 16, 4, rhc);
+    R(bx + 11, 24, 3, 1, dim(rhc, 0.9f)); R(bx + 18, 24, 3, 1, dim(rhc, 0.9f));
+    R(bx + 12, 26, 2, 2, Color{ 30, 24, 24, 255 }); R(bx + 18, 26, 2, 2, Color{ 30, 24, 24, 255 });
+    R(bx + 14, 30, 4, 1, Color{ 110, 60, 50, 255 });                      // air sévère
+    float shake = std::sin(t * 18.f) * 0.6f;
+    R(bx + 27, 14 + shake, 5, 25, rsh);                                   // bras tendu
+    R(bx + 27, 10 + shake, 5, 5, rsk);                                    // main
+    Color cc = ct == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
+    R(bx + 25, 0 + shake, 10, 13, cc); R(bx + 33, 1 + shake, 2, 12, dim(cc, 0.75f)); R(bx + 26, 1 + shake, 3, 1, Color{ 255, 255, 230, 255 });
+    if (fmodf(t * 3.f, 1.f) < 0.15f) DrawCircle(x + bx + 30, y + 6, 10, Color{ 255, 255, 255, 50 });   // flashs des photographes
+    DrawRectangle(x - 2, y + h + 2, w + 4, 10, ct == 2 ? Color{ 200, 25, 35, 255 } : Color{ 220, 170, 0, 255 });
+    std::string lab = second ? (ct == 1 ? "2E CARTON JAUNE..." : "... ET C'EST LE ROUGE !") : ct == 2 ? "CARTON ROUGE" : "CARTON JAUNE";
+    drawTextPx(fitText(lab + " - " + m.team(P.team).shortName, w, 5), x + 2, y + h + 3, 5, ct == 2 ? WHITE : BLACK);
+    if (((int)(t * 2)) % 2) DrawCircle(x + w - 4, y + h + 7, 2, ct == 2 ? WHITE : BLACK);
+}
 static void drawMatchScenes(const Match& m) {
-    static const Match* sm = nullptr; static float st = -1, wait = 0, lastClock = -100; static int kind = 0;
+    static const Match* sm = nullptr; static float st = -1, wait = 0, lastClock = -100; static int kind = 0; static bool goalShot = false;
     static int goalCamSum = -1;
     if (sm != &m) { sm = &m; st = -1; wait = 0; lastClock = -100; goalCamSum = -1; }
     if (m.score[0] + m.score[1] < goalCamSum) goalCamSum = -1;
-    bool goalCam = m.S.tv && m.state == MS_GOAL && m.stateT > 2.6f && m.lastScorerTeam >= 0 && !m.S.neutral && m.score[0] + m.score[1] != goalCamSum;   // après un but : la caméra cherche la joie en tribune
+    bool goalCam = m.S.tv && m.state == MS_GOAL && m.stateT > 2.2f && m.lastScorerTeam >= 0 && !m.S.neutral && m.score[0] + m.score[1] != goalCamSum;   // après un but : la caméra cherche la joie en tribune
     bool stop = !m.S.training && m.refCardT <= 0 && !m.ceremony && !m.finished && !m.trophyActive && !m.lapActive && m.fightT <= 0 && m.shootUI <= 0 && m.subBoardT <= 0 && m.boardT <= 0 && m.pendCardOff < 0 &&
                 (m.state == MS_STOP || goalCam || (m.state == MS_SETPIECE && !m.spReady && m.sp != SP_KICKOFF));
     float dt = GetFrameTime();
@@ -1417,14 +1559,14 @@ static void drawMatchScenes(const Match& m) {
                 lastClock = m.clock;
                 if (goalCam) {
                     goalCamSum = m.score[0] + m.score[1];
-                    kind = 9; st = 0; g_fanTeam = m.lastScorerTeam; g_fanSeed = (unsigned)(m.clock * 977.f) + 11;
+                    kind = (int)(m.clock * 3.f) % 3 == 0 ? 10 : 9; st = 0; goalShot = true; g_fanTeam = m.lastScorerTeam; g_fanSeed = (unsigned)(m.clock * 977.f) + 11;
                 } else if (((int)(m.clock * 7.3f)) % 3 != 0) {
                     // le contexte oriente le choix : score, minute, équipe qui pousse
                     int base = (int)(m.clock * 13.f + m.score[0] * 5 + m.score[1] * 3) % 9;
                     if (m.score[1] > m.score[0] && base == 0) base = 6;
                     // en télé, les caméramans aiment s'attarder sur les supportrices (un plan sur trois environ)
                     if (m.S.tv && ((int)(m.clock * 3.1f)) % 3 == 0) base = ((int)(m.clock * 5.f)) % 4 == 0 ? 10 : 9;
-                    kind = base; st = 0;
+                    kind = base; st = 0; goalShot = false;
                     g_fanSeed = (unsigned)(m.clock * 977.f) + 7;
                     g_fanTeam = m.S.neutral ? ((int)m.clock % 2) : ((int)(m.clock * 2.3f)) % 4 == 0 ? 1 : 0;
                 }
@@ -1433,9 +1575,10 @@ static void drawMatchScenes(const Match& m) {
         return;
     }
     st += dt;
-    if (st > 3.4f || (!stop && st > 1.2f)) { st = -1; return; }
+    float dur = goalShot ? 5.6f : 3.4f;             // après un but, le plan sur les supporters dure plus longtemps
+    if (st > dur || (!stop && !(goalShot && m.state == MS_GOAL) && st > 1.2f)) { st = -1; goalShot = false; return; }
     static const char* LAB[11] = { "EN TRIBUNE", "LE KOP", "SUR LE BANC", "ÉCHAUFFEMENT", "LA MASCOTTE", "EN LOGE", "LE PARCAGE VISITEUR", "JEUNE SUPPORTER", "TRIBUNE DE PRESSE", "FAN CAM", "LES SUPPORTRICES" };
-    float in = std::min(1.f, st * 4.f), out = std::min(1.f, (3.4f - st) * 4.f);
+    float in = std::min(1.f, st * 4.f), out = std::min(1.f, (dur - st) * 4.f);
     bool fan = kind >= 9;
     int w = fan ? 92 : 76, h = fan ? 58 : 46, x = 4 - (int)((1.f - std::min(in, out)) * 120), y = 22;
     float t = (float)GetTime();
@@ -1874,15 +2017,16 @@ void renderMatch(const Match& m, bool radar) {
             if (!replay && (m.refCarry || m.ballStage == 2)) {   // le ballon dans la main (sous le bras) de l'arbitre
                 int d = dirOf(m.refFace);
                 int hx = rx + (d == 2 ? -4 : d == 3 ? 3 : 3), hy = ry - 7;
-                // ballon rond (croix de pixels), sans cadre
-                DrawRectangle(hx, hy, 3, 3, WHITE);
-                DrawPixel(hx, hy, Color{ 225, 228, 235, 255 }); DrawPixel(hx + 2, hy, Color{ 225, 228, 235, 255 });
-                DrawRectangle(hx, hy + 2, 3, 1, Color{ 170, 175, 190, 255 }); DrawPixel(hx + 1, hy + 1, Color{ 40, 40, 50, 255 });
+                drawMiniBall(hx, hy - 1);
             }
             if (showCard) {
+                // carton brandi bras tendu : main, carton avec reflet (sans cadre)
                 Color cc = cardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };
-                DrawRectangle(rx + 3, ry - 18, 3, 4, cc);
-                DrawRectangleLines(rx + 2, ry - 19, 5, 6, Color{ 0, 0, 0, 120 });
+                Color cd = cardType == 2 ? Color{ 160, 15, 20, 255 } : Color{ 205, 165, 0, 255 };
+                DrawRectangle(rx + 3, ry - 19, 3, 4, cc);
+                DrawRectangle(rx + 5, ry - 18, 1, 3, cd);
+                DrawPixel(rx + 3, ry - 19, Color{ 255, 250, 210, 255 });
+                DrawPixel(rx + 4, ry - 15, Color{ 230, 190, 150, 255 });
             } else if (!replay && m.state == MS_STOP && m.stateT < 2.2f && (m.nextSp == SP_FREEKICK || m.nextSp == SP_INDIRECT || m.nextSp == SP_PENALTY || m.nextSp == SP_CORNER)) {
                 // geste de l'arbitre : bras tendu vers le but de l'équipe qui bénéficie de la faute, bras levé pour un coup franc indirect,
                 // désigne le point de penalty
@@ -1950,6 +2094,7 @@ void renderMatch(const Match& m, bool radar) {
             sy -= (int)(std::fabs(std::sin(ph)) * 3.f);
             frame = (int)(GetTime() * 4) + i;
         } else if (heart) frame = 0;
+        if (state == PS_NORMAL && pose == POSE_NONE && !heart) dir = dirOf8(face);      // course en 8 directions
         // poussière / gerbes d'eau sous les crampons en pleine course
         if (!replay && (state == PS_NORMAL || state == PS_SLIDE) && p.vel.len() > p.speed * 0.8f && (type == 1 || type == 2 || type == 3 || state == PS_SLIDE)) {
             V2 back = p.vel.norm() * -1.f;
@@ -2001,6 +2146,12 @@ void renderMatch(const Match& m, bool radar) {
             DrawRectangle(sx + 3, sy - 14 + ph, 1, 2, Color{ 150, 200, 255, 220 });
             if (p.stamina < 0.42f) DrawRectangle(sx - 4, sy - 13 + (ph + 1) % 3, 1, 2, Color{ 150, 200, 255, 220 });
         }
+        // à bout de souffle : petites bouffées devant la bouche, il ralentit
+        if (!replay && p.onPitch && p.breath < 0.3f && state == PS_NORMAL) {
+            float bp = std::fmod((float)GetTime() * 2.5f + i * 0.37f, 1.f);
+            int bx = sx + (dir == 3 || dir == 5 || dir == 7 ? -3 : 3) + (int)(bp * 3) * (dir == 3 || dir == 5 || dir == 7 ? -1 : 1);
+            DrawRectangle(bx, sy - 12 - (int)(bp * 2), 2, 1, Color{ 235, 240, 255, (unsigned char)(170 * (1 - bp)) });
+        }
         // marqueur joueur contrôlé
         if (!replay && p.human >= 0) {
             Color c = CTRL_COL[p.human];
@@ -2019,6 +2170,7 @@ void renderMatch(const Match& m, bool radar) {
                 DrawRectangle(sx - 8, hy - 6, 16, 4, Color{ 0, 0, 0, 190 });
                 Color pc = pw < 0.5f ? Color{ (unsigned char)(80 + 340 * pw), 230, 60, 255 } : Color{ 250, (unsigned char)(230 - 300 * (pw - 0.5f)), 40, 255 };
                 if (p.chargeKind == 1) { pw = std::min(1.f, p.charge / 0.6f); pc = Color{ 80, (unsigned char)(170 + 60 * pw), 255, 255 }; }   // lob : jauge bleue
+                if (p.chargeKind == 2) { pw = std::min(1.f, std::max(0.f, p.charge - 0.14f) / 0.6f); pc = Color{ 230, 255, (unsigned char)(120 + 100 * pw), 255 }; }   // passe dosée : jauge blanc-vert
                 DrawRectangle(sx - 7, hy - 5, (int)(14 * pw), 2, pc);
                 if (pw >= 1.f && ((int)(GetTime() * 12)) % 2) DrawRectangleLines(sx - 8, hy - 6, 16, 4, WHITE);
             }
@@ -2088,6 +2240,7 @@ void renderMatch(const Match& m, bool radar) {
         V2 d = w.target - w.pos;
         int dir = dirOf(d.len() > 0.01f ? d : V2(-1, 0));
         drawPlayerSprite(SX(w.pos.x), SY(w.pos.y), m.kit[w.team], w.skin, w.hair, dir, (int)(w.anim * 2.2f), PS_NORMAL, w.gk, w.gkShirt, 1);
+        if (w.red && w.age < 6.f && ((int)(GetTime() * 3)) % 2) { DrawRectangle(SX(w.pos.x) - 1, SY(w.pos.y) - 19, 3, 4, Color{ 230, 30, 30, 255 }); }   // expulsé : tête basse, carton rouge au-dessus
     }
     // photo officielle : photographes accroupis face aux équipes, flashs
     if (!replay && m.ceremony && m.cerPhase == 0) {
@@ -2123,24 +2276,38 @@ void renderMatch(const Match& m, bool radar) {
             bool cor = m.sp == SP_CORNER;
             V2 q = m.ball.pos, v = m.spAim * (cor ? 20.f : 26.f), prev = q; float spin = m.spCurl * (cor ? 5.5f : 6.5f);
             float len = 0; const float dtp = 0.02f;
+            // trajectoire bien visible : points 2x2 cerclés de noir, alternance blanc / couleur du joueur qui défile
+            int phase = (int)(GetTime() * 12);
             for (int k = 0; k < 60; k++) {
                 v += v.norm().perp() * (spin * dtp); spin *= (1 - 0.9f * dtp);
                 q += v * dtp; len += (v * dtp).len();
-                if (k % 2 == 0) DrawRectangle(SX(q.x), SY(q.y), k > 40 ? 2 : 1, k > 40 ? 2 : 1, cc);
-                if (k == 59) {    // pointe de la flèche
+                if (k % 3 == 0) {
+                    int px = SX(q.x), py = SY(q.y);
+                    DrawRectangle(px - 1, py - 1, 4, 4, Color{ 0, 0, 0, 170 });
+                    DrawRectangle(px, py, 2, 2, ((k / 3 + phase) % 3 == 0) ? cc : WHITE);
+                }
+                if (k == 59) {    // pointe de la flèche, épaisse et cerclée
                     V2 d = (q - prev).norm(), pp = d.perp();
-                    V2 l = q - d * 1.4f + pp * 0.9f, r = q - d * 1.4f - pp * 0.9f;
-                    DrawLine(SX(q.x), SY(q.y), SX(l.x), SY(l.y), cc); DrawLine(SX(q.x), SY(q.y), SX(r.x), SY(r.y), cc);
+                    V2 l = q - d * 2.0f + pp * 1.3f, r = q - d * 2.0f - pp * 1.3f;
+                    Vector2 A{ (float)SX(q.x), (float)SY(q.y) }, B{ (float)SX(l.x), (float)SY(l.y) }, C{ (float)SX(r.x), (float)SY(r.y) };
+                    DrawTriangle(A, C, B, Color{ 0, 0, 0, 200 }); DrawTriangle(A, B, C, Color{ 0, 0, 0, 200 });
+                    DrawLineEx(A, B, 2, WHITE); DrawLineEx(A, C, 2, WHITE); DrawLineEx(B, C, 1, cc);
                 }
                 prev = q;
             }
             (void)len;
-            if (std::fabs(m.spCurl) > 0.02f) drawTextPx(fmt("EFFET %s%d", m.spCurl > 0 ? "+" : "-", (int)std::lround(std::fabs(m.spCurl) * 100)), SX(m.ball.pos.x) + 6, SY(m.ball.pos.y) + 4, 10, cc);
+            if (std::fabs(m.spCurl) > 0.02f) { std::string e = fmt("EFFET %s%d", m.spCurl > 0 ? "+" : "-", (int)std::lround(std::fabs(m.spCurl) * 100)); int ex = SX(m.ball.pos.x) + 6, ey = SY(m.ball.pos.y) + 4; DrawRectangle(ex - 2, ey - 1, textWidth(e, 10) + 4, 12, Color{ 0, 0, 0, 170 }); drawTextPx(e, ex, ey, 10, WHITE); }
         } else {
-            for (int k = 1; k <= 6; k++) {
-                V2 q = m.ball.pos + m.spAim * (float)k;
-                DrawRectangle(SX(q.x), SY(q.y), 1, 1, cc);
+            int phase = (int)(GetTime() * 12);
+            for (int k = 1; k <= 8; k++) {
+                V2 q = m.ball.pos + m.spAim * (float)k * 1.1f;
+                int px = SX(q.x), py = SY(q.y);
+                DrawRectangle(px - 1, py - 1, 4, 4, Color{ 0, 0, 0, 170 });
+                DrawRectangle(px, py, 2, 2, ((k + phase) % 3 == 0) ? cc : WHITE);
             }
+            V2 tip = m.ball.pos + m.spAim * 9.6f, pp = m.spAim.perp();
+            Vector2 A{ (float)SX(tip.x), (float)SY(tip.y) }, B{ (float)SX(tip.x - m.spAim.x * 1.6f + pp.x), (float)SY(tip.y - m.spAim.y * 1.6f + pp.y) }, C{ (float)SX(tip.x - m.spAim.x * 1.6f - pp.x), (float)SY(tip.y - m.spAim.y * 1.6f - pp.y) };
+            DrawLineEx(A, B, 2, WHITE); DrawLineEx(A, C, 2, WHITE);
         }
     }
 
@@ -2234,6 +2401,7 @@ void renderMatch(const Match& m, bool radar) {
     }
     if (Z != 1.f) { rlDrawRenderBatchActive(); rlPopMatrix(); rlPushMatrix(); rlScalef(2, 2, 1); }
     if (!replay) drawMatchScenes(m);
+    if (!replay) drawCardScene(m, (float)GetTime());
     // ---------------- HUD
     const Team& H = m.team(0); const Team& A = m.team(1);
     int mins = (int)m.clock;
@@ -2357,14 +2525,40 @@ void renderMatch(const Match& m, bool radar) {
         drawTextPx(ag, 6, 16, 10, Color{ 220, 220, 220, 255 });
     }
     if (m.shootout) {
+        // panneau TV de la séance : cinq pastilles par équipe (vides = à venir, vertes = réussi, rouges = manqué), mort subite au-delà
+        int ns = std::max(5, (int)std::max(m.penLog[0].size(), m.penLog[1].size()) + ((m.penLog[0].size() + m.penLog[1].size()) % 2 ? 0 : 0));
+        bool sudden = m.penLog[0].size() > 5 || m.penLog[1].size() > 5 || (m.penLog[0].size() == 5 && m.penLog[1].size() == 5);
+        int pw = 60 + ns * 9 + 24, px = MW / 2 - pw / 2, py = 22;
+        DrawRectangle(px + 2, py + 2, pw, 30, Color{ 0, 0, 0, 110 });
+        DrawRectangleGradientV(px, py, pw, 30, Color{ 18, 28, 64, 235 }, Color{ 6, 10, 28, 235 });
+        DrawRectangle(px, py, pw, 1, Color{ 255, 214, 80, 255 });
         for (int t = 0; t < 2; t++) {
-            int y = 30 + t * 10;
-            DrawRectangle(3, y - 1, 90, 10, Color{ 0, 0, 0, 120 });
-            drawTextPx(t == 0 ? H.shortName : A.shortName, 7, y, 10, WHITE);
-            for (int k = 0; k < (int)m.penLog[t].size(); k++) {
-                Color c = m.penLog[t][k] ? Color{ 60, 220, 60, 255 } : Color{ 230, 50, 50, 255 };
-                DrawRectangle(34 + k * 6, y + 2, 4, 4, c);
+            int y = py + 3 + t * 13;
+            DrawRectangle(px + 2, y, 3, 10, hexc(m.kit[t].shirt));
+            drawTextPx(t == 0 ? H.shortName : A.shortName, px + 8, y, 10, WHITE);
+            for (int k = 0; k < ns; k++) {
+                int cx = px + 46 + k * 9, cy = y + 5;
+                if (k < (int)m.penLog[t].size()) {
+                    bool ok = m.penLog[t][k];
+                    DrawCircle(cx, cy, 3.5f, ok ? Color{ 60, 210, 80, 255 } : Color{ 220, 50, 50, 255 });
+                    if (ok) { DrawPixel(cx - 2, cy, WHITE); DrawPixel(cx - 1, cy + 1, WHITE); DrawPixel(cx, cy, WHITE); DrawPixel(cx + 1, cy - 1, WHITE); }
+                    else { DrawPixel(cx - 1, cy - 1, WHITE); DrawPixel(cx + 1, cy + 1, WHITE); DrawPixel(cx + 1, cy - 1, WHITE); DrawPixel(cx - 1, cy + 1, WHITE); DrawPixel(cx, cy, WHITE); }
+                } else DrawCircleLines(cx, cy, 3.5f, k >= 5 ? Color{ 255, 140, 80, 200 } : Color{ 200, 210, 230, 200 });
             }
+            std::string sc = fmt("%d", m.pens[t]);
+            drawTextPx(sc, px + pw - 8 - textWidth(sc, 10), y, 10, Color{ 255, 220, 90, 255 });
+        }
+        if (sudden) { const char* su = "MORT SUBITE"; int w = textWidth(su, 5) + 6; DrawRectangle(MW / 2 - w / 2, py + 30, w, 8, Color{ 200, 40, 40, 230 }); drawTextPx(su, MW / 2 - w / 2 + 3, py + 31, 5, WHITE); }
+        // tireur et gardien face à face : concentration avant la frappe
+        if (!replay && m.state == MS_SETPIECE && m.sp == SP_SHOOTOUT && m.spKicker >= 0) {
+            int gkI = -1; for (int j = (1 - m.spTeam) * 11; j < (1 - m.spTeam) * 11 + 11; j++) if (m.pl[j].onPitch && m.pl[j].gk) gkI = j;
+            float a = std::min(1.f, m.spT * 2.f);
+            int by = MH - 64;
+            DrawRectangle(0, by, MW, 22, Color{ 0, 0, 0, (unsigned char)(150 * a) });
+            DrawRectangle(0, by, MW, 1, Color{ 255, 214, 80, (unsigned char)(255 * a) });
+            drawTextPx("TIREUR", 6, by + 2, 5, Color{ 255, 220, 90, 255 }); drawTextPx(fitText(m.playerTag(m.spKicker), MW / 2 - 12, 10), 6, by + 9, 10, WHITE);
+            if (gkI >= 0) { std::string g = m.playerTag(gkI); drawTextPx("GARDIEN", MW - 6 - textWidth("GARDIEN", 5), by + 2, 5, Color{ 255, 220, 90, 255 }); g = fitText(g, MW / 2 - 12, 10); drawTextPx(g, MW - 6 - textWidth(g, 10), by + 9, 10, WHITE); }
+            if (m.spReady && ((int)(GetTime() * 2)) % 2) drawTextCentered("CONCENTRATION...", MW / 2, by - 10, 5, Color{ 255, 255, 255, 220 }, true);
         }
     }
     // nom du joueur contrôlé / porteur
@@ -2390,6 +2584,9 @@ void renderMatch(const Match& m, bool radar) {
             DrawRectangle(x, MH - 10, 18, 4, Color{ 0, 0, 0, 180 });
             DrawRectangle(x, MH - 10, (int)(18 * std::max(0.f, std::min(1.f, p.stamina))), 4, sc);
         }
+        // jauge de souffle (bleue) juste en dessous : se vide en courant, se recharge en marchant
+        DrawRectangle(x, MH - 6, 18, 2, Color{ 0, 0, 0, 180 });
+        DrawRectangle(x, MH - 6, (int)(18 * std::max(0.f, std::min(1.f, p.breath))), 2, p.breath < 0.3f ? Color{ 255, 120, 80, 255 } : Color{ 110, 190, 255, 255 });
     }
     if (!replay) drawTossUI(m);
     if (!replay) drawShootUI(m);
@@ -2559,6 +2756,11 @@ void renderMatch(const Match& m, bool radar) {
             band(m.refCardSecond ? (ct == 1 ? "2E CARTON JAUNE" : "2E JAUNE = CARTON ROUGE") : ct == 2 ? "CARTON ROUGE" : "CARTON JAUNE", m.playerName(m.refCardFor) + " (" + m.team(cp.team).shortName + ")", ct == 2 ? Color{ 230, 40, 40, 255 } : Color{ 255, 220, 0, 255 }, a);
         }
     }
+    // fin du ralenti du but : arrêt sur image qui s'assombrit avant le retour au direct
+    if (replay && !m.offReplay && m.repEndHold > 0) {
+        DrawRectangle(0, 0, MW, MH, Color{ 0, 0, 0, (unsigned char)std::min(200.f, m.repEndHold / 1.1f * 200.f) });
+        if (m.repEndHold < 0.8f) drawTextCentered("RETOUR AU DIRECT", MW / 2, MH / 2 - 5, 10, Color{ 255, 255, 255, 220 }, true);
+    }
     // ralenti du hors-jeu : ligne de l'avant-dernier défenseur (rouge) et de l'attaquant (jaune), écart mesuré
     if (replay && m.offReplay) {
         int x0 = SX(0), x1 = SX(PITCH_W);
@@ -2582,6 +2784,15 @@ void renderMatch(const Match& m, bool radar) {
         int y = 40;
         int w = std::max(textWidth(m.msg, 10), textWidth(m.msg2, 10)) + 24;
         int h = m.msg2.empty() ? 18 : 30;
+        {   // le bandeau ne doit pas cacher l'arbitre ni le joueur sanctionné (carton) : sinon il passe en bas de l'écran
+            auto hits = [&](int yy, V2 p) { int px = SX(p.x), py = SY(p.y); return px > MW / 2 - w / 2 - 8 && px < MW / 2 + w / 2 + 8 && py > yy - 8 && py < yy + h + 22; };
+            auto blocked = [&](int yy) {
+                if (hits(yy, m.refPos)) return true;
+                int f = m.refCardT > 0 ? m.refCardFor : m.pendCardOff;
+                return f >= 0 && f < 22 && m.pl[f].onPitch && hits(yy, m.pl[f].pos);
+            };
+            if (blocked(y)) { int alt = MH - h - 22; if (!blocked(alt)) y = alt; else if (!blocked(MH / 2 - h / 2)) y = MH / 2 - h / 2; }
+        }
         // bandeau TV : ouverture horizontale depuis le centre, liserés dorés, reflet
         static std::string lastMsg; static float openT = 0;
         if (m.msg != lastMsg) { lastMsg = m.msg; openT = 0; }

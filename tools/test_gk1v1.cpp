@@ -24,7 +24,8 @@ int main(int argc, char** argv) {
                 else if (std::fabs(p.pos.x - M.pl[gk].pos.x) < 2.2f && (g - p.pos).len() > 3.f) ct.dir = V2(side, sg * 0.25f).norm();    // crochet
                 else { ct.dir = (g - p.pos).norm(); if ((g - p.pos).len() < 9.f) { ct.f1 = true; } }
             } else ct.dir = (M.ball.pos - p.pos).norm();
-            ct.f1p = ct.f1; ct.sprint = true;
+            // appui bref (passe au sol automatique), comme un joueur qui tape le bouton
+            static bool prevF1 = false; if (ct.f1 && prevF1) ct.f1 = false; ct.f1p = ct.f1; prevF1 = ct.f1; ct.f1r = !ct.f1 && M.pl[att].charging; ct.sprint = true;
             M.ctl[IN_KB1] = ct; M.update(1.f / 60); M.sfxN = 0;
             if (cut && M.ball.owner == att && std::fabs(p.pos.x - M.pl[gk].pos.x) > 2.5f && sg * (p.pos.y - M.pl[gk].pos.y) > -1.f) { rounded++; cut = false; side = 0; }
             if (M.state == MS_GOAL) { goals++; break; }
