@@ -417,6 +417,7 @@ place_kickoff:
     sta ko_p2
     lda #1
     sta ko_active
+    stz ko_mode
     lda #TU_SEC * 2 / 3
     sta ko_t
     lda #TU_SEC * 6

@@ -376,6 +376,9 @@ call_foul:
     lda t7
     lsr a
     jsr take_ball
+    lda t7
+    lsr a
+    jsr fk_start                ; coup franc : adversaires a distance
     lda #MS_FOUL
     sta m_state
     lda #TU_SEC

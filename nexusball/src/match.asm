@@ -90,8 +90,10 @@ start_match:
     jsr oam_clear
     jsr screen_on
     stz title_music
-    lda #MUS_CHANT              ; ambiance : grosse caisse, mains, cor
-    jsr sfx_play
+    jsr rand
+    and #$0003
+    sta chant_idx
+    jsr play_chant              ; ambiance : grosse caisse, mains, cor
     lda #$0C
     jsr crowd_level
 
@@ -220,6 +222,7 @@ st_goal:
     cmp #3
     beq @golden
     jsr new_kickoff
+    jsr play_chant              ; nouvel air apres chaque point
 @w: clc
     rts
 @golden:
@@ -274,8 +277,7 @@ st_half:
     stz m_acc
     jsr hud_draw_static
     jsr new_kickoff
-    lda #MUS_CHANT
-    jsr sfx_play
+    jsr play_chant
     lda ad_flag
     beq @w
     jsr camera_snap
@@ -724,6 +726,9 @@ ko_update:
     lda ko_active
     bne :+
     rts
+:   lda ko_mode
+    beq :+
+    jmp fk_update
 :   lda ko_lim
     sec
     sbc rc+RC_TDEC
@@ -795,6 +800,9 @@ ko_push:
     lda ko_active
     bne :+
     rts
+:   lda ko_mode
+    beq :+
+    jmp fk_push
 :   lda #FIELD_CX
     sta kz_cx
     lda #FIELD_CY
@@ -819,3 +827,96 @@ ko_push:
     cpx #NUM_PLAYERS * 2
     bne @l
     rts
+
+; -----------------------------------------------------------------------------
+;  Coup franc (apres une faute) : le joueur qui recoit le ballon ne bouge pas,
+;  les adversaires restent a FK_DIST pixels jusqu'a sa passe ou son tir.
+; -----------------------------------------------------------------------------
+FK_DIST = 40
+
+; fk_start : A = joueur qui tire le coup franc
+fk_start:
+    .a16
+    .i16
+    sta ko_p1
+    lda #$FF
+    sta ko_p2
+    lda #1
+    sta ko_active
+    sta ko_mode
+    lda #TU_SEC * 6
+    sta ko_lim
+    rts
+
+fk_update:
+    .a16
+    .i16
+    lda ko_lim
+    sec
+    sbc rc+RC_TDEC
+    bpl :+
+    lda #0
+:   sta ko_lim
+    beq @end
+    lda b_owner
+    cmp ko_p1
+    bne @end                    ; ballon joue : fin du coup franc
+    asl a
+    tax
+    stz p_want,x                ; le tireur ne bouge pas (passe / tir autorises)
+    rts
+@end:
+    stz ko_active
+    rts
+
+fk_push:
+    .a16
+    .i16
+    lda ko_p1
+    asl a
+    tax
+    lda p_x,x
+    ASR_A 4
+    sta fk_x
+    lda p_y,x
+    ASR_A 4
+    sta fk_y
+    lda p_team,x
+    sta ko_t                    ; equipe du tireur
+    ldx #0
+@l: stx cp
+    lda p_team,x
+    cmp ko_t
+    beq @n
+    lda p_state,x
+    cmp #PS_OUT
+    beq @n
+    lda fk_x                    ; (keep_out_zone change kz_*)
+    sta kz_cx
+    lda fk_y
+    sta kz_cy
+    lda #FK_DIST
+    sta kz_r
+    jsr push_out
+    ldx cp
+    jsr keep_out_zone           ; repousse hors du cercle sans entrer dans une raquette
+@n: ldx cp
+    inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne @l
+    rts
+
+; play_chant : lance l'air d'ambiance suivant (3 airs en rotation, depart aleatoire)
+play_chant:
+    .a16
+    .i16
+    lda chant_idx
+    inc a
+    cmp #3
+    bcc :+
+    lda #0
+:   sta chant_idx
+    clc
+    adc #MUS_CHANT
+    jmp sfx_play

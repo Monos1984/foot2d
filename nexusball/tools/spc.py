@@ -215,8 +215,29 @@ def song_chant():
     return [drum, hands, horn]
 
 
+def song_chant2():
+    """rythme rapide : boum . boum-boum . / claps sur 2 et 4 / fanfare"""
+    boom, clap = note_num("F5"), note_num("D6")
+    drum = [(boom, 20), (0, 20), (boom, 10), (boom, 10), (0, 20)] * 8
+    hands = [(0, 20), (clap, 20), (0, 20), (clap, 20)] * 8
+    mel = ["C5", "C5", "D5", "E5", "G5", "E5", "D5", "C5"]
+    horn = [(note_num(n), 40) for n in mel] + [(0, 320)]
+    return [drum, hands, horn]
+
+
+def song_chant3():
+    """chant de supporters : grosse caisse reguliere, contretemps, 'o-le o-le'"""
+    boom, clap = note_num("A5"), note_num("E6")
+    drum = [(boom, 25), (boom, 25), (boom, 25), (0, 25)] * 4
+    hands = [(0, 12), (clap, 13), (0, 25)] * 8
+    horn = [(note_num("G4"), 50), (note_num("E4"), 50), (note_num("G4"), 25), (note_num("A4"), 25),
+            (note_num("G4"), 50), (0, 200)]
+    return [drum, hands, horn]
+
+
 SONGS = [("TITLE", song_title, True, "inst_tab"), ("JINGLE", song_jingle, False, "inst_tab"),
-         ("CHANT", song_chant, True, "inst_chant")]
+         ("CHANT", song_chant, True, "inst_chant"), ("CHANT2", song_chant2, True, "inst_chant"),
+         ("CHANT3", song_chant3, True, "inst_chant")]
 
 
 def build():

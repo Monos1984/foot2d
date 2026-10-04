@@ -349,3 +349,7 @@ rs_b:       .res 2
 rs_aa:      .res 2
 rs_s:       .res 2
 rs_la:      .res 2
+ko_mode:    .res 2          ; 0 coup d'envoi, 1 coup franc
+chant_idx:  .res 2
+fk_x:       .res 2
+fk_y:       .res 2

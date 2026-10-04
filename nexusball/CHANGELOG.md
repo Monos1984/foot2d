@@ -1,5 +1,16 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.1 — corrections et coup franc
+
+- Correction : animation de course figée (l'index du cycle valait toujours 0).
+- Correction : ballon bloqué près d'une raquette. Le gardien ne sortait que dans un rayon plus petit
+  que la zone interdite aux autres joueurs ; il va maintenant chercher tout ballon libre dans sa
+  raquette et ses abords.
+- Coup franc après une faute (ou un port trop long) : le joueur qui reçoit le ballon ne bouge
+  pas, les adversaires restent à 40 pixels jusqu'à sa passe ou son tir (6 s au plus).
+- Ambiance : 3 airs de stade différents (grosse caisse, mains, cor) qui changent au coup d'envoi,
+  après chaque point et à la mi-temps.
+
 ## 0.11.0 — coup d'envoi, écrans de score, ambiance
 
 - Raquettes : aucun joueur de champ n'entre dans aucune des deux raquettes (seuls les gardiens).

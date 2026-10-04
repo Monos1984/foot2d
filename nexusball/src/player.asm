@@ -1453,7 +1453,7 @@ player_anim:
     cmp #PS_CELEB
     bne :+
     lda #SPR_CELEB
-    bra @set
+    brl @set
 :   lda p_z,x
     beq :+
     lda #SPR_JUMP
@@ -1499,9 +1499,12 @@ player_anim:
     lda #SPR_STAND
     bra @set
 :   lda p_anim,x
-    xba
-    asl a
-    asl a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
     and #$0003                  ; (anim >> 6) & 3
     tay
     lda run_cycle,y

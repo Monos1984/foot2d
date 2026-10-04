@@ -238,7 +238,7 @@ gk_ai:
     sta t1
     jsr dist_approx
     ldx cp
-    cmp #ZONE_R
+    cmp #ZONE_R + 14            ; toute la raquette (interdite aux autres) et ses abords
     bcs @place
     lda b_x
     ASR_A 4
