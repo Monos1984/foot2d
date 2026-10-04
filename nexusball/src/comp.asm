@@ -7,7 +7,7 @@
 MODE_PRESET  = 3            ; start_match : manettes deja reglees
 SRAM_COMP    = $A06100      ; 3 emplacements de $400 octets
 COMP_SIZE    = comp_data_end - comp_data
-COMP_VERSION = 1
+COMP_VERSION = 2
 NUM_CITEMS   = 21           ; 16 equipes + TYPE, LENGTH, DIFFICULTY, STADIUM, START
 
 .segment "RODATA"
@@ -112,7 +112,7 @@ comp_new:
     rep #$20
     .a16
     inx
-    cpx #16
+    cpx #MAX_TEAMS
     bne @t
     ldx team_id
     sep #$20
@@ -148,6 +148,8 @@ comp_setup:
     .a16
     .i16
     stz ui_sel
+    stz cs_top
+    jsr cs_build
     jsr safe_screen_off
     jsr bg3_clear
     jsr ui_fill
@@ -161,18 +163,25 @@ cs_loop:
     and #JOY_B
     beq :+
     jmp title_screen
-:   lda ui_sel
-    ldy #NUM_CITEMS
+:   lda vt_n
+    clc
+    adc #5
+    tay
+    lda ui_sel
     jsr ui_updown
     cmp ui_sel
     beq :+
     sta ui_sel
+    jsr cs_scroll
     jsr cs_draw
     bra cs_loop
 :   lda ui_sel
-    cmp #16
+    cmp vt_n
     bcs @opt
     ; statut d'une equipe
+    tax
+    lda vt_list,x
+    and #$00FF
     tax
     lda c_ctrl,x
     and #$00FF
@@ -187,7 +196,7 @@ cs_loop:
     bra cs_loop
 @opt:
     sec
-    sbc #16
+    sbc vt_n
     asl a
     tax
     jmp (.loword(cs_opt_tab),x)
@@ -267,24 +276,79 @@ cs_count:
 @l: lda c_ctrl,x
     and #$00FF
     beq :+
+    txa
+    jsr team_valid
+    bcc :+
     iny
 :   inx
-    cpx #16
+    cpx #MAX_TEAMS
     bne @l
     tya
     rts
 
-cs_rows:
-    .byte 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
+; cs_build : liste des equipes existantes (vt_list)
+cs_build:
+    .a16
+    .i16
+    stz vt_n
+    lda #0
+@l: jsr team_valid
+    bcc :+
+    ldx vt_n
+    sep #$20
+    .a8
+    sta vt_list,x
+    rep #$20
+    .a16
+    inc vt_n
+:   inc a
+    cmp #MAX_TEAMS
+    bne @l
+    rts
+
+; cs_scroll : garde la ligne selectionnee visible (16 lignes d'equipes)
+cs_scroll:
+    .a16
+    lda ui_sel
+    cmp vt_n
+    bcs @d
+    cmp cs_top
+    bcs :+
+    sta cs_top
+    rts
+:   sec
+    sbc cs_top
+    cmp #16
+    bcc @d
+    lda ui_sel
+    sec
+    sbc #15
+    sta cs_top
+@d: rts
+
+cs_opt_rows:
     .byte 20, 21, 22, 23, 25
 
 cs_draw:
     .a16
     .i16
+    ; efface la colonne du curseur
+    ldx #TPOS(1, 3)
+@cc:
+    lda #UI_ATTR
+    sta bg3_map,x
+    txa
+    clc
+    adc #64
+    tax
+    cpx #TPOS(1, 26)
+    bcc @cc
     stz t5
 @team:
     lda t5
-    jsr team_rec_id
+    clc
+    adc cs_top
+    sta near_tmp+4              ; index dans vt_list
     lda t5
     clc
     adc #3
@@ -296,30 +360,38 @@ cs_draw:
     asl a
     clc
     adc #3 * 2
-    tax
-    phx
-    ldx t5
-    lda c_ctrl,x
+    sta near_tmp+2              ; position de ligne
+    lda near_tmp+4
+    cmp vt_n
+    bcc :+
+    ; ligne vide
+    ldx near_tmp+2
+    ldy #24
+    lda #UI_ATTR
+    jsr fill_tiles
+    jmp @nt
+:   tax
+    lda vt_list,x
     and #$00FF
     sta t6
+    tax
+    lda c_ctrl,x
+    and #$00FF
+    sta near_tmp
+    lda t6
+    jsr team_rec_id
     lda #UI_ATTR
-    ldx t6
+    ldx near_tmp
     cpx #2
     bcc :+
     lda #UI_A
 :   sta t0
-    plx
-    phx
     lda #17
     sta t1
+    ldx near_tmp+2
     jsr print_w
     ; statut
-    plx
-    txa
-    clc
-    adc #20 * 2
-    tax
-    lda t6
+    lda near_tmp
     asl a
     tay
     lda ctrl_names,y
@@ -328,11 +400,26 @@ cs_draw:
     sta t0
     lda #4
     sta t1
+    lda near_tmp+2
+    clc
+    adc #20 * 2
+    tax
     jsr print_w
+    ; curseur
+    lda near_tmp+4
+    cmp ui_sel
+    bne @nt
+    lda near_tmp+2
+    sec
+    sbc #2 * 2
+    tax
+    lda #('>' - 32 + UI_HI)
+    sta bg3_map,x
+@nt:
     inc t5
     lda t5
     cmp #16
-    bne @team
+    jne @team
     ; reglages
     lda #UI_ATTR
     sta t0
@@ -406,12 +493,29 @@ cs_draw:
     ldy #32
     lda #UI_ATTR
     jsr fill_tiles
-    lda #.loword(cs_rows)
-    sta t3
-    lda #NUM_CITEMS
-    sta t4
+    ; curseur sur les reglages
     lda ui_sel
-    jmp ui_cursor
+    sec
+    sbc vt_n
+    bcc @nc
+    tay
+    lda cs_opt_rows,y
+    and #$00FF
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #1 * 2
+    tax
+    lda #('>' - 32 + UI_HI)
+    sta bg3_map,x
+@nc:
+    lda #1
+    sta bg3_dirty
+    rts
 
 ; stad_name : A = stade (6 = rotation) -> Y = nom
 stad_name:
@@ -443,6 +547,9 @@ comp_create:
 @p: lda c_ctrl,x
     and #$00FF
     beq :+
+    txa
+    jsr team_valid
+    bcc :+
     sep #$20
     .a8
     txa
@@ -451,7 +558,7 @@ comp_create:
     .a16
     iny
 :   inx
-    cpx #16
+    cpx #MAX_TEAMS
     bne @p
     ; resultats vides
     ldx #0

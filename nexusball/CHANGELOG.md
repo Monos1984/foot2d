@@ -1,5 +1,19 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.5.0 — création (Milestone 8)
+
+- Menu principal complet : EXHIBITION, CHAMPIONSHIP, CUP, CUSTOM COMPETITION, CREATE TEAM,
+  CREATE PLAYER, OPTIONS, CREDITS.
+- Clavier virtuel (A ajoute, B efface, START termine), répétition automatique des directions.
+- CREATE PLAYER : 32 emplacements, budget de caractéristiques (8 et 9 coûtent plus cher),
+  libellés gardien (REFLEX, CATCH, POSITION, THROW).
+- CREATE TEAM : 8 emplacements, couleurs prédéfinies compatibles CGRAM (maillots domicile et
+  extérieur générés), formation, tactique, effectif choisi parmi les joueurs créés et officiels,
+  niveau global calculé.
+- Équipes créées (numéros 16 à 23) dans les listes d'exhibition et de compétitions
+  (liste défilante) ; sauvegarde de compétition passée en version 2.
+- Données d'équipes officielles déplacées en banque $C0 (copie MVN à la demande).
+
 ## 0.4.0 — modes de jeu (Milestone 7)
 
 - Menu principal conforme au cahier des charges (sans Career) ; écran OPTIONS (radar, durée).

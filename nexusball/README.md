@@ -5,9 +5,9 @@ Jeu de sport futuriste (héritier du football et du rugby) pour **Super Nintendo
 Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges_v0.2.md).
 
 ![Titre](docs/screen_title.png) ![Match](docs/screen_match.png) ![Fin](docs/screen_fulltime.png)
-![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png) ![Classement](docs/screen_table.png) ![Coupe](docs/screen_bracket.png)
+![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png) ![Classement](docs/screen_table.png) ![Coupe](docs/screen_bracket.png) ![Créer une équipe](docs/screen_create_team.png) ![Créer un joueur](docs/screen_create_player.png)
 
-## État : Milestones 0 → 7 (gameplay, règles, tactique, présentation, compétitions)
+## État : Milestones 0 → 8 (contenu complet ; finition / équilibrage = Milestone 9)
 
 | Élément | État |
 |---|---|
@@ -45,7 +45,12 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | Custom Competition (ligue ou coupe), équipes CPU / P1 / P2, durée, difficulté, stade fixe ou rotation | ✅ |
 | Matchs CPU contre CPU simulés instantanément, écran d'avant-match, champion | ✅ |
 | Sauvegarde / reprise des 3 compétitions en SRAM (en-tête, version, longueur, checksum) | ✅ |
-| Create Player / Create Team, équipes personnalisées | ⏳ Milestone 8 |
+| CREATE PLAYER : 32 joueurs (nom au clavier virtuel, numéro, postes, apparence, 7 caractéristiques avec budget) | ✅ |
+| CREATE TEAM : 8 équipes (nom, nom court, monde, 14 couleurs, formation, tactique, effectif de 12 parmi joueurs créés et officiels) | ✅ |
+| Équipes créées utilisables en exhibition et dans toutes les compétitions | ✅ |
+| Bloc SRAM d'édition indépendant (en-tête, version, longueur, checksum, remise à zéro du seul bloc corrompu) | ✅ |
+| Apparence des joueurs créés (peau, coiffure) affichée en match | ⏳ enregistrée mais pas encore rendue (palettes OBJ limitées) |
+| Finition : graphismes finaux, équilibrage, tests sur matériel réel | ⏳ Milestone 9 |
 
 Graphismes temporaires générés (lisibles, contraste bleu/orange) — les graphismes finaux viendront au milestone 6.
 
@@ -80,7 +85,7 @@ Les ROMs construites sont aussi versionnées dans `build/` pour être testées d
 ```
 include/   registres, constantes, constantes de région (region.inc), carte mémoire, macros
 src/       main.asm (inclut tous les modules), boot, nmi, video, input, math, region, text,
-           save, menu, ui, comp, match, shootout, audio, formation, player, ball, goalkeeper, ai, rules,
+           save, menu, ui, comp, editor, match, shootout, audio, formation, player, ball, goalkeeper, ai, rules,
            camera, hud, sprites, teams
 tools/     gfx.py (stades, sprites, police, tables), teams.py (équipes), sched.py (calendriers), spc.py (assembleur
            SPC700 + pilote audio + BRR), checksum.py,
@@ -101,6 +106,10 @@ docs/      cahier des charges, référence visuelle, captures
 - **OAM** : entités triées par profondeur chaque frame, ~30 sprites au plus, aucune frame en retard
   mesurée sur bsnes (précision) en NTSC comme en PAL.
 - **Mémoire** : toutes les variables tiennent dans $0000-$1BFF (DB = $80, code en FastROM).
+  Les enregistrements d'équipes (ROM banque $C0 ou SRAM) sont copiés à la demande par MVN
+  dans un tampon en WRAM basse (`team_rec_id`).
+- **SRAM (32 Kio)** : options ($A0:6000), 3 compétitions ($A0:6100, $400 chacune),
+  joueurs et équipes créés ($A1:6000). Chaque bloc : signature, version, longueur, checksum.
 
 ## Tests headless
 

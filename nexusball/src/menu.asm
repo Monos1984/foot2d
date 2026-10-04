@@ -2,8 +2,8 @@
 ;  menu.asm - ecran titre, options, credits
 ; =============================================================================
 
-MENU_ITEMS = 6
-MENU_ROW   = 12
+MENU_ITEMS = 8
+MENU_ROW   = 11
 MENU_COL   = 8
 
 title_screen:
@@ -109,7 +109,8 @@ title_screen:
 
 title_jump:
     .word .loword(go_exhibition), .loword(go_champ), .loword(go_cup)
-    .word .loword(go_custom), .loword(options_screen), .loword(credits_screen)
+    .word .loword(go_custom), .loword(create_team), .loword(create_player)
+    .word .loword(options_screen), .loword(credits_screen)
 
 go_exhibition:
     stz comp_active
@@ -163,6 +164,7 @@ menu_draw:
 
 title_rows:
     .byte MENU_ROW, MENU_ROW + 1, MENU_ROW + 2, MENU_ROW + 3, MENU_ROW + 4, MENU_ROW + 5
+    .byte MENU_ROW + 6, MENU_ROW + 7
 
 ; ui_cursor_col : comme ui_cursor mais en colonne MENU_COL - 2
 ui_cursor_col:
@@ -361,10 +363,13 @@ str_t_champ:    .byte "CHAMPIONSHIP", 0
 str_t_cup:      .byte "CUP", 0
 str_t_custom:   .byte "CUSTOM COMPETITION", 0
 str_t_opt:      .byte "OPTIONS", 0
+str_t_cteam:    .byte "CREATE TEAM", 0
+str_t_cplayer:  .byte "CREATE PLAYER", 0
 str_t_cred:     .byte "CREDITS", 0
 title_items:
     .word .loword(str_t_exh), .loword(str_t_champ), .loword(str_t_cup)
-    .word .loword(str_t_custom), .loword(str_t_opt), .loword(str_t_cred)
+    .word .loword(str_t_custom), .loword(str_t_cteam), .loword(str_t_cplayer)
+    .word .loword(str_t_opt), .loword(str_t_cred)
 str_options:    .byte "OPTIONS", 0
 str_o_radar:    .byte "RADAR", 0
 str_o_len:      .byte "MATCH LENGTH    2X  MIN", 0

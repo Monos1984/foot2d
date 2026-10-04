@@ -59,6 +59,14 @@ TEAMS = [
     ("CYGNUS RANGERS", "CYG", "CYGNUS",       (18, 8, 28),  PURPLE, (6, 26, 26),  CYAN,   "PASSING",   4, 0, (1, 0, 0, 1, 2, 0)),
 ]
 
+KITCOLS = [
+    ("BLUE", (4, 12, 30), BLUE), ("NAVY", (2, 5, 16), BLUE), ("SKY", (10, 22, 31), CYAN),
+    ("CYAN", (4, 26, 26), CYAN), ("GREEN", (6, 22, 8), GREEN), ("LIME", (18, 30, 6), GREEN),
+    ("YELLOW", (31, 26, 4), YELLOW), ("ORANGE", (31, 14, 2), ORANGE), ("RED", (28, 4, 4), RED),
+    ("PINK", (31, 12, 22), PURPLE), ("PURPLE", (18, 6, 28), PURPLE), ("WHITE", (29, 29, 31), WHITE),
+    ("GREY", (16, 16, 18), WHITE), ("BLACK", (6, 6, 8), BLACK),
+]
+
 # profils de stats par style : ajustements SPEED POWER PASS KICK CONTROL DEFENSE STAMINA
 STYLE_ADJ = {
     "SPEED":     (2, -1, 0, 0, 0, -1, 0),
@@ -105,7 +113,9 @@ def kit(rgb):
 def main():
     rng = random.Random(1984)
     used = set()
-    out = ["; genere par tools/teams.py - ne pas modifier", "NUM_TEAMS = %d" % len(TEAMS), "TEAM_REC = 260", ""]
+    out = ["; genere par tools/teams.py - ne pas modifier", "NUM_TEAMS = %d" % len(TEAMS), "TEAM_REC = 260", "",
+           "; enregistrements en banque $C0 (copies a la demande dans trec_buf par team_rec_id)",
+           '.segment "DATA0"']
     for ti, (nm, sh, world, col, fam, away, afam, style, level, form, tac) in enumerate(TEAMS):
         rec = bytearray()
         rec += strfield(nm, 16) + strfield(sh, 4) + strfield(world, 16)
@@ -129,8 +139,21 @@ def main():
         out.append("team_%d:  ; %s" % (ti, nm))
         for i in range(0, len(rec), 20):
             out.append("    .byte " + ",".join("$%02X" % b for b in rec[i:i + 20]))
+    out.append('.segment "RODATA"')
     out.append("team_ptr:")
     out.append("    .word " + ", ".join(".loword(team_%d)" % i for i in range(len(TEAMS))))
+    # couleurs proposees par l'editeur d'equipe : nom, kit (5 mots), famille
+    out.append("NUM_KITCOLS = %d" % len(KITCOLS))
+    out.append("kitcol_names:")
+    for nm, rgb, fam in KITCOLS:
+        out.append('    .byte "%-8s", 0' % nm)
+    out.append("kitcol_kit:")
+    for nm, rgb, fam in KITCOLS:
+        out.append("    .word " + ", ".join("$%04X" % c for c in kit(rgb)))
+    out.append("kitcol_main:")
+    out.append("    .word " + ", ".join("$%04X" % c5(*rgb) for nm, rgb, fam in KITCOLS))
+    out.append("kitcol_fam:")
+    out.append("    .byte " + ", ".join(str(fam) for nm, rgb, fam in KITCOLS))
     out.append("style_names:")
     for s in STYLES:
         out.append('    .byte "%-9s", 0' % s)

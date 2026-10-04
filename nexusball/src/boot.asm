@@ -69,6 +69,8 @@ FastReset:
     jsr load_graphics
     jsr spc_upload
     jsr load_options
+    rep #$30
+    jsr ed_check
 
     rep #$30
     .a16
@@ -76,6 +78,8 @@ FastReset:
     lda #$ACE1
     sta rng
     ; equipes et reglages par defaut
+    lda #$FFFF
+    sta trec_id
     lda #6                      ; EUROPA ICE
     sta team_id
     stz team_id+2               ; ORION STARS

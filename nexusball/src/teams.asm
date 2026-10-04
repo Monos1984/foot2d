@@ -29,19 +29,42 @@ team_rec:
     asl a
     tay
     lda team_id,y
-    asl a
-    tay
-    lda team_ptr,y
-    tay
-    rts
+    ; continue dans team_rec_id
 
-; team_rec_id : A = numero d'equipe -> Y = adresse
+; team_rec_id : A = numero d'equipe -> Y = trec_buf (copie de l'enregistrement).
+;  0..15 : equipes officielles (ROM banque $C0), 16..23 : equipes creees (SRAM).
+;  Le pointeur reste valable jusqu'au prochain appel avec une autre equipe. Preserve X.
 team_rec_id:
     .a16
+    .i16
+    cmp trec_id
+    beq @hit
+    sta trec_id
+    phx
+    phb
+    cmp #NUM_TEAMS
+    bcs @custom
     asl a
-    tay
-    lda team_ptr,y
-    tay
+    tax
+    lda team_ptr,x
+    tax
+    ldy #.loword(trec_buf)
+    lda #TEAM_REC - 1
+    mvn #$C0, #$80
+    bra @done
+@custom:
+    sec
+    sbc #NUM_TEAMS
+    jsr cteam_offset            ; A = adresse SRAM (banque $A1) de l'enregistrement
+    tax
+    ldy #.loword(trec_buf)
+    lda #TEAM_REC - 1
+    mvn #$A1, #$80
+@done:
+    plb
+    plx
+@hit:
+    ldy #.loword(trec_buf)
     rts
 
 ; roster_rec : A = cote, X = index effectif (0..11) -> Y = adresse du joueur. Preserve X.

@@ -194,7 +194,7 @@ c_done:     .res 2
 c_champ:    .res 2          ; equipe championne
 c_cur:      .res 2          ; match global en cours (humain)
 c_teams:    .res 16         ; equipes participantes (index participant -> equipe)
-c_ctrl:     .res 16         ; par equipe : 0 absente, 1 CPU, 2 P1, 3 P2
+c_ctrl:     .res 24         ; par equipe : 0 absente, 1 CPU, 2 P1, 3 P2
 c_res:      .res 240        ; scores (domicile, exterieur), $FF = non joue
 c_br:       .res 32         ; coupe : participant par case du tableau
 c_so:       .res 16         ; coupe : vainqueur aux tirs au but (0 dom, 1 ext, $FF aucun)
@@ -224,3 +224,23 @@ pm_len:     .res 2
 pm_diff:    .res 2
 pm_rule:    .res 2
 hub_i:      .res 2
+trec_id:    .res 2          ; equipe actuellement copiee dans trec_buf ($FFFF : aucune)
+trec_buf:   .res 260
+
+; ---- editeurs
+ct_tmp:     .res 2
+ts_cur:     .res 2
+ed_slot:    .res 2
+ed_pl:      .res 24
+ed_team:    .res 260
+te_c1:      .res 2
+te_c2:      .res 2
+te_k:       .res 2
+te_src:     .res 24
+kb_buf:     .res 18
+kb_max:     .res 2
+kb_x:       .res 2
+kb_y:       .res 2
+vt_n:       .res 2
+vt_list:    .res 24
+cs_top:     .res 2

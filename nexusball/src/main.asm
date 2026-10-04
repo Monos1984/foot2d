@@ -43,6 +43,7 @@
 .include "shootout.asm"
 .include "audio.asm"
 .include "comp.asm"
+.include "editor.asm"
 
 ; -----------------------------------------------------------------------------
 ;  donnees graphiques (banque $C1)

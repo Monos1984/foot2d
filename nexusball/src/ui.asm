@@ -202,8 +202,9 @@ match_setup:
     asl a
     tax
     lda team_id,x
-    ldy #NUM_TEAMS
-    jsr ui_lr
+    phx
+    jsr team_step
+    plx
     cmp team_id,x
     beq @loop
     sta team_id,x
@@ -460,7 +461,7 @@ setup_draw:
     ldx #TPOS(2, 18)
     ldy #.loword(str_start)
     jsr print
-    ldx #TPOS(2, 25)
+    ldx #TPOS(1, 25)
     ldy #.loword(str_setup_help)
     jsr print
     ; curseur
