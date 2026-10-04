@@ -327,6 +327,12 @@ call_foul:
     .i16
     sta tk_foul
     inc dbg_fouls
+    lda p_team,x
+    asl a
+    tay
+    lda st_fouls,y
+    inc a
+    sta st_fouls,y
     lda #SFX_WHISTLE
     jsr sfx_play
     ldx cp

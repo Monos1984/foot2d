@@ -997,6 +997,12 @@ find_kick_target:
 act_shoot:
     .a16
     .i16
+    lda p_team,x
+    asl a
+    tay
+    lda st_shots,y
+    inc a
+    sta st_shots,y
     jsr opp_goal_x
     sta t5
     asl a

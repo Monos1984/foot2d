@@ -35,6 +35,14 @@ start_match:
     stz score
     stz score+2
     stz so_active
+    ldx #0
+:   stz st_shots,x
+    stz st_poss,x
+    stz st_fouls,x
+    inx
+    inx
+    cpx #4
+    bne :-
     lda #1
     sta m_half
     ; duree : (menu_len + 2) minutes
@@ -178,7 +186,17 @@ st_play:
     jsr ball_update
     jsr rules_update
     jsr separate_players
-    clc
+    ; possession
+    lda b_owner
+    cmp #NO_OWNER
+    beq :+
+    asl a
+    tax
+    lda p_team,x
+    asl a
+    tax
+    inc st_poss,x
+:   clc
     rts
 @end:
     clc

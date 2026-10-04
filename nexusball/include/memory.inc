@@ -254,3 +254,8 @@ pm_conf:    .res 2
 pm_side:    .res 2
 pm_cpad:    .res 2
 opt_ctrl:   .res 2          ; configuration des boutons (0..2)
+; ---- statistiques du match
+st_shots:   .res 4
+st_poss:    .res 4          ; frames de possession
+st_fouls:   .res 4
+hs_row:     .res 2

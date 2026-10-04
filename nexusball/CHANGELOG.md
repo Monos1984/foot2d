@@ -10,6 +10,7 @@
 - OPTIONS : 3 configurations de boutons (TYPE A / B / C), sauvegardées en SRAM.
 - Jeu contextuel : X ou Y sans ballon près d'un ballon libre (même en l'air) = reprise de volée.
 - Les anneaux clignotent pendant la célébration d'un but (couleurs du stade restaurées ensuite).
+- Écran de fin de match : tirs, possession (%), fautes de chaque équipe.
 
 ## 0.5.0 — création (Milestone 8)
 

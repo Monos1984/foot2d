@@ -229,6 +229,24 @@ hud_full_time:
     ldx #TPOS(10, MSG_ROW + 2)
     ldy #.loword(str_press_start)
     jsr print
+    ; statistiques
+    lda #MSG_ROW + 4
+    sta hs_row
+    ldy #.loword(str_st_shots)
+    lda st_shots
+    sta t6
+    lda st_shots+2
+    sta t7
+    jsr stat_line
+    jsr poss_pct
+    ldy #.loword(str_st_poss)
+    jsr stat_line
+    ldy #.loword(str_st_fouls)
+    lda st_fouls
+    sta t6
+    lda st_fouls+2
+    sta t7
+    jsr stat_line
     ; resultat des tirs au but
     lda so_active
     beq @d
@@ -250,6 +268,95 @@ hud_full_time:
     ldx #TPOS(21, MSG_ROW + 3)
     jsr print_digit
 @d: rts
+
+; stat_line : Y = libelle, t6 / t7 = valeurs, ligne hs_row (puis +1)
+stat_line:
+    .a16
+    .i16
+    phy
+    lda hs_row
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    sta near_tmp+2
+    clc
+    adc #8 * 2
+    tax
+    ldy #16
+    lda #HUD_ATTR
+    jsr fill_tiles
+    lda #HUD_ATTR
+    sta t0
+    lda near_tmp+2
+    clc
+    adc #13 * 2
+    tax
+    ply
+    jsr print
+    lda t6
+    cmp #100
+    bcc :+
+    lda #99
+:   pha
+    lda near_tmp+2
+    clc
+    adc #9 * 2
+    tax
+    pla
+    jsr print_num2
+    lda t7
+    cmp #100
+    bcc :+
+    lda #99
+:   pha
+    lda near_tmp+2
+    clc
+    adc #20 * 2
+    tax
+    pla
+    jsr print_num2
+    inc hs_row
+    rts
+
+; poss_pct : t6 / t7 = pourcentages de possession
+poss_pct:
+    .a16
+    .i16
+    lda st_poss
+    sta t6
+    lda st_poss+2
+    sta t7
+@sc:
+    lda t6
+    clc
+    adc t7
+    cmp #256
+    bcc @ok
+    lsr t6
+    lsr t7
+    bra @sc
+@ok:
+    sta t5
+    beq @zero
+    lda t6
+    ldy #100
+    jsr mulu8
+    ldx t5
+    jsr divu
+    sta t6
+    lda #100
+    sec
+    sbc t6
+    sta t7
+    rts
+@zero:
+    lda #50
+    sta t6
+    sta t7
+    rts
 
 ; -----------------------------------------------------------------------------
 ;  crowd_update : rotation des 3 couleurs du public (plus rapide apres un
@@ -316,6 +423,9 @@ str_ot:         .byte "OT ", 0
 str_so:         .byte "SO ", 0
 half_names:     .word .loword(str_1st), .loword(str_2nd), .loword(str_ot), .loword(str_so)
 str_so_res:     .byte "SHOOTOUT", 0
+str_st_shots:   .byte "SHOTS", 0
+str_st_poss:    .byte "POSS.", 0
+str_st_fouls:   .byte "FOULS", 0
 str_fulltime:   .byte "FULL TIME", 0
 str_press_start: .byte "PRESS START", 0
 .segment "CODE"
