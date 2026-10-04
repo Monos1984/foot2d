@@ -17,8 +17,15 @@ load_graphics:
     sta BG1SC
     lda #((VRAM_BG3_MAP >> 8) & $FC)         ; 32x32
     sta BG3SC
-    lda #(VRAM_BG1_CHR >> 12)
+    lda #((VRAM_BG2_MAP >> 8) & $FC)         ; logo du titre
+    sta BG2SC
+    lda #(VRAM_BG1_CHR >> 12) | ((VRAM_BG2_CHR >> 12) << 4)
     sta BG12NBA
+    stz BG2HOFS
+    stz BG2HOFS
+    lda #$FF
+    sta BG2VOFS
+    stz BG2VOFS
     lda #(VRAM_BG3_CHR >> 12)
     sta BG34NBA
     lda #(VRAM_OBJ_CHR >> 13)                ; OBJ 8x8 / 16x16
@@ -31,6 +38,8 @@ load_graphics:
 
     VRAM_DMA gfx_font_chr,  VRAM_BG3_CHR, (gfx_font_chr_end - gfx_font_chr)
     VRAM_DMA gfx_obj_chr,   VRAM_OBJ_CHR, 8192
+    VRAM_DMA gfx_logo_chr,  VRAM_BG2_CHR, (gfx_logo_chr_end - gfx_logo_chr)
+    VRAM_DMA gfx_logo_map,  VRAM_BG2_MAP, 2048
 
     ; palette complete
     stz CGADD

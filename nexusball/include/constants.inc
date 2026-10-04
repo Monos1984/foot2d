@@ -117,6 +117,8 @@ VRAM_BG1_MAP = $4000
 VRAM_BG3_CHR = $5000
 VRAM_BG3_MAP = $5800
 VRAM_OBJ_CHR = $6000
+VRAM_BG2_CHR = $7000            ; logo du titre (4bpp)
+VRAM_BG2_MAP = $5C00
 
 ; ---- texte BG3 : tile = ascii - 32 (+64 sur panneau), palette 0, priorite haute
 TXT_ATTR    = $2000

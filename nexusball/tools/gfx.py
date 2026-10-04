@@ -537,6 +537,71 @@ def build_obj():
 BIG_TITLE = "NEXUSBALL"
 
 
+
+# ---------------------------------------------------------------- logo du titre (BG2, palette 3)
+LOGO_PAL = [0, c5(1, 1, 4), c5(3, 4, 12),
+            c5(6, 14, 31), c5(10, 20, 31), c5(16, 26, 31), c5(26, 30, 31),     # bleus (NEXUS)
+            c5(26, 8, 1), c5(31, 14, 2), c5(31, 21, 4), c5(31, 28, 12),         # oranges (BALL)
+            c5(8, 12, 22), c5(14, 20, 30), c5(31, 31, 31), c5(2, 2, 6), c5(20, 10, 2)]
+LOGO_W, LOGO_H = 224, 72
+
+
+def build_logo():
+    im = Img(LOGO_W, LOGO_H, 0)
+    # orbite derriere le texte
+    im.ellipse(112, 34, 104, 22, 11, thick=1.5)
+    im.ellipse(112, 34, 102, 20, 12, thick=1.0)
+    def word(txt, x0, y0, cols, scale=4, slant=0.25):
+        mask = Img(LOGO_W, LOGO_H, 0)
+        x = x0
+        for ch in txt:
+            g = FONT[ch]
+            for r, row in enumerate(g):
+                for k, b in enumerate(row):
+                    if b == "1":
+                        for dy in range(scale):
+                            yy = y0 + r * scale + dy
+                            off = int((y0 + 7 * scale - yy) * slant)
+                            for dx in range(scale + 2):
+                                mask.put(x + k * scale + dx + off, yy, 1)
+            x += 6 * scale
+        # contour sombre (2 px), puis degrade vertical
+        h = 7 * scale
+        for y in range(LOGO_H):
+            for xx in range(LOGO_W):
+                if mask.get(xx, y):
+                    continue
+                near = any(mask.get(xx + a, y + b) for a in (-2, -1, 0, 1, 2) for b in (-2, -1, 0, 1, 2))
+                if near:
+                    im.put(xx, y, 1 if any(mask.get(xx + a, y + b) for a in (-1, 0, 1) for b in (-1, 0, 1)) else 14)
+        for y in range(LOGO_H):
+            for xx in range(LOGO_W):
+                if mask.get(xx, y):
+                    t = (y - y0) / max(1, h - 1)
+                    c = cols[min(len(cols) - 1, int(t * len(cols)))]
+                    if mask.get(xx, y - 1) == 0:
+                        c = 13 if t < 0.5 else c          # reflet sur le haut des lettres
+                    im.put(xx, y, c)
+    word("NEXUS", 30, 3, [6, 5, 4, 3, 3, 2])
+    word("BALL", 90, 37, [10, 9, 8, 8, 7, 15])
+    return im
+
+
+def build_logo_data(im):
+    tiles, index, tmap = [bytes(32)], {(0,) * 64: 0}, []
+    for ty in range(32):
+        for tx in range(32):
+            if 1 <= ty < LOGO_H // 8 + 1 and 2 <= tx < 2 + LOGO_W // 8:
+                px = tuple(im.get((tx - 2) * 8 + c, (ty - 1) * 8 + r) for r in range(8) for c in range(8))
+            else:
+                px = (0,) * 64
+            if px not in index:
+                index[px] = len(tiles)
+                tiles.append(enc_tile(list(px), 4))
+            tmap.append(index[px] | (3 << 10) | (1 << 13))
+    return b"".join(tiles), b"".join(struct.pack("<H", v) for v in tmap), len(tiles)
+
+
 def build_font():
     data = bytearray()
     for opaque in (0, 1):
@@ -629,7 +694,16 @@ def main():
     for p, cols in enumerate(OBJ_PALS):
         for i, c in enumerate(cols):
             pal[128 + p * 16 + i] = c
+    for i, c in enumerate(LOGO_PAL):
+        pal[48 + i] = c
     pal[0] = FIELD_PAL[0]
+    logo = build_logo()
+    lchr, lmap, lcount = build_logo_data(logo)
+    assert len(lchr) <= 8192, len(lchr)
+    open(os.path.join(GEN, "logo.chr"), "wb").write(lchr)
+    open(os.path.join(GEN, "logo.map"), "wb").write(lmap)
+    rows = [[v for x in range(logo.w) for v in (rgb(LOGO_PAL[logo.get(x, y)]) if logo.get(x, y) else (20, 30, 60))] for y in range(logo.h)]
+    write_png(os.path.join(PREV, "preview_logo.png"), logo.w, logo.h, rows)
     with open(os.path.join(GEN, "pal.bin"), "wb") as f:
         for c in pal:
             f.write(struct.pack("<H", c))

@@ -17,6 +17,8 @@
   d'une équipe de niveau +1 ; après : 2 à 8 points par match de 4 min, le favori gagne sans écraser.
 - IA : jeu contre le mur — un porteur bloqué frappe en diagonale vers le mur le plus proche
   pour contourner le défenseur (rebond vers l'avant).
+- Écran titre : logo NEXUS / BALL en dégradé bleu / orange avec contour et orbite (BG2, 4bpp),
+  généré par tools/gfx.py.
 
 ## 0.5.0 — création (Milestone 8)
 

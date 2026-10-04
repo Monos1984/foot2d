@@ -53,6 +53,9 @@ gfx_obj_chr:    .incbin "data/gen/obj.chr"
 gfx_font_chr:   .incbin "data/gen/font.chr"
 gfx_font_chr_end:
 gfx_pal:        .incbin "data/gen/pal.bin"
+gfx_logo_chr:   .incbin "data/gen/logo.chr"
+gfx_logo_chr_end:
+gfx_logo_map:   .incbin "data/gen/logo.map"
 
 ; stades : banques $C2 / $C3 (tiles, tilemap) et palettes en banque $80
 .include "data/gen/stadiums.inc"

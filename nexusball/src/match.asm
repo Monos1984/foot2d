@@ -9,6 +9,12 @@ start_match:
     .a16
     .i16
     jsr screen_off
+    sep #$20
+    .a8
+    lda #$15                    ; pas de logo pendant le match
+    sta TM
+    rep #$20
+    .a16
     ; manettes -> equipes (deja reglees par une competition)
     lda game_mode
     cmp #MODE_PRESET

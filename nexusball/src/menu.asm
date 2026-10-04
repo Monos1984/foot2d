@@ -3,7 +3,7 @@
 ; =============================================================================
 
 MENU_ITEMS = 8
-MENU_ROW   = 11
+MENU_ROW   = 12
 MENU_COL   = 8
 
 title_screen:
@@ -18,10 +18,14 @@ title_screen:
     sta scroll_y
     stz title_scroll
     ; titre en gros caracteres
-    ldx #TPOS(6, 4)
-    ldy #.loword(big_title)
-    jsr big_print
-    ldx #TPOS(10, 7)
+    ; logo sur BG2
+    sep #$20
+    .a8
+    lda #$17                    ; BG1 + BG2 + BG3 + OBJ
+    sta TM
+    rep #$20
+    .a16
+    ldx #TPOS(3, 10)
     lda #TXT_ATTR
     sta t0
     ldy #.loword(str_sub)
@@ -383,7 +387,7 @@ credits_screen:
 .segment "RODATA"
 big_title:
     .byte BIG_N, BIG_E, BIG_X, BIG_U, BIG_S, 1, BIG_B, BIG_A, BIG_L, BIG_L, 0
-str_sub:        .byte "FUTURE SPORT LEAGUE", 0
+str_sub:        .byte "INTERPLANETARY SPORT LEAGUE", 0
 str_t_exh:      .byte "EXHIBITION", 0
 str_t_champ:    .byte "CHAMPIONSHIP", 0
 str_t_cup:      .byte "CUP", 0
