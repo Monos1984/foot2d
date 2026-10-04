@@ -889,7 +889,11 @@ static float crowdExcite(const Match& m, int side, int chant) {
     if (m.S.training) return 0;
     if (m.state == MS_GOAL || (m.state == MS_REPLAY && !m.offReplay && m.lastScorerTeam >= 0)) return m.lastScorerTeam == side ? 1.f : 0.f;
     if (m.trophyActive || m.lapActive) return (m.trophyActive ? m.trophyTeam : m.lapTeam) == side ? 0.9f : 0.05f;
-    if (m.finished) { int d = m.score[side] - m.score[1 - side]; return d > 0 ? 0.8f : 0.03f; }
+    if (m.finished) {   // fin du match : ovation des vainqueurs, applaudissements après un nul ou une défaite honorable, silence après une déroute
+        int d = m.score[side] - m.score[1 - side];
+        float fade = std::max(0.35f, 1.f - m.walkT / 40.f);
+        return (d > 0 ? 0.95f : d == 0 ? 0.55f : d >= -2 ? 0.35f : 0.03f) * fade;
+    }
     float e = 0.12f + m.S.supporterAtmosphere * 0.002f;
     if (side == 0) {
         if (chant == CH_CELEBRATE) e = 0.6f; else if (chant == CH_LOUD) e = 0.4f; else if (chant == CH_ENCOURAGE) e = 0.32f;
@@ -1146,6 +1150,7 @@ static void drawLedBoards(const Match& m, int ox, int oy, int MWZ, int MHZ) {
     std::string msg;
     Color fg = Color{ 255, 220, 80, 255 }, bg = Color{ 8, 10, 18, 255 };
     if (goal) { msg = "  BUT !  BUT !  BUT !  " + m.team(m.lastScorerTeam).shortName + "  "; fg = ((int)(t * 6) % 2) ? Color{ 255, 220, 80, 255 } : WHITE; bg = ((int)(t * 6) % 2) ? Color{ 40, 10, 10, 255 } : Color{ 10, 10, 40, 255 }; }
+    else if (m.finished) { msg = fmt("  MERCI À TOUS !  %s %d - %d %s   BON RETOUR   ", m.team(0).shortName.c_str(), m.score[0], m.score[1], m.team(1).shortName.c_str()); fg = WHITE; }
     else if (m.ceremony) msg = "  BIENVENUE  -  " + m.team(0).name + "  -  " + m.team(1).name + "  -  " + (m.S.title.empty() ? std::string("") : m.S.title + "  ");
     else msg = fmt("  %s %d - %d %s   PIXEL COLA   CRAMPONS+   GOAL FM 98.5   SUPER BUT   TURBO FIBRE   VOLT AUTO   PIZZA PENALTY   ", m.team(0).shortName.c_str(), m.score[0], m.score[1], m.team(1).shortName.c_str());
     int tw = std::max(40, textWidth(msg, 10));
@@ -1869,9 +1874,10 @@ void renderMatch(const Match& m, bool radar) {
             if (!replay && (m.refCarry || m.ballStage == 2)) {   // le ballon dans la main (sous le bras) de l'arbitre
                 int d = dirOf(m.refFace);
                 int hx = rx + (d == 2 ? -4 : d == 3 ? 3 : 3), hy = ry - 7;
+                // ballon rond (croix de pixels), sans cadre
                 DrawRectangle(hx, hy, 3, 3, WHITE);
-                DrawRectangle(hx, hy + 2, 3, 1, Color{ 170, 175, 190, 255 }); DrawRectangle(hx + 1, hy + 1, 1, 1, Color{ 40, 40, 50, 255 });
-                DrawRectangleLines(hx - 1, hy - 1, 5, 5, Color{ 20, 20, 30, 90 });
+                DrawPixel(hx, hy, Color{ 225, 228, 235, 255 }); DrawPixel(hx + 2, hy, Color{ 225, 228, 235, 255 });
+                DrawRectangle(hx, hy + 2, 3, 1, Color{ 170, 175, 190, 255 }); DrawPixel(hx + 1, hy + 1, Color{ 40, 40, 50, 255 });
             }
             if (showCard) {
                 Color cc = cardType == 2 ? Color{ 230, 30, 30, 255 } : Color{ 255, 220, 0, 255 };

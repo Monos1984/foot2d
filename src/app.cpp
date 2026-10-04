@@ -16,7 +16,7 @@
 
 enum Screen { SC_MAIN = 0, SC_PICK, SC_SETUP, SC_MATCH, SC_POST, SC_INTL, SC_HUB, SC_COMPS, SC_COMPVIEW, SC_FIXTURES,
               SC_SQUAD, SC_HISTORY, SC_OPTIONS, SC_SLOTS, SC_SEASONEND, SC_HELP, SC_QUIT, SC_FICHE, SC_EDITMENU, SC_CLUBEDIT,
-              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS, SC_SOUNDTEST };
+              SC_CUSTOM, SC_COEFF, SC_CONTROLS, SC_DEPTPICK, SC_MATCHINFO, SC_MARKET, SC_FINANCE, SC_NEWS, SC_JOBS, SC_CAREEROPT, SC_STATUS, SC_STADIUM, SC_CUSTOMLIST, SC_STAFF, SC_RESERVES, SC_FRIENDLIES, SC_REFEREES, SC_CLUBMENU, SC_TVINTRO, SC_ARTICLE, SC_TRAINMODE, SC_TRAINING, SC_DRAW, SC_TROPHIES, SC_STUDIO, SC_ABOUT, SC_SPONSORS, SC_MANAGERS, SC_LEAGUEMODE, SC_HALFTIME, SC_OFFERS, SC_ACADEMY, SC_PLAYER, SC_PLAYEREDIT, SC_TACTICS, SC_EDITDB, SC_MATCHDAY, SC_CALLUP, SC_HOSTS, SC_COACHLOG, SC_COACHJOBS, SC_ARCHIVE, SC_KITS, SC_SPLASH, SC_LIFENEW, SC_LIFE, SC_BRIBE, SC_SEASONSTART, SC_COMPARCH, SC_LEGENDS, SC_ANTHEMS, SC_COMPEDIT, SC_BALLON, SC_SEASONAWARDS, SC_TEAMPLANS, SC_POLESCOUT, SC_MUSEUM, SC_DIRECTOR, SC_SPORTNEW, SC_SPORTING, SC_SUPPORTERS, SC_SUPPORTPARTY, SC_LOCKER, SC_WALKMUSIC, SC_TVADS, SC_ADSEDIT, SC_PRESS, SC_MEDIA, SC_CUPNEWS, SC_SOUNDTEST, SC_FRIENDLYVS };
 static void openPlayer(int team, int idx, Screen back);
 static bool g_lifePick = false;            // choix du club pour une carrière de joueur
 static int g_lifeTab = 0;
@@ -364,6 +364,8 @@ struct Item { std::string label, right; int kind; int a = 0, b = 0, c = 0; int t
 static PickMode g_pickMode;
 static std::vector<Node> g_stack;
 static int g_friendlyHome = -1;
+static int g_friendlyAway = -1;
+static int g_frVsPick = 0;               // 1 / 2 : retour sur l'écran face-à-face du match amical après le choix dans les championnats
 static std::vector<int> g_intlSel;
 static int g_intlType = 0;
 static bool g_intlQual = true;
@@ -659,6 +661,7 @@ static void screenPick() {
     } else drawFooter("OK : choisir    Retour : revenir");
     if (IN.back) {
         if (g_stack.size() > 1) g_stack.pop_back();
+        else if (g_frVsPick && (g_pickMode == PM_FRIENDLY_HOME || g_pickMode == PM_FRIENDLY_AWAY)) { g_frVsPick = 0; g_screen = SC_FRIENDLYVS; }
         else if (g_pickMode == PM_FRIENDLY_AWAY) { g_pickMode = PM_FRIENDLY_HOME; }
         else if (g_pickMode == PM_BROWSE) g_screen = SC_COMPS;
         else if (g_pickMode == PM_CAREER && g_lifePick) g_screen = SC_LIFENEW;
@@ -677,8 +680,21 @@ static void screenPick() {
     if (it.kind == K_COACHCAT) { g_coachCatPick = (g_coachCatPick + 1) % 4; return; }
     if (it.kind == K_TEAM) {
         switch (g_pickMode) {
-        case PM_FRIENDLY_HOME: g_friendlyHome = it.team; g_pickMode = PM_FRIENDLY_AWAY; break;
+        case PM_FRIENDLY_HOME:
+            if (g_frVsPick) {
+                if (it.team == g_friendlyAway) { toast("Cette équipe joue déjà à l'extérieur"); break; }
+                g_friendlyHome = it.team; g_frVsPick = 0; g_screen = SC_FRIENDLYVS;
+                if (g_friendlyAway >= 0 && isWomenTeam(g_friendlyAway) != isWomenTeam(it.team)) g_friendlyAway = -1;
+                break;
+            }
+            g_friendlyHome = it.team; g_pickMode = PM_FRIENDLY_AWAY; break;
         case PM_FRIENDLY_AWAY:
+            if (g_frVsPick) {
+                if (it.team == g_friendlyHome) { toast("Choisissez une autre équipe"); break; }
+                if (g_friendlyHome >= 0 && isWomenTeam(it.team) != isWomenTeam(g_friendlyHome)) { toast(isWomenTeam(g_friendlyHome) ? "Séparation stricte : choisissez un club ou une sélection féminine" : "Séparation stricte : choisissez une équipe masculine"); break; }
+                g_friendlyAway = it.team; g_frVsPick = 0; g_screen = SC_FRIENDLYVS;
+                break;
+            }
             if (it.team == g_friendlyHome) { toast("Choisissez une autre équipe"); break; }
             if (isWomenTeam(it.team) != isWomenTeam(g_friendlyHome)) { toast(isWomenTeam(g_friendlyHome) ? "Séparation stricte : choisissez un club ou une sélection féminine" : "Séparation stricte : choisissez une équipe masculine"); break; }
             startSetup(g_friendlyHome, it.team, false, -1, -1);
@@ -1555,12 +1571,18 @@ static void screenMatch(float dt) {
             if (m.possTeam == 1 && !m.S.neutral) danger *= 0.6f;
             static float swell = 0; swell += (danger - swell) * std::min(1.f, dt * 2.5f);
             float goalBoost = m.state == MS_GOAL ? 0.12f : 0.f;
+            // fin du match : ovation, la rumeur reste haute pendant que les joueurs se saluent ; salves d'applaudissements
+            if (m.finished && !m.trophyActive && !m.lapActive) {
+                goalBoost = std::max(0.f, 0.14f - m.walkT * 0.004f);
+                static float clapT = 0; clapT -= dt;
+                if (m.walkT < 28.f && clapT <= 0) { audioPlay(SFX_CLAPS); clapT = 1.1f + (float)GetRandomValue(0, 60) / 100.f; }
+            }
             audioCrowd(!m.S.training, anth ? 0.08f : .10f + m.S.supporterAtmosphere * .003f + swell * 0.12f + goalBoost);
             static float lastWave = -1; float wv = crowdWavePhase(m);
             if (wv >= 0 && lastWave < 0) audioPlay(SFX_OLA);
             lastWave = wv;
         }
-        if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||(m.state==MS_REPLAY&&!m.offReplay))&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
+        if(!m.S.training&&!anth){int chant=supportersLiveChant(m.S,m.score[0],m.score[1],m.clock);if((m.state==MS_GOAL||(m.state==MS_REPLAY&&!m.offReplay))&&m.lastScorerTeam==0&&!m.S.neutral)chant=CH_CELEBRATE;else if(m.trophyActive||m.lapActive)chant=CH_CELEBRATE;else if(m.finished){int d=m.S.neutral?0:m.score[0]-m.score[1];chant=d>0?CH_CELEBRATE:d==0?CH_ENCOURAGE:d>=-2?CH_ENCOURAGE:CH_WHISTLES;}audioSupporters(chant,std::max(.35f,m.S.supporterAtmosphere/100.f));}
     } else audioCrowd(false, 0);
     if (m.finished && !g_trophyChecked && !g_paused) {
         g_trophyChecked = true;
@@ -2046,7 +2068,7 @@ static int drawEventColumns(const std::vector<EvLine>& ev, int y, int maxY) {
 }
 
 static bool openMatchday(int comp, int mi, bool endOfDay);
-static void postContinue() { if (g_mctx.career) { autosave(); if (!openMatchday(g_mctx.comp, g_mctx.match, true)) openHub(); } else g_screen = SC_MAIN; }
+static void postContinue() { if (g_mctx.career) { autosave(); if (!openMatchday(g_mctx.comp, g_mctx.match, true)) openHub(); } else g_screen = g_mctx.back == SC_FRIENDLYVS ? SC_FRIENDLYVS : SC_MAIN; }
 static void postExit() {
     static int shown = -1;     // une seule scène de vestiaire par match
     if (g_match && shown != g_matchSerial) { shown = g_matchSerial; openLocker(2); if (g_screen == SC_LOCKER) return; }
@@ -4039,6 +4061,7 @@ static int g_roleSlot=0,g_roleInstr=0,g_rolePlayerTab=0;
 #include "app_season.inc"
 #include "app_ballondor.inc"
 #include "app_season_features.inc"
+#include "app_friendly.inc"
 
 // ------------------------------------------------------------------ test des sons : bruitages, chants, musiques, jingles, hymnes, vibrations
 static void screenSoundTest() {
@@ -4495,8 +4518,8 @@ static void screenMain(float dt) {
     switch (act) {
     case 1:
         g_careerActive = false;
-        askConfirm("Type de match amical :", []() { g_frEnd = 0; openPick(PM_FRIENDLY_HOME); }, "Match complet", "Séance de tirs au but directe",
-                   []() { g_frEnd = 5; openPick(PM_FRIENDLY_HOME); });
+        askConfirm("Type de match amical :", []() { g_frEnd = 0; frStartVs(); }, "Match complet", "Séance de tirs au but directe",
+                   []() { g_frEnd = 5; frStartVs(); });
         g_confirm.backCancel = true;
         g_confirm.sel = 0;                 // choix par défaut : match complet
         break;
@@ -4600,6 +4623,7 @@ void appFrame(float dt) {
     case SC_COMPARCH: screenCompArch(); break;
     case SC_MAIN: screenMain(dt); break;
     case SC_PICK: screenPick(); break;
+    case SC_FRIENDLYVS: screenFriendlyVs(); break;
     case SC_SETUP: if(g_mctx.career&&g_career.sportingMode())launchMatch();else screenSetup(); break;
     case SC_MATCH: screenMatch(dt); break;
     case SC_POST: screenPost(); break;
@@ -4834,6 +4858,8 @@ void appTestStart(const char* mode) {
     } else if (m == "setup") {
         startSetup(g_world.nationIndex("FRA"), g_world.nationIndex("BRA"), false, -1, -1);
     } else if (m == "soundtest") { g_screen = SC_SOUNDTEST;
+    } else if (m == "friendlyvs") { g_friendlyHome = g_world.nationIndex("FRA"); g_friendlyAway = g_world.nationIndex("BRA"); frStartVs(); if (getenv("FOOT_FRROW")) g_frVsLW.cur = atoi(getenv("FOOT_FRROW"));
+        if (getenv("FOOT_FRSEARCH")) { g_frSearching = 2; g_frQuery = getenv("FOOT_FRSEARCH"); g_textMode = true; }
     } else if (m == "customcomp") { g_cdefPreset = getenv("FOOT_PRESET") ? atoi(getenv("FOOT_PRESET")) : 1; customApplyPreset(g_cdefPreset); g_screen = SC_CUSTOM;
     } else if (m == "continents" || m == "contmatch") {
         auto T = continentTeams(); continentsStart(g_career, { T[0] }); g_careerActive = true; g_needAdvance = true; openHub();

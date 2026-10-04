@@ -437,8 +437,9 @@ struct Match {
     std::vector<PendSub> pendSubs;
     float subBoardT = 0; int subBoardTeam = 0, subBoardOut = 0, subBoardIn = 0; std::string subBoardOutName, subBoardInName;
     bool autoSubDone = false;
-    struct Walker { V2 pos, target; int team; int skin, hair; bool gk; unsigned gkShirt; float anim; };
+    struct Walker { V2 pos, target; int team; int skin, hair; bool gk; unsigned gkShirt; float anim; bool sub = false; };
     std::vector<Walker> walkers;
+    bool subOutWalking() const { for (auto& w : walkers) if (w.sub) return true; return false; }
     int celebScorer = -1, celebType = 0; V2 celebTarget; bool celebSfx = false;
     void setCelebration(int type);         // choisit la célébration du buteur et sa destination
     void doSub(int team, int slot, int incoming, bool anim);
