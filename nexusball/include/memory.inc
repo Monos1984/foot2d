@@ -267,3 +267,23 @@ st_fouls:   .res 4
 hs_row:     .res 2
 dbg_saves:  .res 2
 dbg_ringmiss: .res 2
+
+; ---- calques des menus
+bg1_mode:   .res 2          ; 0 stade, 1 fond des menus
+bg2_dirty:  .res 2
+tm_sh:      .res 1
+ts_sh:      .res 1
+cgw_sh:     .res 1
+cga_sh:     .res 1
+bar_row:    .res 2
+bar_x0:     .res 2
+bar_w:      .res 2
+pn_x:       .res 2
+pn_y:       .res 2
+pn_w:       .res 2
+pn_h:       .res 2
+pn_r:       .res 2
+pn_l:       .res 2
+pn_m:       .res 2
+pn_rt:      .res 2
+hdma_sh:    .res 2          ; valeur de HDMAEN ecrite au NMI

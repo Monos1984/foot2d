@@ -587,8 +587,35 @@ def build_logo():
     return im
 
 
+PANEL_PAL = [0, c5(2, 3, 10), c5(7, 12, 24), c5(8, 24, 31), c5(31, 16, 4), c5(1, 1, 4),
+             0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+
+def panel_tiles():
+    """tuiles des panneaux de menu (BG2, palette 4) : fond, barre, 8 bords."""
+    def t(fn):
+        return [fn(x, y) for y in range(8) for x in range(8)]
+    fill = t(lambda x, y: 1)
+    bar = t(lambda x, y: 3 if y == 0 else (2 if y < 7 else 1))
+    def border(left, right, top, bottom):
+        def f(x, y):
+            if (left and x == 0) or (right and x == 7) or (top and y == 0) or (bottom and y == 7):
+                return 5
+            if (left and x == 1) or (right and x == 6) or (top and y == 1) or (bottom and y == 6):
+                corner = (left or right) and (top or bottom)
+                return 4 if corner else 3
+            return 1
+        return t(f)
+    return [fill, bar,
+            border(1, 0, 1, 0), border(0, 0, 1, 0), border(0, 1, 1, 0),
+            border(1, 0, 0, 0), border(0, 1, 0, 0),
+            border(1, 0, 0, 1), border(0, 0, 0, 1), border(0, 1, 0, 1)]
+
+
 def build_logo_data(im):
     tiles, index, tmap = [bytes(32)], {(0,) * 64: 0}, []
+    for pt in panel_tiles():                  # tuiles 1..10 : panneaux
+        tiles.append(enc_tile(pt, 4))
     for ty in range(32):
         for tx in range(32):
             if 1 <= ty < LOGO_H // 8 + 1 and 2 <= tx < 2 + LOGO_W // 8:
@@ -600,6 +627,57 @@ def build_logo_data(im):
                 tiles.append(enc_tile(list(px), 4))
             tmap.append(index[px] | (3 << 10) | (1 << 13))
     return b"".join(tiles), b"".join(struct.pack("<H", v) for v in tmap), len(tiles)
+
+
+# ---------------------------------------------------------------- fond des menus (BG1, palette 2)
+MENU_PAL = [c5(0, 0, 3), c5(1, 1, 6), c5(2, 2, 9), c5(4, 2, 12), c5(6, 3, 14), c5(8, 4, 15),
+            c5(4, 6, 14), c5(7, 10, 20), c5(31, 14, 4), c5(3, 10, 18),
+            c5(8, 22, 31), c5(31, 18, 6),                 # 10-11 neons (cycle "anneaux")
+            c5(14, 18, 31), c5(26, 26, 31), c5(10, 12, 24),  # 12-14 etoiles (cycle "public")
+            c5(31, 31, 31)]
+
+
+def build_menubg():
+    im = Img(256, 224, 0)
+    rng = __import__("random").Random(42)
+    bayer = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+    for y in range(224):
+        v = y / 150 * 5                      # degrade nuit -> violet jusqu'a l'horizon
+        for x in range(256):
+            base = int(v)
+            frac = v - base
+            c = base + (1 if frac * 16 > bayer[y & 3][x & 3] else 0)
+            im.put(x, y, max(0, min(5, c)))
+    # etoiles
+    for _ in range(140):
+        x, y = rng.randrange(256), rng.randrange(140)
+        im.put(x, y, rng.choice((12, 13, 14, 14, 15)))
+    # planete annelee en haut a droite
+    cx, cy, r = 204, 58, 34
+    im.ellipse(cx, cy + 2, 58, 10, 11, thick=1.0, clip=lambda x, y: y > cy + 2)
+    for y in range(cy - r, cy + r + 1):
+        for x in range(cx - r, cx + r + 1):
+            d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+            if d < r:
+                shade = 7 if (x - cx) * 0.6 + (cy - y) > r * 0.1 else 6
+                if d > r - 2:
+                    shade = 8
+                im.put(x, y, shade)
+    im.ellipse(cx, cy + 2, 58, 10, 11, thick=1.0, clip=lambda x, y: y >= cy + 2 or ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 >= r)
+    # sol en perspective (grille neon)
+    hy = 152
+    im.hline(0, 255, hy, 10)
+    for k in range(1, 9):
+        y = hy + int(k * k * 1.0)
+        if y < 224:
+            im.hline(0, 255, y, 9)
+    for k in range(-12, 13):
+        x0 = 128 + k * 12
+        x1 = 128 + k * 60
+        for y in range(hy, 224):
+            t = (y - hy) / (224 - hy)
+            im.put(int(x0 + (x1 - x0) * t), y, 9)
+    return im
 
 
 def build_font():
@@ -614,6 +692,15 @@ def build_font():
                     for k, b in enumerate(row):
                         if b == "1":
                             px[r * 8 + k + 1] = 2
+                if not opaque:
+                    # ombre portee (couleur 1) en bas a droite pour la lisibilite sur les fonds
+                    for r in range(7, -1, -1):
+                        for c in range(7, -1, -1):
+                            if px[r * 8 + c] == 2:
+                                for dr, dc in ((1, 1), (0, 1), (1, 0)):
+                                    rr, cc = r + dr, c + dc
+                                    if rr < 8 and cc < 8 and px[rr * 8 + cc] == 0:
+                                        px[rr * 8 + cc] = 1
             if opaque and code == 95:  # '_' -> bord accentue
                 px = [3] * 8 + [1] * 56
             data += enc_tile(px, 2)
@@ -696,6 +783,24 @@ def main():
             pal[128 + p * 16 + i] = c
     for i, c in enumerate(LOGO_PAL):
         pal[48 + i] = c
+    for i, c in enumerate(PANEL_PAL):
+        pal[64 + i] = c
+    mbg = build_menubg()
+    mt, mi, mm = [], {}, []
+    for ty in range(32):
+        for tx in range(32):
+            px = tuple(mbg.get(tx * 8 + c, ty * 8 + r) for r in range(8) for c in range(8)) if ty < 28 else (0,) * 64
+            if px not in mi:
+                mi[px] = len(mt)
+                mt.append(px)
+            mm.append(mi[px] | (2 << 10))
+    assert len(mt) <= 1024
+    open(os.path.join(GEN, "menubg.chr"), "wb").write(b"".join(enc_tile(list(t), 4) for t in mt))
+    open(os.path.join(GEN, "menubg.map"), "wb").write(b"".join(struct.pack("<H", v) for v in mm))
+    open(os.path.join(GEN, "menubg.pal"), "wb").write(b"".join(struct.pack("<H", c) for c in MENU_PAL))
+    rows = [[v for x in range(256) for v in rgb(MENU_PAL[mbg.get(x, y)])] for y in range(224)]
+    write_png(os.path.join(PREV, "preview_menubg.png"), 256, 224, rows)
+    print("fond des menus : %d tiles" % len(mt))
     pal[0] = FIELD_PAL[0]
     logo = build_logo()
     lchr, lmap, lcount = build_logo_data(logo)

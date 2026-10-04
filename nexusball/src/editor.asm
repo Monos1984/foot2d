@@ -514,7 +514,11 @@ cpl_draw:
     jne @l
     lda #1
     sta bg3_dirty
-    rts
+    lda ed_slot
+    and #$000F
+    clc
+    adc #4
+    jmp bg2_bar
 
 ; cpl_rowpos : A = emplacement -> X = position (colonne 1 ou 16, ligne 4 + n mod 16)
 cpl_rowpos:
@@ -1168,7 +1172,10 @@ ctl_draw:
     lda t5
     cmp #ED_TM_N
     bne @l
-    rts
+    lda ed_slot
+    clc
+    adc #4
+    jmp bg2_bar
 
 ; -----------------------------------------------------------------------------
 ;  te_edit : edition de l'equipe creee ed_slot (copie de travail ed_team)

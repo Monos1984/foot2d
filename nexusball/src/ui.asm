@@ -3,7 +3,7 @@
 ;  equipe (formation + 6 tactiques), remplacements / composition
 ; =============================================================================
 
-UI_ATTR  = TXT_ATTR + TXT_PANEL
+UI_ATTR  = TXT_ATTR
 UI_HI    = UI_ATTR + $1000          ; texte accentue (palette 4)
 UI_A     = UI_ATTR + $1400          ; equipe humaine (palette 5)
 NUM_TACT = 6
@@ -12,10 +12,25 @@ NUM_TACT = 6
 ui_fill:
     .a16
     .i16
-    ldx #0
-    ldy #32*28
-    lda #UI_ATTR
-    jmp fill_tiles
+    ; ecran eteint : fond des menus sur BG1 (sinon le jeu reste visible, assombri)
+    lda inidisp
+    and #$0080
+    beq :+
+    jsr load_menubg
+:   jsr layers_menu
+    jsr bg2_clear
+    stz pn_x
+    stz pn_y
+    lda #32
+    sta pn_w
+    lda #28
+    sta pn_h
+    jsr bg2_panel
+    lda #1
+    sta bar_x0
+    lda #30
+    sta bar_w
+    rts
 
 ; print_w : comme print (t0 = attributs) puis complete par des espaces jusqu'a t1 cases
 print_w:
@@ -35,7 +50,6 @@ print_w:
     tay
     lda t0
     and #$FF00
-    ora #TXT_PANEL
     jmp fill_tiles
 @d: rts
 
@@ -74,7 +88,14 @@ ui_cursor:
     bne @l
     lda #1
     sta bg3_dirty
-    rts
+    ; barre de selection sur la ligne choisie
+    lda t5
+    clc
+    adc t3
+    tay
+    lda a:0,y
+    and #$00FF
+    jmp bg2_bar
 
 ; ui_wait : une frame d'interface ; t7 = boutons appuyes (manettes 1 et 2)
 ui_wait:
@@ -82,6 +103,10 @@ ui_wait:
     jsr oam_begin
     jsr oam_finish
     jsr wait_frame
+    lda bg1_mode
+    beq :+
+    jsr crowd_update            ; etoiles qui scintillent
+:
     lda joy_new
     ora joy_new+2
     sta t7
@@ -1000,7 +1025,10 @@ subs_draw:
     jsr print
     lda #1
     sta bg3_dirty
-    rts
+    lda ui_sel
+    clc
+    adc #5
+    jmp bg2_bar
 
 .segment "RODATA"
 str_setup:      .byte "MATCH SETUP", 0

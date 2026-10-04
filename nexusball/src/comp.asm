@@ -516,7 +516,21 @@ cs_draw:
 @nc:
     lda #1
     sta bg3_dirty
-    rts
+    ; barre de selection
+    lda ui_sel
+    cmp vt_n
+    bcs :+
+    sec
+    sbc cs_top
+    clc
+    adc #3
+    jmp bg2_bar
+:   sec
+    sbc vt_n
+    tay
+    lda cs_opt_rows,y
+    and #$00FF
+    jmp bg2_bar
 
 ; stad_name : A = stade (6 = rotation) -> Y = nom
 stad_name:

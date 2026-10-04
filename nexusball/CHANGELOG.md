@@ -1,5 +1,18 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.7.0 — compression et menus graphiques
+
+- Compression LZSS (tools/lz.py) de tous les graphismes : stades, sprites, police, logo, fond des
+  menus. Décompression 65C816 (src/lz.asm) vers la WRAM $7F:0000 puis DMA vers la VRAM.
+  ~110 Kio de graphismes bruts tiennent dans ~38 Kio de ROM.
+- Menus refaits : fond dédié (ciel étoilé qui scintille, planète annelée, sol à grille néon) sur BG1,
+  panneaux encadrés translucides sur BG2 (color math : moyenne avec le fond), barre de sélection
+  sur la ligne choisie, texte avec ombre portée.
+- Écran titre : logo opaque (HDMA sur CGADSUB), menu dans un panneau translucide sur le stade.
+- En match, l'écran TEAM SETUP de la pause s'affiche en panneau translucide sur le terrain.
+- Registres de calques (TM, TS, CGWSEL, CGADSUB, HDMAEN) écrits au NMI depuis des ombres ;
+  tilemap BG2 copiée en WRAM $7E:2000.
+
 ## 0.6.0 — finition (début du Milestone 9)
 
 - Teinte de peau en match : palettes OBJ 5/6 (maillot de l'équipe + peau foncée), masque par

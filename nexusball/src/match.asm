@@ -9,12 +9,8 @@ start_match:
     .a16
     .i16
     jsr screen_off
-    sep #$20
-    .a8
-    lda #$15                    ; pas de logo pendant le match
-    sta TM
-    rep #$20
-    .a16
+    jsr layers_match
+    jsr ensure_stadium_bg
     ; manettes -> equipes (deja reglees par une competition)
     lda game_mode
     cmp #MODE_PRESET
@@ -614,6 +610,7 @@ pause_menu:
     lda #1
     sta ui_back
     jsr team_screen
+    jsr layers_match
     jsr bg3_clear
     jsr hud_draw_static
     jsr hud_update

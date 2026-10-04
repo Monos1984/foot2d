@@ -12,46 +12,36 @@ title_screen:
     jsr safe_screen_off
     jsr bg3_clear
     jsr oam_clear
+    jsr ensure_stadium_bg
     lda #64
     sta scroll_x
     lda #40
     sta scroll_y
     stz title_scroll
-    ; titre en gros caracteres
-    ; logo sur BG2
-    sep #$20
-    .a8
-    lda #$17                    ; BG1 + BG2 + BG3 + OBJ
-    sta TM
-    rep #$20
-    .a16
+    ; logo (BG2) et panneau translucide du menu
+    jsr layers_menu
+    jsr title_hdma
+    jsr bg2_logo
+    lda #MENU_COL - 3
+    sta pn_x
+    sta bar_x0
+    lda #MENU_ROW - 1
+    sta pn_y
+    lda #24
+    sta pn_w
+    lda #MENU_ITEMS + 2
+    sta pn_h
+    jsr bg2_panel
+    lda #22
+    sta bar_w
+    inc bar_x0
     ldx #TPOS(3, 10)
     lda #TXT_ATTR
     sta t0
     ldy #.loword(str_sub)
     jsr print
-    ; panneau du menu
-    lda #MENU_ROW - 1
-@pan:
-    pha
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    clc
-    adc #(MENU_COL - 2) * 2
-    tax
-    ldy #22
-    lda #TXT_ATTR + TXT_PANEL
-    jsr fill_tiles
-    pla
-    inc a
-    cmp #MENU_ROW + MENU_ITEMS + 1
-    bne @pan
     ; pied de page
-    lda #TXT_ATTR + TXT_PANEL
+    lda #TXT_ATTR
     sta t0
     ldx #TPOS(7, 22)
     ldy #.loword(str_project)
@@ -133,7 +123,7 @@ go_custom:
 menu_draw:
     .a16
     .i16
-    lda #TXT_ATTR + TXT_PANEL
+    lda #TXT_ATTR
     sta t0
     stz t5
 @l: lda t5
@@ -193,9 +183,9 @@ ui_cursor_col:
     sbc t3
     cmp t5
     bne :+
-    lda #('>' - 32 + TXT_ATTR + TXT_PANEL + $1000)
+    lda #('>' - 32 + TXT_ATTR + $1000)
     bra :++
-:   lda #TXT_ATTR + TXT_PANEL
+:   lda #TXT_ATTR
 :   sta bg3_map,x
     ply
     iny
@@ -203,7 +193,11 @@ ui_cursor_col:
     bne @l
     lda #1
     sta bg3_dirty
-    rts
+    ; barre de selection
+    lda menu_sel
+    clc
+    adc #MENU_ROW
+    jmp bg2_bar
 
 ; -----------------------------------------------------------------------------
 ;  options_screen : RADAR, MATCH LENGTH (sauvegardes en SRAM)

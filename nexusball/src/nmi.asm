@@ -62,6 +62,39 @@ NmiHandler:
     sta MDMAEN
 @nobg3:
 
+    ; --- tilemap BG2 (panneaux des menus, copie en $7E:2000)
+    lda bg2_dirty
+    beq @nobg2
+    stz bg2_dirty
+    lda #$80
+    sta VMAIN
+    ldx #VRAM_BG2_MAP
+    stx VMADDL
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    ldx #.loword(BG2_SHADOW)
+    stx A1T0L
+    lda #^BG2_SHADOW
+    sta A1B0
+    ldx #2048
+    stx DAS0L
+    lda #$01
+    sta MDMAEN
+@nobg2:
+    ; --- calques et color math
+    lda tm_sh
+    sta TM
+    lda ts_sh
+    sta TS
+    lda cgw_sh
+    sta CGWSEL
+    lda cga_sh
+    sta CGADSUB
+    lda hdma_sh
+    sta HDMAEN
+
     ; --- couleurs du public (CGRAM 44-46)
     lda pal_dirty
     beq @nopal

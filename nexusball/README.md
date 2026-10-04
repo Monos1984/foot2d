@@ -5,7 +5,7 @@ Jeu de sport futuriste (héritier du football et du rugby) pour **Super Nintendo
 Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges_v0.2.md).
 
 ![Titre](docs/screen_title.png) ![Match](docs/screen_match.png) ![Fin](docs/screen_fulltime.png)
-![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png) ![Classement](docs/screen_table.png) ![Coupe](docs/screen_bracket.png) ![Créer une équipe](docs/screen_create_team.png) ![Créer un joueur](docs/screen_create_player.png)
+![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png) ![Classement](docs/screen_table.png) ![Coupe](docs/screen_bracket.png) ![Compétition](docs/screen_comp.png) ![Créer une équipe](docs/screen_create_team.png) ![Créer un joueur](docs/screen_create_player.png)
 
 ## État : Milestones 0 → 8 (contenu complet ; finition / équilibrage = Milestone 9)
 
@@ -113,6 +113,9 @@ docs/      cahier des charges, référence visuelle, captures
 - **Mémoire** : toutes les variables tiennent dans $0000-$1BFF (DB = $80, code en FastROM).
   Les enregistrements d'équipes (ROM banque $C0 ou SRAM) sont copiés à la demande par MVN
   dans un tampon en WRAM basse (`team_rec_id`).
+- **Compression** : graphismes compressés en LZSS (tools/lz.py), décompressés par le 65C816
+  en WRAM $7F:0000 puis envoyés en VRAM par DMA (src/lz.asm).
+- **Menus** : fond sur BG1, panneaux translucides sur BG2 (color math), texte sur BG3.
 - **SRAM (32 Kio)** : options ($A0:6000), 3 compétitions ($A0:6100, $400 chacune),
   joueurs et équipes créés ($A1:6000). Chaque bloc : signature, version, longueur, checksum.
 

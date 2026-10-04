@@ -32,6 +32,7 @@ load_graphics:
     sta OBJSEL
     lda #$15                    ; BG1 + BG3 + OBJ
     sta TM
+    sta tm_sh
     stz TS
     lda #$80
     sta VMAIN
