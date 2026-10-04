@@ -36,11 +36,12 @@ def c5(r, g, b):
 # ---------------------------------------------------------------- palettes
 BG3_PAL = [  # palettes BG3 (couleurs 0-15) : 0 texte blanc, 1 equipe A, 2 titre, 3 equipe B
     c5(1, 1, 4), c5(2, 3, 8), c5(29, 30, 31), c5(31, 24, 6),
-    c5(0, 0, 0), c5(2, 3, 8), c5(10, 20, 31), c5(31, 24, 6),
+    c5(0, 0, 0), c5(2, 3, 8), c5(10, 20, 31), c5(31, 31, 31),
     c5(0, 0, 0), c5(1, 1, 4), c5(31, 27, 8), c5(31, 31, 31),
-    c5(0, 0, 0), c5(2, 3, 8), c5(31, 15, 3), c5(31, 24, 6),
+    c5(0, 0, 0), c5(2, 3, 8), c5(31, 15, 3), c5(31, 31, 31),
     c5(0, 0, 0), c5(2, 3, 8), c5(31, 18, 4), c5(31, 26, 8),     # 4 : texte accentue (menus)
     c5(0, 0, 0), c5(2, 3, 8), c5(12, 24, 31), c5(31, 26, 8),    # 5 : equipe humaine (menus)
+    c5(0, 0, 0), c5(2, 3, 8), c5(31, 31, 31), c5(6, 20, 31),    # 6 : cadre du score (HUD)
 ]
 FIELD_PAL = [
     c5(1, 1, 3),     # 0 noir
@@ -245,42 +246,67 @@ class Img:
 
 
 # ---------------------------------------------------------------- stade
+def build_crowd():
+    """tribunes (BG2, palette 2) : 256x256 repete, rangees de spectateurs de 8 px.
+    Corps en couleurs 12-14 (cycle de palette = public anime), tetes 15."""
+    im = Img(256, 256, 1)
+    for tier in range(32):
+        y0 = tier * 8
+        # marche de la tribune
+        im.hline(0, 255, y0 + 7, 6)
+        for px in range(0, 256, 8):
+            v = (px // 8 * 7 + tier * 3) % 11
+            if v == 10:
+                continue                          # place vide
+            body = 12 + (px // 8 + tier) % 3
+            x = px + (tier % 2) * 4 % 8
+            raised = v in (2, 7)
+            # tete
+            im.rect(x + 2, y0, x + 4, y0 + 1, 15)
+            im.put(x + 3, y0, 1 if v % 3 == 0 else 15)
+            # corps
+            im.rect(x + 1, y0 + 2, x + 5, y0 + 6, body)
+            im.put(x + 1, y0 + 6, 1)
+            im.put(x + 5, y0 + 6, 1)
+            if raised:
+                im.put(x, y0, 15)
+                im.put(x + 6, y0, 15)
+                im.vline(x, y0 + 1, y0 + 2, body)
+                im.vline(x + 6, y0 + 1, y0 + 2, body)
+            if v == 5:                            # drapeau
+                im.rect(x + 5, y0 - 2 if y0 else 0, x + 7, y0, 10)
+    return im
+
+
 def build_field(st):
-    im = Img(WORLD_W, WORLD_H, 0)
-    # tribunes (motif periodique 16x8 pour limiter le nombre de tiles)
-    crowd = [
-        "..a...b...c...a.",
-        ".aaa.bbb.ccc.aaa",
-        ".ofo.ofo.ofo.ofo",
-        "..o...o...o...o.",
-        "c...a...b...c...",
-        "cc.aaa.bbb.ccc.c",
-        "fo.ofo.ofo.ofo.o",
-        "o...o...o...o...",
-    ]
-    cmap = {".": 0, "a": 12, "b": 13, "c": 14, "o": 0, "f": 15}
-    for y in range(0, 56):
-        for x in range(WORLD_W):
-            row = crowd[y % 8]
-            ch = row[(x + (y // 8) * 4) % 16]
-            im.put(x, y, cmap[ch])
-    for y in range(304, WORLD_H):
-        for x in range(WORLD_W):
-            row = crowd[y % 8]
-            im.put(x, y, cmap[row[(x + 8) % 16]] if y >= 306 else 0)
-    # mur du haut (face visible)
+    im = Img(WORLD_W, WORLD_H, 0)            # 0 = transparent : les tribunes (BG2) apparaissent
+    # rambarde en haut des tribunes basses
+    im.rect(0, 50, WORLD_W - 1, 55, 6)
+    im.hline(0, WORLD_W - 1, 50, 8)
+    im.hline(0, WORLD_W - 1, 51, 9)
+    for x in range(0, WORLD_W, 32):
+        im.rect(x, 50, x + 1, 55, 8)
+    # mur du haut : panneaux publicitaires lumineux et piliers
     im.rect(0, 56, WORLD_W - 1, 71, 7)
     im.hline(0, WORLD_W - 1, 56, 8)
-    im.hline(0, WORLD_W - 1, 57, 8)
-    im.hline(0, WORLD_W - 1, 69, 6)
-    im.hline(0, WORLD_W - 1, 70, 9)
+    im.hline(0, WORLD_W - 1, 57, 6)
+    im.hline(0, WORLD_W - 1, 68, 6)
+    im.hline(0, WORLD_W - 1, 69, 9)
+    im.hline(0, WORLD_W - 1, 70, 8)
     im.hline(0, WORLD_W - 1, 71, 6)
     w1, w2 = st["words"]
     for x0 in range(0, WORLD_W, 128):
-        im.rect(x0 + 8, 59, x0 + 63, 67, 6)
-        im.text(w1, x0 + 36 - len(w1) * 3, 60, 9)
-        im.rect(x0 + 72, 59, x0 + 119, 67, 6)
-        im.text(w2, x0 + 96 - len(w2) * 3, 60, 11)
+        for bx, word, col in ((x0 + 6, w1, 9), (x0 + 70, w2, 11)):
+            im.rect(bx, 58, bx + 51, 67, 6)
+            im.rect(bx + 1, 59, bx + 50, 66, 0 if False else 6)
+            im.hline(bx, bx + 51, 58, col)
+            im.hline(bx, bx + 51, 67, col)
+            im.vline(bx, 58, 67, col)
+            im.vline(bx + 51, 58, 67, col)
+            im.text(word, bx + 26 - len(word) * 3, 60, col)
+        for px in (x0 + 0, x0 + 64):
+            im.rect(px, 57, px + 3, 68, 8)
+            im.vline(px + 1, 57, 68, 9)
     # sol
     im.rect(FIELD_L, FIELD_T, FIELD_R, FIELD_B, 2)
     for y in range(FIELD_T, FIELD_B + 1):
@@ -313,36 +339,62 @@ def build_field(st):
                     im.put(x, y, 3)
                 if (y // 16) % 2:
                     im.put(x, y, 1) if im.get(x, y) == 2 else None
-    # murs lateraux / fond
+    # reflets des projecteurs : bandes verticales tramees
+    for lx in range(FIELD_L + 40, FIELD_R, 112):
+        for y in range(FIELD_T + 8, FIELD_B - 8):
+            for x in range(lx, lx + 16):
+                if (x + y) % 4 == 0 and im.get(x, y) in (1, 2):
+                    im.put(x, y, 3)
+    # ombre portee du mur du haut
+    for y in range(FIELD_T + 1, FIELD_T + 7):
+        for x in range(FIELD_L, FIELD_R + 1):
+            if (y < FIELD_T + 4) or (x + y) % 2 == 0:
+                if im.get(x, y) != 4:
+                    im.put(x, y, 1)
+    # murs lateraux techniques
     for side in (0, 1):
         x0, x1 = (0, FIELD_L - 1) if side == 0 else (FIELD_R + 1, WORLD_W - 1)
         im.rect(x0, 56, x1, 303, 7)
         edge = x1 if side == 0 else x0
+        inner = edge - 3 if side == 0 else edge + 3
         im.vline(edge, 56, 303, 9)
         im.vline(edge - 1 if side == 0 else edge + 1, 56, 303, 6)
-        for y in range(64, 300, 16):
-            im.hline(x0 + 2, x1 - 2, y, 6)
-    # mur du bas (vu de dessus)
-    im.rect(0, 296, WORLD_W - 1, 303, 8)
+        im.vline(inner, 56, 303, 8)
+        for y in range(64, 300, 24):
+            im.rect(x0 + 2, y, x1 - 2, y + 2, 6)
+            im.put(x0 + 4, y + 1, 9)
+            im.put(x1 - 4, y + 1, 9)
+    # mur du bas : vitre avec bande neon
+    im.rect(0, 296, WORLD_W - 1, 303, 7)
     im.hline(0, WORLD_W - 1, 296, 9)
+    im.hline(0, WORLD_W - 1, 297, 8)
     im.hline(0, WORLD_W - 1, 303, 6)
-    im.rect(0, 296, FIELD_L - 1, 303, 8)
-    im.rect(FIELD_R + 1, 296, WORLD_W - 1, 303, 8)
+    for x in range(0, WORLD_W, 16):
+        im.vline(x, 298, 302, 6)
+        im.put(x + 4, 299, 8)
 
     inside = lambda x, y: FIELD_L <= x <= FIELD_R and FIELD_T <= y <= FIELD_B
-    # lignes
-    im.vline(256, FIELD_T, FIELD_B, 4)
-    im.ellipse(256, FIELD_CY, 40, 40, 4)
-    im.rect(255, FIELD_CY - 1, 257, FIELD_CY + 1, 4)
+    # lignes (plus epaisses)
+    im.rect(255, FIELD_T, 256, FIELD_B, 4)
+    im.ellipse(256, FIELD_CY, 40, 40, 4, thick=1.5)
+    im.ellipse(256, FIELD_CY, 10, 10, 5, thick=1.0)
+    im.rect(254, FIELD_CY - 1, 257, FIELD_CY + 1, 4)
     for gx, sgn in ((FIELD_L, 1), (FIELD_R, -1)):
-        im.ellipse(gx, FIELD_CY, ZONE_R, ZONE_R, 4, clip=lambda x, y, gx=gx, s=sgn: inside(x, y) and (x - gx) * s >= 0)
+        im.ellipse(gx, FIELD_CY, ZONE_R, ZONE_R, 4, thick=1.5,
+                   clip=lambda x, y, gx=gx, s=sgn: inside(x, y) and (x - gx) * s >= 0)
         im.ellipse(gx, FIELD_CY, LONG_R, LONG_R * 0.9, 5, thick=1.0,
                    clip=lambda x, y, gx=gx, s=sgn: inside(x, y) and (x - gx) * s >= 0, dash=4)
-    # anneaux
+    # anneaux : plaque sombre, halo, anneau epais
     for gx in (FIELD_L, FIELD_R):
         cy = FIELD_CY - RING_Z
+        for y in range(cy - RING_R - 4, cy + RING_R + 5):
+            for x in range(gx - 12, gx + 13):
+                d = ((x - gx) / 12.0) ** 2 + ((y - cy) / (RING_R + 4.0)) ** 2
+                if d <= 1.0 and not inside(x, y):
+                    im.put(x, y, 6)
         im.rect(gx - 1, cy + RING_R - 2, gx + 1, FIELD_CY + 2, 6)  # pied
-        im.ellipse(gx, cy, 8, RING_R + 1, 10, thick=1.5)
+        im.ellipse(gx, cy, 10, RING_R + 3, 10, thick=1.0, dash=2)  # halo
+        im.ellipse(gx, cy, 8, RING_R + 1, 10, thick=2.0)
         im.ellipse(gx, cy, 6, RING_R - 1, 11, thick=1.0)
     im.hline(FIELD_L, FIELD_R, FIELD_T, 8)
     return im
@@ -392,37 +444,76 @@ def limb(im, x0, y0, ang, ln, c_up, c_end, width=1):
             im.put(round(x - 0.5), round(y), col)
 
 
-def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0):
-    im = Img(16, 16, 0)
+FW, FH = 16, 32          # cadre d'un joueur : 2 sprites 16x16 empiles (figure de 16x24)
+FEET = 22
+
+
+def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
+    im = Img(FW, FH, 0)
     L = lean
+    hip = 16 + crouch
+    sh = 9 + crouch
     # bras / jambe arriere
-    limb(im, 7 + L, 11, legs[1], 4.4, SKINS, BOOT, 2)
-    limb(im, 6 + L, 6, arms[1], 4.0, KITD, SKINS, 2)
-    # torse (5 px) et short
-    im.rect(5 + L, 5, 10 + L, 9, KIT)
-    im.vline(5 + L, 5, 9, KITD)
-    im.vline(6 + L, 6, 9, KITD)
-    im.hline(5 + L, 10 + L, 5, KITH)
-    im.vline(8 + L, 6, 8, TRIM)
-    im.rect(5 + L, 10, 10 + L, 11, SHORT)
-    # tete
-    for y in range(0, 6):
-        for x in range(4 + L, 12 + L):
-            d = (x - 8.0 - L) ** 2 * 1.1 + (y - 2.6) ** 2
-            if d <= 7.2:
-                im.put(x, y, HAIR if (y <= 1 or x <= 6 + L) else SKIN)
-    im.put(10 + L, 3, SKINS)
-    im.put(9 + L, 2, OUT)
+    limb(im, 6 + L, hip, legs[1], 6.0 - crouch, SKINS, BOOT, 2)
+    limb(im, 5 + L, sh, arms[1], 5.2, KITD, SKINS, 2)
+    # torse (7 px), col, bande, short
+    im.rect(5 + L, sh - 1, 11 + L, hip - 2, KIT)
+    im.vline(5 + L, sh - 1, hip - 2, KITD)
+    im.vline(6 + L, sh, hip - 2, KITD)
+    im.hline(6 + L, 10 + L, sh - 1, KITH)
+    im.hline(7 + L, 9 + L, sh - 1, TRIM)            # col
+    im.vline(11 + L, sh, hip - 3, KITH)
+    im.rect(8 + L, sh + 1, 9 + L, sh + 3, TRIM)     # numero / ecusson
+    im.hline(5 + L, 11 + L, hip - 2, KITD)
+    im.rect(5 + L, hip - 1, 11 + L, hip, SHORT)
+    im.put(5 + L, hip, KITD)
+    # tete (7 px)
+    hy = 4 + crouch
+    for y in range(hy - 4, hy + 4):
+        for x in range(4 + L, 13 + L):
+            d = (x - 8.5 - L) ** 2 * 1.05 + (y - hy) ** 2
+            if d <= 11.5:
+                hair = (y <= hy - 2) or (x <= 6 + L and y <= hy + 1)
+                im.put(x, y, HAIR if hair else SKIN)
+    im.put(11 + L, hy, OUT)                         # oeil
+    im.put(10 + L, hy + 2, SKINS)
+    im.vline(8 + L, hy + 4, sh - 2, SKINS)          # cou
     # jambe / bras avant
-    limb(im, 9 + L, 11, legs[0], 4.4, SKIN, BOOT, 2)
-    limb(im, 9 + L, 6, arms[0], 4.0, KIT, SKIN, 2)
+    limb(im, 9 + L, hip, legs[0], 6.0 - crouch, SKIN, BOOT, 2)
+    limb(im, 10 + L, sh, arms[0], 5.2, KIT, SKIN, 2)
+    return im
+
+
+def lying(flip=False):
+    """joueur allonge (chute) ou en extension (plongeon), 16 px de long."""
+    im = Img(FW, FH, 0)
+    y0 = 17
+    for y in range(y0 - 3, y0 + 3):                 # tete
+        for x in range(0, 6):
+            if (x - 2.5) ** 2 + (y - y0) ** 2 <= 6.5:
+                im.put(x, y, HAIR if y < y0 - 1 else SKIN)
+    im.rect(5, y0 - 2, 10, y0 + 2, KIT)
+    im.hline(5, 10, y0 + 2, KITD)
+    im.rect(8, y0 - 1, 9, y0, TRIM)
+    im.rect(11, y0 - 2, 12, y0 + 2, SHORT)
+    im.hline(13, 14, y0 - 1, SKIN)
+    im.hline(13, 15, y0 + 1, SKINS)
+    im.put(15, y0 - 1, BOOT)
+    im.put(15, y0 + 1, BOOT)
+    im.hline(6, 9, y0 + 3, SKIN)                    # bras
+    if flip:
+        out = Img(FW, FH, 0)
+        for y in range(FH):
+            for x in range(FW):
+                out.put(15 - x, y, im.get(x, y))
+        return out
     return im
 
 
 def outline(im):
-    out = Img(16, 16, 0)
-    for y in range(16):
-        for x in range(16):
+    out = Img(FW, FH, 0)
+    for y in range(FH):
+        for x in range(FW):
             v = im.get(x, y)
             if v:
                 out.put(x, y, v)
@@ -431,49 +522,38 @@ def outline(im):
     return out
 
 
-def rot90(im, cw=True):
-    out = Img(16, 16, 0)
-    for y in range(16):
-        for x in range(16):
-            if cw:
-                out.put(15 - y, x, im.get(x, y))
-            else:
-                out.put(y, 15 - x, im.get(x, y))
-    return out
-
-
-def shift(im, dx, dy):
-    out = Img(16, 16, 0)
-    for y in range(16):
-        for x in range(16):
-            out.put(x + dx, y + dy, im.get(x, y))
-    return out
+def with_shadow(im, y=FEET + 1, rx=5):
+    for x in range(8 - rx, 8 + rx):
+        for dy in (0, 1):
+            if dy == 1 and (x < 8 - rx + 2 or x > 8 + rx - 3):
+                continue
+            if im.get(x, y + dy) == 0:
+                im.put(x, y + dy, OUT)
+    return im
 
 
 def player_frames():
     f = []
     f.append(figure((6, -6), (15, -15)))                       # 0 stand
-    f.append(figure((40, -40), (-35, 40), lean=1))             # 1 run1
+    f.append(figure((42, -42), (-35, 40), lean=1))             # 1 run1
     f.append(figure((5, -5), (5, -5), lean=1))                 # 2 run2
-    f.append(figure((-40, 40), (40, -35), lean=1))             # 3 run3
+    f.append(figure((-42, 42), (40, -35), lean=1))             # 3 run3
     f.append(figure((85, -10), (-60, 60), lean=-1))            # 4 kick
     f.append(figure((10, -15), (120, 100)))                    # 5 throw / pass
-    f.append(figure((45, -45), (80, 70), lean=2))              # 6 charge
-    f.append(shift(rot90(figure((10, -10), (60, 40)), cw=False), 0, 0))  # 7 fall (allonge)
+    f.append(figure((50, -45), (80, 70), lean=2))              # 6 charge
+    f.append(lying())                                          # 7 fall
     f.append(figure((10, -10), (170, -170)))                   # 8 celebrate
-    f.append(rot90(figure((20, -10), (175, 160)), cw=True))    # 9 dive (gardien)
+    f.append(lying(flip=True))                                 # 9 dive
     f.append(figure((15, -15), (150, 140)))                    # 10 catch
-    f.append(figure((20, -30), (60, -60), lean=-1))            # 11 stumble
-    f.append(figure((40, -40), (100, 90), lean=1))             # 12 carry run1 (ballon en mains)
-    f.append(figure((-40, 40), (100, 90), lean=1))             # 13 carry run2
+    f.append(figure((20, -30), (60, -60), lean=-1, crouch=1))  # 11 stumble
+    f.append(figure((42, -42), (100, 90), lean=1))             # 12 carry run1
+    f.append(figure((-42, 42), (100, 90), lean=1))             # 13 carry run2
     f.append(figure((6, -6), (100, 90)))                       # 14 carry stand
     f.append(figure((30, -30), (-90, 90)))                     # 15 jump
-    out = []
-    for im in f:
-        # fall/dive : poser au sol
-        out.append(outline(im))
-    out[7] = outline(shift(rot90(figure((10, -10), (60, 40)), cw=False), 0, 4))
-    out[9] = outline(shift(rot90(figure((20, -10), (175, 160)), cw=True), 0, 2))
+    out = [outline(im) for im in f]
+    for k in range(16):
+        if k != 15:
+            with_shadow(out[k], rx=6 if k in (7, 9) else 5)
     return out
 
 
@@ -509,18 +589,24 @@ def panel_frames():
 
 
 def build_obj():
-    sheet = Img(128, 128, 0)   # 16 tiles de large
-    frames = player_frames() + panel_frames()
-    for k, im in enumerate(frames):
-        bx, by = (k % 8) * 16, (k // 8) * 16
+    """feuille OBJ 128x128 :
+    joueurs : cadre k (16x32) -> tile haut = (k//8)*64 + (k%8)*2, tile bas = haut + 32
+    panneaux du radar (16x16) : tiles 128.. ; petites tiles 8x8 : 160.."""
+    sheet = Img(128, 128, 0)
+    for k, im in enumerate(player_frames()):
+        bx, by = (k % 8) * 16, (k // 8) * 32
+        for y in range(32):
+            for x in range(16):
+                sheet.put(bx + x, by + y, im.get(x, y))
+    for k, im in enumerate(panel_frames()):
+        bx, by = k * 16, 64
         for y in range(16):
             for x in range(16):
                 sheet.put(bx + x, by + y, im.get(x, y))
-    # petites tiles a partir de la tile 96 (ligne 6)
     st = small_tiles()
     order = ["ball", "shadow", "cur1", "cur2", "dotA", "dotB", "dotW", "warn", "ballhi"]
     for i, name in enumerate(order):
-        tx, ty = (96 + i) % 16, (96 + i) // 16
+        tx, ty = (160 + i) % 16, (160 + i) // 16
         for r, row in enumerate(st[name]):
             for c, ch in enumerate(row):
                 v = 0 if ch == "." else int(ch, 16)
@@ -720,7 +806,115 @@ def build_font():
         for ty in (0, 1):
             for tx in (0, 1):
                 data += enc_tile([im.get(tx * 8 + c, ty * 8 + r) for r in range(8) for c in range(8)], 2)
-    return bytes(data), letters
+    hud = build_hud_tiles(128 + 4 * len(letters))
+    for t in hud["tiles"]:
+        data += enc_tile(t, 2)
+    assert len(data) // 16 <= 256, len(data) // 16
+    return bytes(data), letters, hud["syms"]
+
+
+def build_hud_tiles(base):
+    """Tiles 2bpp du HUD de match (a la suite de la police).
+    Plaques d'equipe (palettes 1 / 3 : 1 sombre, 2 couleur d'equipe, 3 blanc) : 16 px de haut,
+    lettres A-Z blanches ombrees, extremites biseautees.
+    Cadre du score (palette 6 : 1 fond, 2 chiffres blancs, 3 filet cyan) : gros chiffres 8x16."""
+    tiles, syms = [], {}
+
+    def add(name, im16):
+        syms[name] = base + len(tiles)
+        for ty in range(im16.h // 8):
+            tiles.append([im16.get(c, ty * 8 + r) for r in range(8) for c in range(8)])
+
+    def plate(ch=None, cap=0):
+        im = Img(8, 16, 0)
+        for y in range(16):
+            for x in range(8):
+                if cap == 1 and x < (15 - y) // 2:
+                    continue
+                if cap == 2 and x > 7 - (y // 2) + 0:
+                    continue
+                edge = y in (0, 15) or (cap == 1 and x == (15 - y) // 2) or (cap == 2 and x == 7 - y // 2)
+                im.put(x, y, 1 if edge else 2)
+        for x in range(8):
+            if im.get(x, 1) == 2:
+                im.put(x, 1, 3 if cap == 0 else 2)
+        if ch:
+            g = FONT[ch]
+            for r, row in enumerate(g):
+                for k, b in enumerate(row):
+                    if b == "1":
+                        im.put(k + 2, r + 5, 1)
+            for r, row in enumerate(g):
+                for k, b in enumerate(row):
+                    if b == "1":
+                        im.put(k + 1, r + 4, 3)
+        return im
+
+    add("PL_BLANK", plate())
+    add("PL_CAPL", plate(cap=1))
+    add("PL_CAPR", plate(cap=2))
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        add("PL_" + ch, plate(ch))
+
+    def box(top=True, cap=0):
+        im = Img(8, 16, 0)
+        for y in range(16):
+            for x in range(8):
+                if cap == 1 and x < (7 - y) and y <= 7:
+                    continue
+                if cap == 2 and x > 7 - (7 - y) and y <= 7:
+                    continue
+                im.put(x, y, 1)
+        if top:
+            for x in range(8):
+                if im.get(x, 0) == 1:
+                    im.put(x, 0, 3)
+        if cap == 1:
+            for y in range(16):
+                for x in range(8):
+                    if im.get(x, y) == 1:
+                        im.put(x, y, 3)
+                        break
+        if cap == 2:
+            for y in range(16):
+                for x in range(7, -1, -1):
+                    if im.get(x, y) == 1:
+                        im.put(x, y, 3)
+                        break
+        return im
+
+    add("SB_BLANK", box())
+    add("SB_CAPL", box(cap=1))
+    add("SB_CAPR", box(cap=2))
+    for d in "0123456789":
+        im = box()
+        g = FONT[d]
+        for r, row in enumerate(g):
+            for k, b in enumerate(row):
+                if b == "1":
+                    for yy in (r * 2 + 1, r * 2 + 2):
+                        im.put(k + 1, yy, 2)
+                        im.put(k + 2, yy, 2)
+        add("SB_" + d, im)
+    # tiret centre sur la frontiere de deux colonnes (moitie droite / moitie gauche)
+    for name, xs in (("SB_DASHL", range(5, 8)), ("SB_DASHR", range(0, 3))):
+        im = box()
+        for x in xs:
+            for y in (8, 9):
+                im.put(x, y, 3)
+        add(name, im)
+    # coins bas de la ligne du temps (8x8)
+    for name, side in (("TM_L", 1), ("TM_R", 2)):
+        syms[name] = base + len(tiles)
+        t = []
+        for y in range(8):
+            for x in range(8):
+                lim = y + 1
+                inside = x >= lim if side == 1 else x <= 7 - lim
+                edge = x == lim if side == 1 else x == 7 - lim
+                t.append(3 if edge else (1 if inside else 0))
+        tiles.append(t)
+    return {"tiles": tiles, "syms": syms}
 
 
 def main():
@@ -766,13 +960,16 @@ def main():
     sheet, obj = build_obj()
     with open(os.path.join(GEN, "obj.chr"), "wb") as f:
         f.write(obj)
-    font, letters = build_font()
+    font, letters, hudsyms = build_font()
     with open(os.path.join(GEN, "font.chr"), "wb") as f:
         f.write(font)
     with open(os.path.join(GEN, "bigfont.inc"), "w") as f:
         f.write("; genere par tools/gfx.py : index des gros caracteres (tile = 128 + 4*n)\n")
         for i, ch in enumerate(letters):
             f.write("BIG_%s = %d\n" % (ch, 128 + 4 * i))
+        f.write("; tiles du HUD de match (16 px : tile du haut, celle du bas = +1)\n")
+        for k, v in hudsyms.items():
+            f.write("HT_%s = %d\n" % (k, v))
     pal = [0] * 256
     for i, c in enumerate(BG3_PAL):
         pal[i] = c
@@ -785,6 +982,21 @@ def main():
         pal[48 + i] = c
     for i, c in enumerate(PANEL_PAL):
         pal[64 + i] = c
+    # tribunes (BG2) : tile 0 vide, 1..10 panneaux (comme le logo), puis la foule
+    crowd = build_crowd()
+    ct = [bytes(32)] + [enc_tile(pt, 4) for pt in panel_tiles()]
+    ci, cm = {}, []
+    for ty in range(32):
+        for tx in range(32):
+            px = tuple(crowd.get(tx * 8 + c, ty * 8 + r) for r in range(8) for c in range(8))
+            if px not in ci:
+                ci[px] = len(ct)
+                ct.append(enc_tile(list(px), 4))
+            cm.append(ci[px] | (2 << 10))
+    assert len(ct) <= 256, len(ct)
+    open(os.path.join(GEN, "crowd.chr"), "wb").write(b"".join(ct))
+    open(os.path.join(GEN, "crowd.map"), "wb").write(b"".join(struct.pack("<H", v) for v in cm))
+    print("tribunes : %d tiles" % len(ct))
     mbg = build_menubg()
     mt, mi, mm = [], {}, []
     for ty in range(32):

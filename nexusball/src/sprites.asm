@@ -151,7 +151,7 @@ draw_player:
     sec
     sbc scroll_y
     sec
-    sbc #16
+    sbc #FEET_ROW + 1
     sta t0
     lda p_x,x
     ASR_A 4
@@ -159,8 +159,26 @@ draw_player:
     sbc scroll_x
     sec
     sbc #8
+    sta dp_x
+    ; moitie basse (jambes, ombre) puis moitie haute
+    lda t0
+    pha
+    clc
+    adc #16
+    sta t0
+    lda t1
+    pha
+    clc
+    adc #32
+    sta t1
+    lda dp_x
     jsr oam_add
-    rts
+    pla
+    sta t1
+    pla
+    sta t0
+    lda dp_x
+    jmp oam_add
 
 ; -----------------------------------------------------------------------------
 ;  draw_ball / draw_ball_shadow
@@ -261,7 +279,7 @@ draw_cursors:
     sec
     sbc scroll_y
     sec
-    sbc #24
+    sbc #FEET_ROW + 9
     sta t0
     lda p_x,x
     ASR_A 4

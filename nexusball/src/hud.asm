@@ -5,6 +5,10 @@
 HUD_ATTR   = TXT_ATTR + TXT_PANEL
 HUD_TEAMA  = HUD_ATTR + $0400       ; palette BG3 1
 HUD_TEAMB  = HUD_ATTR + $0C00       ; palette BG3 3
+HUD_PLA    = TXT_ATTR + $0400       ; plaques d'equipe (tiles HT_PL_*)
+HUD_PLB    = TXT_ATTR + $0C00
+HUD_SB     = TXT_ATTR + $1800       ; cadre du score (palette 6)
+HUD_HALF   = HUD_ATTR + $1400       ; periode en cyan (palette 5)
 MSG_ROW    = 12
 
 hud_init:
@@ -17,35 +21,53 @@ hud_draw_static:
     .a16
     .i16
     ldx #TPOS(0, 0)
-    ldy #64
+    ldy #96
+    lda #0
+    jsr fill_tiles
+    ; plaques d'equipe
+    lda #HUD_PLA
+    sta t2
+    ldx #TPOS(3, 0)
+    lda #0
+    jsr hud_plate
+    lda #HUD_PLB
+    sta t2
+    ldx #TPOS(22, 0)
+    lda #1
+    jsr hud_plate
+    ; cadre du score
+    ldx #TPOS(11, 0)
+    lda #HT_SB_CAPL + HUD_SB
+    jsr hud_put2
+    ldx #TPOS(20, 0)
+    lda #HT_SB_CAPR + HUD_SB
+    jsr hud_put2
+    ldx #TPOS(12, 0)
+@sb:
+    lda #HT_SB_BLANK + HUD_SB
+    jsr hud_put2
+    inx
+    inx
+    cpx #TPOS(20, 0)
+    bne @sb
+    ldx #TPOS(15, 0)
+    lda #HT_SB_DASHL + HUD_SB
+    jsr hud_put2
+    ldx #TPOS(16, 0)
+    lda #HT_SB_DASHR + HUD_SB
+    jsr hud_put2
+    ; ligne du temps
+    lda #HT_TM_L + HUD_SB
+    sta bg3_map + TPOS(11, 2)
+    lda #HT_TM_R + HUD_SB
+    sta bg3_map + TPOS(20, 2)
+    ldx #TPOS(12, 2)
+    ldy #8
     lda #HUD_ATTR
     jsr fill_tiles
-    lda #HUD_TEAMA
+    lda #HUD_HALF
     sta t0
-    lda #0
-    jsr team_rec
-    tya
-    clc
-    adc #T_SHORT
-    tay
-    ldx #TPOS(1, 1)
-    jsr print
-    lda #HUD_TEAMB
-    sta t0
-    lda #1
-    jsr team_rec
-    tya
-    clc
-    adc #T_SHORT
-    tay
-    ldx #TPOS(13, 1)
-    jsr print
-    lda #HUD_ATTR
-    sta t0
-    ldx #TPOS(8, 1)
-    lda #('-' - 32 + HUD_ATTR)
-    sta bg3_map,x
-    ldx #TPOS(27, 1)
+    ldx #TPOS(17, 2)
     lda m_half
     dec a
     and #$0003
@@ -60,25 +82,163 @@ hud_draw_static:
     sta hud_cache+4
     rts
 
+; hud_put2 : A = tile du haut + attributs, X = position (ligne du haut). Preserve X.
+hud_put2:
+    .a16
+    .i16
+    sta bg3_map,x
+    inc a
+    sta bg3_map+64,x
+    rts
+
+; hud_plate : A = cote, X = position de l'extremite gauche, t2 = attributs
+hud_plate:
+    .a16
+    .i16
+    phx
+    jsr team_rec
+    tya
+    clc
+    adc #T_SHORT
+    sta t3                      ; nom court
+    plx
+    lda #HT_PL_CAPL
+    clc
+    adc t2
+    jsr hud_put2
+    inx
+    inx
+    lda #HT_PL_BLANK
+    clc
+    adc t2
+    jsr hud_put2
+    inx
+    inx
+    stz t4
+@ch:
+    lda #HT_PL_BLANK
+    ldy t3
+    beq @put
+    lda a:0,y
+    and #$00FF
+    bne :+
+    stz t3                      ; fin de chaine : plaque vide ensuite
+    lda #HT_PL_BLANK
+    bra @put
+:   inc t3
+    cmp #'A'
+    bcc @blank
+    cmp #'Z' + 1
+    bcs @blank
+    sec
+    sbc #'A'
+    asl a
+    adc #HT_PL_A
+    bra @put
+@blank:
+    lda #HT_PL_BLANK
+@put:
+    clc
+    adc t2
+    jsr hud_put2
+    inx
+    inx
+    inc t4
+    lda t4
+    cmp #3
+    bne @ch
+    lda #HT_PL_BLANK
+    clc
+    adc t2
+    jsr hud_put2
+    inx
+    inx
+    lda #HT_PL_CAPR
+    clc
+    adc t2
+    jsr hud_put2
+    lda #1
+    sta bg3_dirty
+    rts
+
+; hud_big : A = chiffre (0..9, $FF = vide), X = position (ligne du haut)
+hud_big:
+    .a16
+    .i16
+    cmp #$00FF
+    bne :+
+    lda #HT_SB_BLANK + HUD_SB
+    jmp hud_put2
+:   asl a
+    clc
+    adc #HT_SB_0 + HUD_SB
+    jmp hud_put2
+
+; hud_score : A = score, X = position des dizaines, t5 = 0 aligne a droite, 1 a gauche
+hud_score:
+    .a16
+    .i16
+    cmp #100
+    bcc :+
+    lda #99
+:   phx
+    ldx #10
+    jsr divu
+    plx
+    sta t3                      ; dizaines
+    lda RDMPYL
+    sta t4                      ; unites
+    lda t3
+    bne @two
+    lda t5
+    bne @left
+    lda #$FF
+    jsr hud_big
+    inx
+    inx
+    lda t4
+    jmp hud_big
+@left:
+    lda t4
+    jsr hud_big
+    inx
+    inx
+    lda #$FF
+    jmp hud_big
+@two:
+    jsr hud_big
+    inx
+    inx
+    lda t4
+    jmp hud_big
+
 hud_update:
     .a16
     .i16
-    lda #HUD_ATTR
-    sta t0
-    ; scores
+    ; scores (gros chiffres)
     lda score
     cmp hud_cache
     beq :+
     sta hud_cache
-    ldx #TPOS(5, 1)
-    jsr print_num2
+    stz t5
+    ldx #TPOS(12, 0)
+    jsr hud_score
+    lda #1
+    sta bg3_dirty
 :   lda score+2
     cmp hud_cache+2
     beq :+
     sta hud_cache+2
-    ldx #TPOS(10, 1)
-    jsr print_num2
+    lda #1
+    sta t5
+    lda score+2
+    ldx #TPOS(18, 0)
+    jsr hud_score
+    lda #1
+    sta bg3_dirty
 :   ; horloge m:ss
+    lda #HUD_ATTR
+    sta t0
     lda m_sec
     cmp hud_cache+4
     beq @msg
@@ -89,9 +249,9 @@ hud_update:
     lda RDMPYL
     sta t4                      ; secondes
     lda t3
-    ldx #TPOS(21, 1)
+    ldx #TPOS(12, 2)
     jsr print_digit
-    ldx #TPOS(22, 1)
+    ldx #TPOS(13, 2)
     lda #(':' - 32 + HUD_ATTR)
     sta bg3_map,x
     lda t4
@@ -101,10 +261,10 @@ hud_update:
     lda RDMPYL
     sta t4
     lda t3
-    ldx #TPOS(23, 1)
+    ldx #TPOS(14, 2)
     jsr print_digit
     lda t4
-    ldx #TPOS(24, 1)
+    ldx #TPOS(15, 2)
     jsr print_digit
 @msg:
     ; effacement du message

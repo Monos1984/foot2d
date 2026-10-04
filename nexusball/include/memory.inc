@@ -288,3 +288,7 @@ pn_m:       .res 2
 pn_rt:      .res 2
 hdma_sh:    .res 2          ; valeur de HDMAEN ecrite au NMI
 fade_v:     .res 2
+dp_x:       .res 2
+bg2_mode:   .res 2          ; tiles BG2 en VRAM : 1 logo, 2 tribunes
+bg2_hofs:   .res 2
+bg2_vofs:   .res 2

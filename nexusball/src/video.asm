@@ -49,6 +49,8 @@ load_graphics:
     ldx #VRAM_BG2_CHR
     jsr lz_vram
     jsr load_logo_map
+    lda #1
+    sta bg2_mode
     sep #$20
     .a8
 

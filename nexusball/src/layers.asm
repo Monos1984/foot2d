@@ -23,7 +23,7 @@ layers_match:
     stz hdma_sh
     sep #$20
     .a8
-    lda #$15
+    lda #$17                    ; BG1 + BG2 (tribunes) + BG3 + OBJ
     sta tm_sh
     stz ts_sh
     stz cgw_sh
@@ -36,6 +36,8 @@ layers_match:
 layers_menu:
     .a16
     stz hdma_sh
+    stz bg2_hofs
+    stz bg2_vofs
     sep #$20
     .a8
     lda #$17
@@ -299,3 +301,47 @@ hdma_cga_tab:
     .byte 84, $00               ; logo : pas de color math
     .byte 1, $42                ; ensuite : panneaux translucides
     .byte 0
+
+; -----------------------------------------------------------------------------
+;  tiles BG2 : logo (titre) ou tribunes (match). Les deux jeux contiennent les
+;  tuiles de panneaux 1..10 (menus et pause).
+; -----------------------------------------------------------------------------
+load_logo_chr:
+    .a16
+    lda bg2_mode
+    cmp #1
+    beq :+
+    LZ_SRC gfx_logo_chr
+    ldx #VRAM_BG2_CHR
+    jsr lz_vram
+    lda #1
+    sta bg2_mode
+:   rts
+
+; load_crowd : (ecran eteint) tiles des tribunes + tilemap dans la copie BG2
+load_crowd:
+    .a16
+    lda bg2_mode
+    cmp #2
+    beq bg2_crowd_map
+    LZ_SRC gfx_crowd_chr
+    ldx #VRAM_BG2_CHR
+    jsr lz_vram
+    lda #2
+    sta bg2_mode
+; bg2_crowd_map : tilemap des tribunes dans la copie BG2 (transferee au NMI)
+bg2_crowd_map:
+    .a16
+    .i16
+    LZ_SRC gfx_crowd_map
+    jsr lz_decompress
+    ldx #0
+@l: lda f:LZ_BUF,x
+    sta f:BG2_SHADOW,x
+    inx
+    inx
+    cpx #2048
+    bne @l
+    lda #1
+    sta bg2_dirty
+    rts

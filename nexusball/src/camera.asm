@@ -71,4 +71,9 @@ camera_scroll:
     bcc :+
     lda #CAM_MAX_Y
 :   sta scroll_y
+    ; tribunes (BG2) : parallaxe horizontale (moitie de la vitesse)
+    sta bg2_vofs
+    lda scroll_x
+    lsr a
+    sta bg2_hofs
     rts

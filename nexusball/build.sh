@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 mkdir -p build data/gen
 python3 tools/gfx.py
 for f in data/gen/stad?.chr data/gen/stad?.map data/gen/obj.chr data/gen/font.chr \
-         data/gen/logo.chr data/gen/logo.map data/gen/menubg.chr data/gen/menubg.map; do
+         data/gen/logo.chr data/gen/logo.map data/gen/menubg.chr data/gen/menubg.map data/gen/crowd.chr data/gen/crowd.map; do
     python3 tools/lz.py "$f" "$f.lz" > /dev/null
 done
 python3 tools/teams.py

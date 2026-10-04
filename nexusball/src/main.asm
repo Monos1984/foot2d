@@ -59,6 +59,8 @@ gfx_logo_map:   .incbin "data/gen/logo.map.lz"
 gfx_menubg_chr: .incbin "data/gen/menubg.chr.lz"
 gfx_menubg_map: .incbin "data/gen/menubg.map.lz"
 gfx_menubg_pal: .incbin "data/gen/menubg.pal"
+gfx_crowd_chr:  .incbin "data/gen/crowd.chr.lz"
+gfx_crowd_map:  .incbin "data/gen/crowd.map.lz"
 
 ; stades : banques $C2 / $C3 (tiles, tilemap) et palettes en banque $80
 .include "data/gen/stadiums.inc"

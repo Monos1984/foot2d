@@ -21,6 +21,7 @@ title_screen:
     ; logo (BG2) et panneau translucide du menu
     jsr layers_menu
     jsr title_hdma
+    jsr load_logo_chr
     jsr bg2_logo
     lda #MENU_COL - 3
     sta pn_x

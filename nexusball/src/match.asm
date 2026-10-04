@@ -11,6 +11,7 @@ start_match:
     jsr screen_off
     jsr layers_match
     jsr ensure_stadium_bg
+    jsr load_crowd
     ; manettes -> equipes (deja reglees par une competition)
     lda game_mode
     cmp #MODE_PRESET
@@ -611,6 +612,7 @@ pause_menu:
     sta ui_back
     jsr team_screen
     jsr layers_match
+    jsr bg2_crowd_map
     jsr bg3_clear
     jsr hud_draw_static
     jsr hud_update

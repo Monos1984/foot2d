@@ -124,6 +124,19 @@ NmiHandler:
     sta BG1VOFS
     xba
     sta BG1VOFS
+    lda bg2_hofs
+    sta BG2HOFS
+    lda bg2_hofs+1
+    sta BG2HOFS
+    rep #$20
+    .a16
+    lda bg2_vofs
+    dec a
+    sep #$20
+    .a8
+    sta BG2VOFS
+    xba
+    sta BG2VOFS
     stz BG3HOFS
     stz BG3HOFS
     lda #$FF

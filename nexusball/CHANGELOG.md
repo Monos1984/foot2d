@@ -1,5 +1,18 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.8.0 — joueurs, stades et HUD
+
+- Joueurs agrandis : silhouette 16×24 dans des cadres 16×32 (deux sprites), tête, maillot avec
+  col et numéro, short, bras et jambes animés, ombre au sol ; 16 poses (course, frappe, lancer,
+  charge, chute, plongeon, célébration…).
+- Terrains refaits : sol à motifs avec reflets des projecteurs, panneaux publicitaires néon sur le
+  mur du haut, murs latéraux techniques, mur vitré en bas, lignes plus épaisses, emblème central,
+  anneaux sur plaque sombre avec halo.
+- Tribunes sur BG2 : foule animée (couleurs cyclées) visible à travers les zones transparentes du
+  stade, défilement en parallaxe (½ vitesse horizontale).
+- Nouveau HUD : plaques biseautées à la couleur de chaque équipe, cadre central à gros chiffres
+  8×16 pour le score, horloge et période sous le score (tiles BG3 dédiées, palette 6).
+
 ## 0.7.0 — compression et menus graphiques
 
 - Compression LZSS (tools/lz.py) de tous les graphismes : stades, sprites, police, logo, fond des
