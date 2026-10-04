@@ -68,7 +68,7 @@ gk_try:
     sta t4
     lda p_speed,x               ; REFLEX
     clc
-    adc #12
+    adc #8
     cmp t4
     bcc @no
     ; une seule tentative pour ce tir
@@ -88,7 +88,7 @@ gk_try:
     sta t3
     lda p_speed,x
     clc
-    adc #10
+    adc #7
     sec
     sbc t3
     sta t3
@@ -120,6 +120,7 @@ gk_try:
     adc p_y,x
     sta p_y,x
 @catch:
+    inc dbg_saves
     lda #SFX_SAVE
     jsr sfx_play
     lda #SFX_OOH

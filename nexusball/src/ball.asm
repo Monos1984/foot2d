@@ -213,6 +213,7 @@ ball_update:
     stz b_vy
     rts
 @bl:
+    inc dbg_ringmiss
     lda #FIELD_L * FP
     sta b_x
     lda b_vx
@@ -236,6 +237,7 @@ ball_update:
     stz b_vy
     rts
 @br:
+    inc dbg_ringmiss
     lda #(FIELD_R + 1) * FP
     sta b_x
     lda b_vx

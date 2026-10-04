@@ -14,15 +14,15 @@ RCR RC_FRIC_G,  6, 7        ; frottement au sol  (v -= v*k/256)
 RCR RC_FRIC_A,  1, 1        ; frottement en l'air
 RCR RC_FRIC_P,  40, 47      ; freinage d'un joueur sans direction
 
-RCV RC_SPD1,    19          ; vitesse max selon SPEED (1..9)
-RCV RC_SPD2,    20
-RCV RC_SPD3,    21
-RCV RC_SPD4,    22
+RCV RC_SPD1,    21          ; vitesse max selon SPEED (1..9)
+RCV RC_SPD2,    22
+RCV RC_SPD3,    22
+RCV RC_SPD4,    23
 RCV RC_SPD5,    23
 RCV RC_SPD6,    24
 RCV RC_SPD7,    25
-RCV RC_SPD8,    26
-RCV RC_SPD9,    27
+RCV RC_SPD8,    25
+RCV RC_SPD9,    26
 RCV RC_SPRINT,  9           ; bonus de sprint
 RCV RC_CARRYPEN, 2          ; malus en portant le ballon
 RCA RC_ACCEL,   4           ; acceleration des joueurs

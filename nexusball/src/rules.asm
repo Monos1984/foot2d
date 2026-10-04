@@ -222,7 +222,7 @@ resolve_tackle:
 @duel:
     ; porteur = POWER + CONTROL + alea ; chargeur = POWER + DEFENSE + alea
     jsr rand
-    and #$0007
+    and #$000F
     sta t0
     ldy t7
     lda p_power,y
@@ -231,7 +231,7 @@ resolve_tackle:
     adc t0
     sta t1                      ; porteur
     jsr rand
-    and #$0007
+    and #$000F
     ldx cp
     clc
     adc p_power,x

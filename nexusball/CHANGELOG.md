@@ -11,6 +11,10 @@
 - Jeu contextuel : X ou Y sans ballon près d'un ballon libre (même en l'air) = reprise de volée.
 - Les anneaux clignotent pendant la célébration d'un but (couleurs du stade restaurées ensuite).
 - Écran de fin de match : tirs, possession (%), fautes de chaque équipe.
+- Équilibrage mesuré (tools/balance.sh, matchs CPU entre équipes de niveaux différents) :
+  gardien moins infaillible (portée et réussite réduites), duels de charge plus incertains,
+  écart de vitesse entre SPEED 1 et 9 réduit. Avant : ~1 point pour 30 tirs et domination totale
+  d'une équipe de niveau +1 ; après : 2 à 8 points par match de 4 min, le favori gagne sans écraser.
 
 ## 0.5.0 — création (Milestone 8)
 

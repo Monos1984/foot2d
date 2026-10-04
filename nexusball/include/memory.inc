@@ -259,3 +259,5 @@ st_shots:   .res 4
 st_poss:    .res 4          ; frames de possession
 st_fouls:   .res 4
 hs_row:     .res 2
+dbg_saves:  .res 2
+dbg_ringmiss: .res 2
