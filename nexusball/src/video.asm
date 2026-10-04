@@ -36,10 +36,20 @@ load_graphics:
     lda #$80
     sta VMAIN
 
-    VRAM_DMA gfx_font_chr,  VRAM_BG3_CHR, (gfx_font_chr_end - gfx_font_chr)
-    VRAM_DMA gfx_obj_chr,   VRAM_OBJ_CHR, 8192
-    VRAM_DMA gfx_logo_chr,  VRAM_BG2_CHR, (gfx_logo_chr_end - gfx_logo_chr)
-    VRAM_DMA gfx_logo_map,  VRAM_BG2_MAP, 2048
+    rep #$20
+    .a16
+    LZ_SRC gfx_font_chr
+    ldx #VRAM_BG3_CHR
+    jsr lz_vram
+    LZ_SRC gfx_obj_chr
+    ldx #VRAM_OBJ_CHR
+    jsr lz_vram
+    LZ_SRC gfx_logo_chr
+    ldx #VRAM_BG2_CHR
+    jsr lz_vram
+    jsr load_logo_map
+    sep #$20
+    .a8
 
     ; palette complete
     stz CGADD
@@ -215,36 +225,23 @@ load_stadium:
     adc t1
     asl a                       ; *12
     tay
-    sep #$20
-    .a8
-    lda #$80
-    sta VMAIN
-    ; tiles
-    ldx #VRAM_BG1_CHR
-    stx VMADDL
-    lda #$01
-    sta DMAP0
-    lda #$18
-    sta BBAD0
-    ldx stadium_tab+0,y
-    stx A1T0L
+    lda stadium_tab+0,y
+    sta lz_src
     lda stadium_tab+2,y
-    sta A1B0
-    ldx stadium_tab+3,y
-    stx DAS0L
-    lda #$01
-    sta MDMAEN
-    ; tilemap
-    ldx #VRAM_BG1_MAP
-    stx VMADDL
-    ldx stadium_tab+5,y
-    stx A1T0L
+    sta lz_src+2
+    phy
+    ldx #VRAM_BG1_CHR
+    jsr lz_vram
+    ply
+    lda stadium_tab+5,y
+    sta lz_src
     lda stadium_tab+7,y
-    sta A1B0
-    ldx #8192
-    stx DAS0L
-    lda #$01
-    sta MDMAEN
+    and #$00FF
+    sta lz_src+2
+    phy
+    ldx #VRAM_BG1_MAP
+    jsr lz_vram
+    ply
     rep #$20
     .a16
     ; palette (CGRAM 32..47), fond (CGRAM 0) et couleurs du public
@@ -276,3 +273,10 @@ load_stadium:
     sta ring_pal+2
     sta ring_base+2
     rts
+
+; load_logo_map : (ecran eteint) tilemap du logo sur BG2
+load_logo_map:
+    .a16
+    LZ_SRC gfx_logo_map
+    ldx #VRAM_BG2_MAP
+    jmp lz_vram

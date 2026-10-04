@@ -6,6 +6,10 @@ set -e
 cd "$(dirname "$0")"
 mkdir -p build data/gen
 python3 tools/gfx.py
+for f in data/gen/stad?.chr data/gen/stad?.map data/gen/obj.chr data/gen/font.chr \
+         data/gen/logo.chr data/gen/logo.map; do
+    python3 tools/lz.py "$f" "$f.lz" > /dev/null
+done
 python3 tools/teams.py
 python3 tools/spc.py
 python3 tools/sched.py

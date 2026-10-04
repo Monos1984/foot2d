@@ -664,17 +664,17 @@ def main():
     with open(os.path.join(GEN, "stadiums.inc"), "w") as f:
         f.write("; genere par tools/gfx.py\nNUM_STADIUMS = %d\n" % len(STADIUMS))
         for n, st in enumerate(STADIUMS):
-            seg = "DATA2" if n < 3 else "DATA3"
-            f.write('.segment "%s"\nstad%d_chr: .incbin "data/gen/stad%d.chr"\nstad%d_chr_end:\n'
-                    'stad%d_map: .incbin "data/gen/stad%d.map"\n' % (seg, n, n, n, n, n))
+            seg = "DATA2"
+            f.write('.segment "%s"\nstad%d_chr: .incbin "data/gen/stad%d.chr.lz"\n'
+                    'stad%d_map: .incbin "data/gen/stad%d.map.lz"\n' % (seg, n, n, n, n))
         f.write('.segment "RODATA"\n')
         for n, st in enumerate(STADIUMS):
             f.write('stad%d_pal: .incbin "data/gen/stad%d.pal"\n' % (n, n))
             f.write('stad%d_name: .byte "%s", 0\n' % (n, st["name"]))
-        f.write("; par stade : chr (long), taille chr, map (long), palette, nom\nstadium_tab:\n")
+        f.write("; par stade : chr compresse (long), reserve, map compressee (long), palette, nom\nstadium_tab:\n")
         for n in range(len(STADIUMS)):
-            f.write("    .faraddr stad%d_chr\n    .word stad%d_chr_end - stad%d_chr\n    .faraddr stad%d_map\n"
-                    "    .word .loword(stad%d_pal), .loword(stad%d_name)\n" % (n, n, n, n, n, n))
+            f.write("    .faraddr stad%d_chr\n    .word 0\n    .faraddr stad%d_map\n"
+                    "    .word .loword(stad%d_pal), .loword(stad%d_name)\n" % (n, n, n, n))
         f.write('.segment "CODE"\n')
     sheet, obj = build_obj()
     with open(os.path.join(GEN, "obj.chr"), "wb") as f:

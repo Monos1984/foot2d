@@ -21,6 +21,7 @@
 .segment "CODE"
 .include "boot.asm"
 .include "nmi.asm"
+.include "lz.asm"
 .include "video.asm"
 .include "input.asm"
 .include "math.asm"
@@ -49,13 +50,11 @@
 ;  donnees graphiques (banque $C1)
 ; -----------------------------------------------------------------------------
 .segment "GFX"
-gfx_obj_chr:    .incbin "data/gen/obj.chr"
-gfx_font_chr:   .incbin "data/gen/font.chr"
-gfx_font_chr_end:
+gfx_obj_chr:    .incbin "data/gen/obj.chr.lz"
+gfx_font_chr:   .incbin "data/gen/font.chr.lz"
 gfx_pal:        .incbin "data/gen/pal.bin"
-gfx_logo_chr:   .incbin "data/gen/logo.chr"
-gfx_logo_chr_end:
-gfx_logo_map:   .incbin "data/gen/logo.map"
+gfx_logo_chr:   .incbin "data/gen/logo.chr.lz"
+gfx_logo_map:   .incbin "data/gen/logo.map.lz"
 
 ; stades : banques $C2 / $C3 (tiles, tilemap) et palettes en banque $80
 .include "data/gen/stadiums.inc"

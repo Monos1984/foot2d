@@ -23,6 +23,12 @@ nmi_on:     .res 2          ; 1 = NMI actif
 scroll_x:   .res 2          ; scroll BG1 (pixels)
 scroll_y:   .res 2
 cp:         .res 2          ; joueur courant (index*2)
+lz_src:     .res 4          ; decompression LZSS
+lz_size:    .res 2
+lz_d:       .res 2
+lz_flags:   .res 1
+lz_cnt:     .res 1
+lz_len:     .res 1
 l_dx:       .res 2          ; parametres de lancer du ballon
 l_dy:       .res 2
 l_spd:      .res 2
