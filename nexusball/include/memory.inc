@@ -244,3 +244,5 @@ kb_y:       .res 2
 vt_n:       .res 2
 vt_list:    .res 24
 cs_top:     .res 2
+rep_bits:   .res 2
+rep_t:      .res 2

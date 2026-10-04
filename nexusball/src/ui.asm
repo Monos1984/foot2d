@@ -85,6 +85,29 @@ ui_wait:
     lda joy_new
     ora joy_new+2
     sta t7
+    ; repetition automatique des directions maintenues
+    lda joy_cur
+    ora joy_cur+2
+    and #(JOY_UP | JOY_DOWN | JOY_LEFT | JOY_RIGHT)
+    beq @none
+    cmp rep_bits
+    bne @new
+    inc rep_t
+    lda rep_t
+    cmp #20
+    bcc @d
+    and #$0003
+    bne @d
+    lda rep_bits
+    ora t7
+    sta t7
+@d: rts
+@new:
+    sta rep_bits
+    stz rep_t
+    rts
+@none:
+    stz rep_bits
     rts
 
 ; ui_updown : t7 = boutons, A = selection, Y = nombre -> A = nouvelle selection
