@@ -353,3 +353,5 @@ ko_mode:    .res 2          ; 0 coup d'envoi, 1 coup franc
 chant_idx:  .res 2
 fk_x:       .res 2
 fk_y:       .res 2
+gk_sign:    .res 2
+gk_x0:      .res 2

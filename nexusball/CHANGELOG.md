@@ -1,5 +1,12 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.4 — relance du gardien
+
+- Le gardien ne relance plus vers un coéquipier à côté ou derrière lui : seulement vers un
+  joueur au moins 48 pixels devant (le plus démarqué). Sinon, dégagement long au pied vers le camp
+  adverse.
+- Musiques d'ambiance du match retirées (le bruit de la foule et les bruitages restent).
+
 ## 0.11.3 — bruitages
 
 - Nouvel échantillon « impact métallique » : le ballon qui touche un mur de l'arène sonne

@@ -249,9 +249,7 @@ def song_chant3():
     return [drum, hands, horn]
 
 
-SONGS = [("TITLE", song_title, True, "inst_tab"), ("JINGLE", song_jingle, False, "inst_tab"),
-         ("CHANT", song_chant, True, "inst_chant"), ("CHANT2", song_chant2, True, "inst_chant"),
-         ("CHANT3", song_chant3, True, "inst_chant")]
+SONGS = [("TITLE", song_title, True, "inst_tab"), ("JINGLE", song_jingle, False, "inst_tab")]
 
 
 def build():

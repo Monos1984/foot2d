@@ -193,7 +193,7 @@ gk_ai:
 :   txa
     lsr a
     cmp b_owner
-    bne @noball
+    jne @noball
     ; relance
     stz p_want,x
     lda b_carry
@@ -201,6 +201,8 @@ gk_ai:
     bcs :+
     rts
 :   jsr gk_pick_target
+    cmp #NO_OWNER
+    beq @punt
     asl a
     tay
     ldx cp
@@ -214,6 +216,33 @@ gk_ai:
     jsr pass_to_player
     ldx cp
     lda #SPR_THROW
+    sta p_spr,x
+    rts
+@punt:
+    ; personne devant : degagement long au pied vers le camp adverse
+    ldx cp
+    lda gk_sign
+    bpl :+
+    lda #.loword(-170)
+    bra :++
+:   lda #170
+:   sta l_dx
+    lda #FIELD_CY * FP
+    sec
+    sbc p_y,x
+    ASR_A 5                     ; vers l'axe
+    sta l_dy
+    lda rc+RC_PASS_K
+    sta l_spd
+    lda #4
+    sta l_zt
+    lda #8
+    sta l_err
+    lda #1
+    sta l_foot
+    jsr launch_ball
+    ldx cp
+    lda #SPR_KICK
     sta p_spr,x
     rts
 @noball:
@@ -299,6 +328,11 @@ gk_ai:
 gk_pick_target:
     .a16
     .i16
+    jsr attack_sign
+    sta gk_sign
+    lda p_x,x
+    ASR_A 4
+    sta gk_x0
     lda p_team,x
     beq :+
     lda #TEAM_SIZE
@@ -308,7 +342,7 @@ gk_pick_target:
     adc #TEAM_SIZE - 1
     sta t2                      ; fin
     stz near_tmp                ; meilleur ecart
-    lda t3
+    lda #NO_OWNER
     sta gk_best
 @l: lda t3
     asl a
@@ -316,6 +350,17 @@ gk_pick_target:
     lda p_state,x
     cmp #PS_OUT
     beq @n
+    ; seulement un coequipier nettement devant le gardien
+    lda p_x,x
+    ASR_A 4
+    sec
+    sbc gk_x0
+    ldy gk_sign
+    bpl :+
+    eor #$FFFF
+    inc a
+:   cmp #48
+    bmi @n
     lda t3
     pha
     lda t2

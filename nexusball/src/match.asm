@@ -90,10 +90,8 @@ start_match:
     jsr oam_clear
     jsr screen_on
     stz title_music
-    jsr rand
-    and #$0003
-    sta chant_idx
-    jsr play_chant              ; ambiance : grosse caisse, mains, cor
+    lda #MUS_STOP
+    jsr sfx_play
     lda #$0C
     jsr crowd_level
 
@@ -222,7 +220,6 @@ st_goal:
     cmp #3
     beq @golden
     jsr new_kickoff
-    jsr play_chant              ; nouvel air apres chaque point
 @w: clc
     rts
 @golden:
@@ -277,7 +274,6 @@ st_half:
     stz m_acc
     jsr hud_draw_static
     jsr new_kickoff
-    jsr play_chant
     lda ad_flag
     beq @w
     jsr camera_snap
@@ -907,16 +903,3 @@ fk_push:
     bne @l
     rts
 
-; play_chant : lance l'air d'ambiance suivant (3 airs en rotation, depart aleatoire)
-play_chant:
-    .a16
-    .i16
-    lda chant_idx
-    inc a
-    cmp #3
-    bcc :+
-    lda #0
-:   sta chant_idx
-    clc
-    adc #MUS_CHANT
-    jmp sfx_play
