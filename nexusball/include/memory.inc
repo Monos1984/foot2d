@@ -355,3 +355,6 @@ fk_x:       .res 2
 fk_y:       .res 2
 gk_sign:    .res 2
 gk_x0:      .res 2
+zc_t:       .res 2          ; temps du ballon dans une raquette
+zc_zone:    .res 2
+zc_team:    .res 2

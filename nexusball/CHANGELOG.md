@@ -1,5 +1,12 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.5 — règle des 4 secondes en raquette
+
+- Le ballon ne peut pas rester 4 secondes dans une raquette (porté par le gardien ou libre).
+  Sinon : buzzer, bandeau « 4 SEC IN THE ZONE! » à la couleur de l'équipe fautive, et
+  l'adversaire reçoit le ballon au centre (coup d'envoi à deux).
+- Règles du jeu (EN / FR) mises à jour.
+
 ## 0.11.4 — relance du gardien
 
 - Le gardien ne relance plus vers un coéquipier à côté ou derrière lui : seulement vers un

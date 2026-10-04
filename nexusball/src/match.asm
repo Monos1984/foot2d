@@ -192,6 +192,8 @@ st_play:
     jsr ko_push
     jsr ball_update
     jsr rules_update
+    jsr zone_clock
+    bcs @zr                     ; 4 s dans une raquette : remise en jeu au centre
     jsr separate_players
     ; possession
     lda b_owner
@@ -205,6 +207,7 @@ st_play:
     inc st_poss,x
 :   clc
     rts
+@zr:
 @end:
     clc
     rts
@@ -903,3 +906,87 @@ fk_push:
     bne @l
     rts
 
+
+; -----------------------------------------------------------------------------
+;  zone_clock : le ballon ne peut pas rester 4 s dans une raquette (porte par le
+;  gardien ou libre). Sinon l'adversaire de l'equipe qui defend cette raquette
+;  recoit le ballon au centre (coup d'envoi). Carry = 1 si la regle s'applique.
+; -----------------------------------------------------------------------------
+zone_clock:
+    .a16
+    .i16
+    lda m_state
+    cmp #MS_PLAY
+    bne @out
+    lda ko_active
+    bne @out
+    ; raquette gauche ?
+    lda b_x
+    ASR_A 4
+    sec
+    sbc #FIELD_L
+    sta t0
+    lda b_y
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    sta t1
+    jsr dist_approx
+    ldy #0
+    cmp #ZONE_R
+    bcc @in
+    lda b_x
+    ASR_A 4
+    sec
+    sbc #FIELD_R
+    sta t0
+    lda b_y
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    sta t1
+    jsr dist_approx
+    ldy #1
+    cmp #ZONE_R
+    bcc @in
+@out:
+    stz zc_t
+    clc
+    rts
+@in:
+    cpy zc_zone
+    beq :+
+    sty zc_zone
+    stz zc_t
+:   lda zc_t
+    clc
+    adc rc+RC_TDEC
+    sta zc_t
+    cmp #4 * TU_SEC
+    bcs :+
+    clc
+    rts
+:   stz zc_t
+    ; equipe qui defend cette raquette : gauche = celle qui attaque vers la droite
+    lda team_dir
+    beq :+
+    lda #1                      ; equipe 0 attaque vers la gauche : elle defend a droite
+:   ldy zc_zone
+    beq :+
+    eor #1
+:   sta zc_team
+    eor #1
+    sta kick_team
+    lda #SFX_BUZZER
+    jsr sfx_play
+    jsr new_kickoff
+    lda zc_team
+    ldx #$FF
+    ldy #.loword(str_zone4)
+    jsr show_tmsg
+    sec
+    rts
+
+.segment "RODATA"
+str_zone4:  .byte "4 SEC IN THE ZONE!", 0
+.segment "CODE"
