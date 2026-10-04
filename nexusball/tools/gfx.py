@@ -1057,22 +1057,22 @@ def main():
     open(os.path.join(GEN, "crowd.chr"), "wb").write(b"".join(ct))
     open(os.path.join(GEN, "crowd.map"), "wb").write(b"".join(struct.pack("<H", v) for v in cm))
     print("tribunes : %d tiles" % len(ct))
-    mbg = build_menubg()
-    mt, mi, mm = [], {}, []
-    for ty in range(32):
-        for tx in range(32):
-            px = tuple(mbg.get(tx * 8 + c, ty * 8 + r) for r in range(8) for c in range(8)) if ty < 28 else (0,) * 64
-            if px not in mi:
-                mi[px] = len(mt)
-                mt.append(px)
-            mm.append(mi[px] | (2 << 10))
-    assert len(mt) <= 1024
-    open(os.path.join(GEN, "menubg.chr"), "wb").write(b"".join(enc_tile(list(t), 4) for t in mt))
-    open(os.path.join(GEN, "menubg.map"), "wb").write(b"".join(struct.pack("<H", v) for v in mm))
-    open(os.path.join(GEN, "menubg.pal"), "wb").write(b"".join(struct.pack("<H", c) for c in MENU_PAL))
-    rows = [[v for x in range(256) for v in rgb(MENU_PAL[mbg.get(x, y)])] for y in range(224)]
-    write_png(os.path.join(PREV, "preview_menubg.png"), 256, 224, rows)
-    print("fond des menus : %d tiles" % len(mt))
+    import scenes
+    scenes.FONT = FONT
+    def scene_out(name, cv, groups):
+        st, sm = scenes.to_tiles(cv, groups)
+        assert len(st) <= 1024, len(st)
+        open(os.path.join(GEN, name + ".chr"), "wb").write(b"".join(enc_tile(list(t), 4) for t in st))
+        open(os.path.join(GEN, name + ".map"), "wb").write(b"".join(struct.pack("<H", v) for v in sm))
+        cols = []
+        for g in sorted(groups):
+            cols += groups[g]
+        open(os.path.join(GEN, name + ".pal"), "wb").write(b"".join(struct.pack("<H", c) for c in cols))
+        write_png(os.path.join(PREV, "preview_%s.png" % name), cv.w, cv.h, scenes.preview(cv, groups))
+        print("%s : %d tiles" % (name, len(st)))
+    scene_out("menubg", scenes.build_menubg(), scenes.MENU_GROUPS)
+    for n in range(2):
+        scene_out("ad%d" % n, scenes.build_ad(n), scenes.AD_GROUPS)
     pal[0] = FIELD_PAL[0]
     logo = build_logo()
     lchr, lmap, lcount = build_logo_data(logo)

@@ -11,6 +11,7 @@ usage: lrtest.py core.so rom.sfc script out_prefix
      m ADDR LEN   affiche LEN octets de WRAM a ADDR (hex ou symbole)
      k ADDR VAL   ecrit un mot en WRAM
      t N ADDR     N frames, compte les changements de l'octet ADDR
+     bot N [SEED] N frames d'entrees aleatoires (manette 1) + controle des invariants
 """
 import ctypes as C
 import os
@@ -183,6 +184,55 @@ def main():
             w.writeframes(bytes(state["audio"])); w.close()
             print("audio %s: %.1f s, rms %.0f, max %d" % (a[1], len(pcm) / 2 / (av.timing.rate or 32040), rms, max(pcm or [0])))
             state["audio"] = bytearray()
+        elif a[0] == "bot":
+            # bot N [SEED] : N frames d'entrees pseudo-aleatoires sur la manette 1 et
+            # verification des invariants du controle humain
+            import random
+            rnd = random.Random(int(a[2]) if len(a) > 2 else 1)
+            ptr = core.retro_get_memory_data(2)
+            rd = lambda sym, i=0: int.from_bytes(C.string_at(ptr + addr_of(sym) + i, 2), "little")
+            dirs = ["U", "D", "L", "R", "U+L", "U+R", "D+L", "D+R"]
+            held, hold_t, stuck, maxstuck, errs = set(), 0, 0, 0, {}
+            lastpos = None
+            for f in range(int(a[1])):
+                if hold_t <= 0:
+                    d = rnd.choice(dirs)
+                    held = set(d.split("+"))
+                    if rnd.random() < 0.5:
+                        held.add(rnd.choice(["B", "Y", "A", "X", "L1", "R1"]))
+                    hold_t = rnd.randint(5, 40)
+                hold_t -= 1
+                state["pad"][0] = {BTN[b] for b in held}
+                core.retro_run(); nframe += 1
+                state["pad"][0] = {BTN[b] for b in held if b not in ("B", "Y", "A", "X", "L1")}
+                c = rd("ctrl") & 0xFF
+                ms = rd("m_state")
+                def err(k):
+                    errs[k] = errs.get(k, 0) + 1
+                    if errs[k] == 1:
+                        print("  ! %s frame %d ctrl=%d m_state=%d half=%d" % (k, nframe, c, ms, rd("m_half")))
+                if c == 0xFF:
+                    err("no_ctrl")
+                    continue
+                if rd("p_team", c * 2) != rd("pad_team"):
+                    err("ctrl_other_team")
+                if rd("p_human", c * 2) != 1:
+                    err("p_human_off")
+                for i in range(12):
+                    if i != c and rd("p_human", i * 2) == 1:
+                        err("p_human_extra")
+                st = rd("p_state", c * 2)
+                pos = (rd("p_x", c * 2), rd("p_y", c * 2))
+                if ms == 1 and st == 0 and pos == lastpos:
+                    stuck += 1
+                    maxstuck = max(maxstuck, stuck)
+                    if stuck == 120:
+                        err("stuck_2s")
+                else:
+                    stuck = 0
+                lastpos = pos
+            state["pad"][0] = set()
+            print("bot: erreurs", errs, "immobile max", maxstuck)
         elif a[0] == "k":
             # k ADDR VALEUR : ecrit un mot en WRAM
             ptr = core.retro_get_memory_data(2)

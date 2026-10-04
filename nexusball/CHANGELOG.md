@@ -1,5 +1,20 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.9.1 — corrections, publicités, fond des menus
+
+- Correction : un but contre son camp vaut toujours 1 point (il pouvait en donner 2 si le
+  dernier tir venait de loin).
+- Correction : perte des commandes / contrôle d'un joueur adverse. Le changement automatique
+  de joueur gardait le candidat dans t5 alors que dist_to_ball l'écrase : la manette pouvait
+  recevoir un numéro quelconque (adversaire ou hors tableau). Variables dédiées sw_cand / sw_lim.
+- Correction : après une faute grave, la manette ne peut plus reprendre le joueur exclu.
+- Écrans de publicité futuristes (NOVA COLA, ZENTEK, ORBITEL, HYPERION FUEL) avant le match et à
+  la mi-temps (3 s, A / B / START pour passer).
+- Nouveau fond des menus et de l'écran titre : nébuleuse, planète annelée ombrée, lune, ville
+  futuriste et arène à l'horizon, sol à grille néon. Décors BG1 multi-palettes (tools/scenes.py,
+  palettes BG 2, 5, 6, 7).
+- Outil de test : commande `bot` de tools/lrtest.py (entrées aléatoires + invariants du contrôle).
+
 ## 0.9.0 — ballon ovale, règles, français
 
 - Ballon ovale futuriste (sprite 16×16) : coque bleu métal, couture néon qui tourne, anneau

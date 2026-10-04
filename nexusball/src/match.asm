@@ -9,6 +9,8 @@ start_match:
     .a16
     .i16
     jsr screen_off
+    lda #0
+    jsr ad_show                 ; publicites avant le match
     jsr layers_match
     jsr ensure_stadium_bg
     jsr load_crowd
@@ -232,7 +234,22 @@ st_half:
     .a16
     lda m_timer
     bne @w
-    ; changement de cote, l'autre equipe engage
+    ; publicites de la mi-temps (pas avant la prolongation)
+    lda m_half
+    cmp #1
+    bne @noad
+    jsr screen_off
+    lda #1
+    jsr ad_show
+    jsr ensure_stadium_bg
+    jsr layers_match
+    jsr bg3_clear
+    lda #1
+    sta ad_flag
+    bra :+
+@noad:
+    stz ad_flag
+:   ; changement de cote, l'autre equipe engage
     lda team_dir
     eor #1
     sta team_dir
@@ -253,6 +270,10 @@ st_half:
     stz m_acc
     jsr hud_draw_static
     jsr new_kickoff
+    lda ad_flag
+    beq @w
+    jsr camera_snap
+    jsr screen_on
 @w: clc
     rts
 
@@ -431,6 +452,18 @@ goal_scored:
     bne :+
     jmp so_goal
 :   sta t0
+    ; but contre son camp : toujours 1 point
+    lda b_last
+    cmp #NO_OWNER
+    beq :+
+    asl a
+    tax
+    lda p_team,x
+    cmp t0
+    beq :+
+    lda #1
+    sta b_points
+:   lda t0
     asl a
     tax
     lda score,x

@@ -134,18 +134,18 @@ human_input:
     beq @input
     cmp ctrl,y
     beq @input
-    sta t5
+    sta sw_cand                 ; (dist_to_ball ecrase t4 / t5)
     lda near_dist,x
     clc
     adc #40
-    sta t4
+    sta sw_lim
     lda ctrl,y
     asl a
     tax
     jsr dist_to_ball
-    cmp t4
+    cmp sw_lim
     bcc @input
-    lda t5
+    lda sw_cand
     jsr set_ctrl
     lda #T_SWITCH_AUTO
     sta switch_t,y

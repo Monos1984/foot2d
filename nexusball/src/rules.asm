@@ -400,6 +400,12 @@ call_foul:
     lda #TEAM_SIZE
 :   clc
     adc #3
+    sta t0
+    asl a
+    cmp cp
+    bne :+
+    inc t0                      ; le milieu choisi est l'exclu : le suivant
+:   lda t0
     jsr set_ctrl
     ldx cp
 @np:

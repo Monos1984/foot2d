@@ -67,22 +67,12 @@ load_menubg:
     LZ_SRC gfx_menubg_map
     ldx #VRAM_BG1_MAP
     jsr lz_vram
-    ldx #32
-    ldy #0
-@p: tyx
-    lda f:gfx_menubg_pal,x
-    pha
-    tya
-    lsr a
-    clc
-    adc #32
-    tax
-    pla
-    jsr cg_write
-    iny
-    iny
-    cpy #32
-    bne @p
+    lda #.loword(gfx_menubg_pal)
+    sta tr_zp
+    lda #^gfx_menubg_pal
+    sta tr_zp+2
+    lda #48 * 2
+    jsr bg1_pal_load
     lda f:gfx_menubg_pal + 20
     sta ring_base
     sta ring_pal
@@ -102,6 +92,117 @@ load_menubg:
     sta bg1_mode
 @d: stz scroll_x
     stz scroll_y
+    rts
+
+; bg1_pal_load : [tr_zp] = palettes des groupes 1..4 (16 couleurs chacun), A = taille (octets)
+;   groupe 1 -> CGRAM 32 (palette 2), 2 -> 80 (5), 3 -> 96 (6), 4 -> 112 (7) ; couleur 0 -> fond
+bg1_pal_load:
+    .a16
+    .i16
+    sta t2
+    ldy #0
+@l: tya
+    lsr a
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tax
+    lda f:grp_slot,x
+    and #$00FF
+    sta t1
+    pla
+    and #$000F
+    clc
+    adc t1
+    tax
+    lda [tr_zp],y
+    jsr cg_write
+    iny
+    iny
+    cpy t2
+    bne @l
+    lda [tr_zp]
+    ldx #0
+    jmp cg_write
+
+grp_slot:
+    .byte 32, 80, 96, 112
+
+; -----------------------------------------------------------------------------
+;  ad_show : A = numero de l'ecran de publicite. Appele ecran eteint, rend la main
+;  ecran eteint (fond BG1 = publicite : ensure_stadium_bg remet le stade).
+;  Environ 3 secondes, A / B / START pour passer.
+; -----------------------------------------------------------------------------
+ad_show:
+    .a16
+    .i16
+    asl a
+    asl a
+    asl a
+    tay
+    lda ad_tab,y
+    sta lz_src
+    lda ad_tab+2,y
+    sta lz_src+2
+    phy
+    ldx #VRAM_BG1_CHR
+    jsr lz_vram
+    ply
+    lda ad_tab+4,y
+    sta lz_src
+    lda ad_tab+2,y
+    sta lz_src+2
+    phy
+    ldx #VRAM_BG1_MAP
+    jsr lz_vram
+    ply
+    lda ad_tab+6,y
+    sta tr_zp
+    lda #^gfx_ad0_pal
+    sta tr_zp+2
+    lda #64 * 2
+    jsr bg1_pal_load
+    lda #2
+    sta bg1_mode
+    lda scroll_x
+    pha
+    lda scroll_y
+    pha
+    stz scroll_x
+    stz scroll_y
+    jsr oam_clear
+    stz hdma_sh
+    sep #$20
+    .a8
+    lda #$11                    ; BG1 + OBJ
+    sta tm_sh
+    stz ts_sh
+    stz cgw_sh
+    stz cga_sh
+    rep #$20
+    .a16
+    jsr screen_on
+    ldy #0
+@w: phy
+    jsr wait_frame
+    ply
+    iny
+    cpy #20
+    bcc @w
+    cpy #200
+    bcs @end
+    lda joy_new
+    ora joy_new+2
+    and #(JOY_A | JOY_B | JOY_START)
+    beq @w
+@end:
+    jsr screen_off
+    pla
+    sta scroll_y
+    pla
+    sta scroll_x
     rts
 
 ; ensure_stadium_bg : (ecran eteint) remet le stade sur BG1 si le fond des menus y est

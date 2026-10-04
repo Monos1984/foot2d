@@ -301,3 +301,6 @@ tr_h:       .res 2
 tr_c:       .res 2
 tr_buf:     .res 40
 rl_page:    .res 2
+sw_cand:    .res 2          ; changement automatique de joueur
+sw_lim:     .res 2
+ad_flag:    .res 2          ; mi-temps : ecran de publicite affiche

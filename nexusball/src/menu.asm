@@ -12,12 +12,7 @@ title_screen:
     jsr safe_screen_off
     jsr bg3_clear
     jsr oam_clear
-    jsr ensure_stadium_bg
-    lda #64
-    sta scroll_x
-    lda #40
-    sta scroll_y
-    stz title_scroll
+    jsr load_menubg
     ; logo (BG2) et panneau translucide du menu
     jsr layers_menu
     jsr title_hdma
@@ -67,16 +62,6 @@ title_screen:
 
 @loop:
     jsr wait_frame
-    ; fond qui defile doucement
-    inc title_scroll
-    lda title_scroll
-    lsr a
-    lsr a
-    and #$01FF
-    cmp #$0100
-    bcc :+
-    eor #$01FF
-:   sta scroll_x
     jsr oam_begin
     jsr oam_finish
     jsr crowd_update

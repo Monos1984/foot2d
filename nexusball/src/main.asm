@@ -62,7 +62,19 @@ gfx_menubg_map: .incbin "data/gen/menubg.map.lz"
 gfx_menubg_pal: .incbin "data/gen/menubg.pal"
 gfx_crowd_chr:  .incbin "data/gen/crowd.chr.lz"
 gfx_crowd_map:  .incbin "data/gen/crowd.map.lz"
+gfx_ad0_chr:    .incbin "data/gen/ad0.chr.lz"
+gfx_ad0_map:    .incbin "data/gen/ad0.map.lz"
+gfx_ad0_pal:    .incbin "data/gen/ad0.pal"
+gfx_ad1_chr:    .incbin "data/gen/ad1.chr.lz"
+gfx_ad1_map:    .incbin "data/gen/ad1.map.lz"
+gfx_ad1_pal:    .incbin "data/gen/ad1.pal"
 
+.segment "RODATA"
+; publicites : chr, banque, map, palette (banque $C1)
+ad_tab:
+    .word .loword(gfx_ad0_chr), ^gfx_ad0_chr, .loword(gfx_ad0_map), .loword(gfx_ad0_pal)
+    .word .loword(gfx_ad1_chr), ^gfx_ad1_chr, .loword(gfx_ad1_map), .loword(gfx_ad1_pal)
+.segment "GFX"
 ; stades : banques $C2 / $C3 (tiles, tilemap) et palettes en banque $80
 .include "data/gen/stadiums.inc"
 
