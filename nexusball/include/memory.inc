@@ -304,7 +304,6 @@ rl_page:    .res 2
 sw_cand:    .res 2          ; changement automatique de joueur
 sw_lim:     .res 2
 ad_flag:    .res 2          ; mi-temps : ecran de publicite affiche
-zn_gx:      .res 2
 b_relx:     .res 2          ; x (pixels) du dernier lanceur, $FFFF : pas un tir
 gv_team:    .res 2
 bn_team:    .res 2          ; bandeau des messages
@@ -332,3 +331,21 @@ ts_slot:    .res 2
 ts_t:       .res 2
 ts_attr:    .res 2
 fs_buf:     .res 6
+kz_cx:      .res 2
+kz_cy:      .res 2
+kz_r:       .res 2
+ko_active:  .res 2          ; coup d'envoi en cours (passe obligatoire)
+ko_p1:      .res 2
+ko_p2:      .res 2
+ko_t:       .res 2
+ko_lim:     .res 2
+ko_y:       .res 2
+rs_mode:    .res 2          ; ecran de score
+rs_t:       .res 2
+rs_row:     .res 2
+rs_pos:     .res 2
+rs_a:       .res 2
+rs_b:       .res 2
+rs_aa:      .res 2
+rs_s:       .res 2
+rs_la:      .res 2

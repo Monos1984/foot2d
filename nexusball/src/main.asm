@@ -46,7 +46,9 @@
 .include "audio.asm"
 .include "comp.asm"
 .include "editor.asm"
+.segment "CODE"
 .include "tsel.asm"
+.include "result.asm"
 .include "lang.asm"
 
 ; -----------------------------------------------------------------------------

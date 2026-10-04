@@ -1,5 +1,23 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.0 — coup d'envoi, écrans de score, ambiance
+
+- Raquettes : aucun joueur de champ n'entre dans aucune des deux raquettes (seuls les gardiens).
+- Coup d'envoi : deux joueurs dans le rond central ; le porteur ne bouge pas et doit passer à son
+  partenaire (humain : n'importe quel bouton d'action ; IA : après 2/3 s). Le jeu reprend quand
+  le partenaire a le ballon ; jusque-là, personne d'autre n'entre dans le rond central.
+- Mi-temps : écran de score (plaques, gros chiffres, noms, statistiques) avant les publicités.
+- Fin de match : nouvel écran de statistiques (barres aux couleurs des équipes pour tirs,
+  possession, fautes ; tirs au but).
+- Son : buzzer long pour la fin des périodes (buzzer court pour les fautes), ambiance de stade
+  (grosse caisse, claquements de mains, cor) pendant le match, bruit de foule diminué,
+  silence pendant le logo OFFGAME (volume de la foule à zéro au démarrage du SPC700).
+- Pilote SPC700 : table d'instruments propre à chaque morceau.
+- Équilibrage après les raquettes interdites : gardien un peu moins sûr, tir moins gêné par un
+  adversaire au contact.
+- Code relié en banque $C0 (miroir FastROM de $80) : les modules compétitions, éditeurs et écran de
+  score sont dans la moitié basse $C0:0000-7FFF (place libérée en banque haute).
+
 ## 0.10.0 — règles, buzzer, bandeaux, intro, choix des équipes
 
 - Règle : seul le gardien peut entrer dans sa raquette (les joueurs de champ sont repoussés sur

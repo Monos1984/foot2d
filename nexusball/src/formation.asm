@@ -320,9 +320,18 @@ place_kickoff:
     bne @nk
     lda t1
     cmp #5                      ; joueur le plus avance de l'equipe qui engage : au centre
-    bne @nk
+    bne :+
     lda #(FIELD_CX - 6)
     sta t0
+    lda #FIELD_CY * FP
+    sta ko_y
+    bra @nk
+:   cmp #4                      ; son partenaire, en retrait dans le rond central
+    bne @nk
+    lda #(FIELD_CX - 28)
+    sta t0
+    lda #(FIELD_CY + 16) * FP
+    sta ko_y
 @nk:
     lda p_team,x
     asl a
@@ -345,7 +354,16 @@ place_kickoff:
     asl a
     asl a
     sta p_y,x
-    stz p_vx,x
+    ; les deux joueurs du coup d'envoi
+    lda p_team,x
+    cmp kick_team
+    bne :+
+    lda t1
+    cmp #4
+    bcc :+
+    lda ko_y
+    sta p_y,x
+:   stz p_vx,x
     stz p_vy,x
     stz p_z,x
     stz p_vz,x
@@ -392,6 +410,17 @@ place_kickoff:
     jsr ball_reset
     lda t0
     jsr take_ball
+    ; coup d'envoi : passe obligatoire au partenaire
+    lda t0
+    sta ko_p1
+    dec a
+    sta ko_p2
+    lda #1
+    sta ko_active
+    lda #TU_SEC * 2 / 3
+    sta ko_t
+    lda #TU_SEC * 6
+    sta ko_lim
     ; manettes : joueur controle = attaquant (ou milieu) de chaque equipe humaine
     jsr init_control
     rts

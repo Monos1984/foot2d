@@ -160,7 +160,8 @@ SFX = [
     ("MENU",    7, SINE,  0x2000, 0x28, 0x8F, 0xFA),
     ("OK",      7, SINE,  0x3000, 0x30, 0x8F, 0xF8),
     ("OOH",     3, SINE,  0x1000, 0x30, 0x88, 0xE9),
-    ("BUZZER",  5, BUZZ,  0x0700, 0x60, 0x8F, 0xF1),   # fin de periode, fautes
+    ("BUZZER",  5, BUZZ,  0x0700, 0x60, 0x8F, 0xF1),   # fautes
+    ("BUZZLONG", 5, BUZZ, 0x0680, 0x70, 0x8F, 0xEB),   # fin de periode : buzzer long
 ]
 
 # ----------------------------------------------------------------- musique
@@ -205,7 +206,17 @@ def song_jingle():
     return [lead, bass, pad]
 
 
-SONGS = [("TITLE", song_title, True), ("JINGLE", song_jingle, False)]
+def song_chant():
+    """ambiance de stade : grosse caisse, claquements de mains, cor (voix 0, 1, 2)"""
+    boom, clap = note_num("G5"), note_num("D6")
+    drum = [(boom, 25), (boom, 25), (0, 25), (0, 25)] * 4
+    hands = [(0, 50), (clap, 25), (0, 25)] * 4
+    horn = [(note_num("E4"), 50), (note_num("G4"), 50), (note_num("A4"), 100), (0, 200)]
+    return [drum, hands, horn]
+
+
+SONGS = [("TITLE", song_title, True, "inst_tab"), ("JINGLE", song_jingle, False, "inst_tab"),
+         ("CHANT", song_chant, True, "inst_chant")]
 
 
 def build():
@@ -300,11 +311,14 @@ def build():
     a.mov_a_imm(1); a.mov_dpx_a(CH_T); a.mov_dpx_a(CH_ACT)
     a.pop_x()
     a.inc_y(); a.mov_a_y(); a.cmp_a_imm(3); a.bne("ms_ch")
-    # instruments des voix 0..2
-    a.mov_x_imm(0)
+    # instruments des voix 0..2 : table propre au morceau (TMP = n-1)
+    a.mov_a_dp(TMP); a.asl_a(); a.mov_x_a()
+    a.mov_a_absx("inst_ptr"); a.mov_dp_a(PTR); a.inc_x()
+    a.mov_a_absx("inst_ptr"); a.mov_dp_a(PTR + 1)
+    a.mov_y_imm(0)
     a.label("ms_inst")
-    a.mov_a_absx("inst_tab"); a.cmp_a_imm(0xFF); a.beq("ms_done")
-    a.mov_dp_a(0xF2); a.inc_x(); a.mov_a_absx("inst_tab"); a.mov_dp_a(0xF3); a.inc_x()
+    a.mov_a_indy(PTR); a.cmp_a_imm(0xFF); a.beq("ms_done")
+    a.mov_dp_a(0xF2); a.inc_y(); a.mov_a_indy(PTR); a.mov_dp_a(0xF3); a.inc_y()
     a.bra("ms_inst")
     a.label("ms_done")
     a.ret()
@@ -368,7 +382,7 @@ def build():
     regs = [(0x6C, 0x60), (0x0C, 0x5F), (0x1C, 0x5F), (0x2C, 0), (0x3C, 0), (0x4D, 0), (0x2D, 0),
             (0x3D, 0x18), (0x5D, 0x00), (0x6D, 0x00), (0x7D, 0x00), (0x5C, 0x00),
             # ambiance du public : voix 4 en bruit, GAIN direct
-            (0x40, 0x10), (0x41, 0x10), (0x42, 0x00), (0x43, 0x10), (0x44, SINE), (0x45, 0x00), (0x47, 0x7F),
+            (0x40, 0x00), (0x41, 0x00), (0x42, 0x00), (0x43, 0x10), (0x44, SINE), (0x45, 0x00), (0x47, 0x7F),
             (0x6C, 0x3A),   # FLG : echo desactive, bruit ~ 1 kHz
             (0x4C, 0x10)]
     for r, v in regs:
@@ -381,6 +395,15 @@ def build():
                  (0x20, 0x16), (0x21, 0x16), (0x24, SQUARE), (0x25, 0x8A), (0x26, 0xEA)]:
         a.emit(r, v)
     a.emit(0xFF)
+    a.label("inst_chant")
+    for r, v in [(0x00, 0x34), (0x01, 0x34), (0x04, THUMP), (0x05, 0x8F), (0x06, 0xE0),
+                 (0x10, 0x22), (0x11, 0x22), (0x14, CLICK), (0x15, 0x8F), (0x16, 0xE0),
+                 (0x20, 0x12), (0x21, 0x12), (0x24, SQUARE), (0x25, 0x8A), (0x26, 0xEA)]:
+        a.emit(r, v)
+    a.emit(0xFF)
+    a.label("inst_ptr")
+    for s in SONGS:
+        a.emit(("abs", s[3]))
     # effets (8 octets par entree, l'entree 0 est inutilisee)
     a.label("sfx_tab")
     rows = [(0, 0, 0, 0, 0, 0)] + [x[1:] for x in SFX]
@@ -400,7 +423,7 @@ def build():
     a.labels["ptab1"] = a.labels["ptab"] + 1
     # morceaux
     songs_streams = []
-    for name, fn, loop in SONGS:
+    for name, fn, loop, _inst in SONGS:
         chans = fn()
         ptrs = []
         for ch in chans:
@@ -410,7 +433,7 @@ def build():
         a.labels  # noqa
         songs_streams.append(None)
     a.label("song_tab")
-    for name, fn, loop in SONGS:
+    for name, fn, loop, _inst in SONGS:
         for c in range(3):
             a.emit(("abs", "s_%s_%d" % (name, c)))
     for item in songs_streams:

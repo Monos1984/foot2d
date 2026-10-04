@@ -1,3 +1,4 @@
+.segment "CODE2"
 ; =============================================================================
 ;  comp.asm - competitions : CHAMPIONSHIP (ligue), CUP (4/8/16), CUSTOM
 ;  Affectation des equipes CPU / P1 / P2, calendrier, simulation des matchs
@@ -12,7 +13,7 @@ NUM_CITEMS   = 21           ; 16 equipes + TYPE, LENGTH, DIFFICULTY, STADIUM, ST
 
 .segment "RODATA"
 .include "data/gen/sched.inc"
-.segment "CODE"
+.segment "CODE2"
 
 ; -----------------------------------------------------------------------------
 ;  comp_menu : A = emplacement (0 CHAMPIONSHIP, 1 CUP, 2 CUSTOM)
@@ -2225,4 +2226,4 @@ str_tro1:       .byte "*****", 0
 str_tro2:       .byte " ***", 0
 str_tro3:       .byte "  *", 0
 str_tro4:       .byte " ***", 0
-.segment "CODE"
+.segment "CODE2"

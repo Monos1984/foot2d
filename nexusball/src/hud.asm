@@ -566,87 +566,10 @@ hud_full_time:
     .i16
     ldy #.loword(str_fulltime)
     jsr show_msg
-    stz msg_time                ; reste affiche
-    ldx #TPOS(8, MSG_ROW + 2)
-    ldy #16
-    lda #HUD_ATTR
-    jsr fill_tiles
-    ldx #TPOS(8, MSG_ROW + 3)
-    ldy #16
-    jsr fill_tiles
-    lda #HUD_TEAMA
-    sta t0
-    lda #0
-    jsr team_rec
-    tya
-    clc
-    adc #T_SHORT
-    tay
-    ldx #TPOS(9, MSG_ROW + 2)
-    jsr print
-    lda #HUD_TEAMB
-    sta t0
-    lda #1
-    jsr team_rec
-    tya
-    clc
-    adc #T_SHORT
-    tay
-    ldx #TPOS(20, MSG_ROW + 2)
-    jsr print
-    lda #HUD_ATTR
-    sta t0
-    lda score
-    ldx #TPOS(13, MSG_ROW + 2)
-    jsr print_num2
-    lda score+2
-    ldx #TPOS(17, MSG_ROW + 2)
-    jsr print_num2
-    ldx #TPOS(16, MSG_ROW + 2)
-    lda #('-' - 32 + HUD_ATTR)
-    sta bg3_map,x
-    ldx #TPOS(10, MSG_ROW + 3)
-    ldy #.loword(str_press_start)
-    jsr print
-    ; statistiques
-    lda #MSG_ROW + 5
-    sta hs_row
-    ldy #.loword(str_st_shots)
-    lda st_shots
-    sta t6
-    lda st_shots+2
-    sta t7
-    jsr stat_line
-    jsr poss_pct
-    ldy #.loword(str_st_poss)
-    jsr stat_line
-    ldy #.loword(str_st_fouls)
-    lda st_fouls
-    sta t6
-    lda st_fouls+2
-    sta t7
-    jsr stat_line
-    ; resultat des tirs au but
-    lda so_active
-    beq @d
-    ldx #TPOS(8, MSG_ROW + 4)
-    ldy #16
-    lda #HUD_ATTR
-    jsr fill_tiles
-    lda #HUD_ATTR
-    sta t0
-    ldx #TPOS(9, MSG_ROW + 4)
-    ldy #.loword(str_so_res)
-    jsr print
-    lda so_goals
-    ldx #TPOS(19, MSG_ROW + 4)
-    jsr print_digit
-    lda #('-' - 32 + HUD_ATTR)
-    sta bg3_map + TPOS(20, MSG_ROW + 4)
-    lda so_goals+2
-    ldx #TPOS(21, MSG_ROW + 4)
-    jsr print_digit
-@d: rts
+    stz msg_time                ; reste affiche jusqu'a l'ecran des statistiques
+    lda #T_GOAL
+    sta m_timer
+    rts
 
 ; stat_line : Y = libelle, t6 / t7 = valeurs, ligne hs_row (puis +1)
 stat_line:

@@ -1,3 +1,4 @@
+.segment "CODE2"
 ; =============================================================================
 ;  editor.asm - CREATE PLAYER / CREATE TEAM, clavier virtuel, bloc SRAM d'edition
 ;
@@ -1971,4 +1972,4 @@ stat_labels:
 gk_labels:
     .word .loword(str_re), .loword(str_po), .loword(str_pos), .loword(str_th)
     .word .loword(str_ca), .loword(str_pos), .loword(str_sta)
-.segment "CODE"
+.segment "CODE2"

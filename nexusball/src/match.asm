@@ -90,9 +90,9 @@ start_match:
     jsr oam_clear
     jsr screen_on
     stz title_music
-    lda #MUS_STOP
+    lda #MUS_CHANT              ; ambiance : grosse caisse, mains, cor
     jsr sfx_play
-    lda #$18
+    lda #$0C
     jsr crowd_level
 
 match_loop:
@@ -187,7 +187,9 @@ st_play:
     jsr compute_nearest
     jsr human_input
     jsr ai_update
+    jsr ko_update
     jsr players_update
+    jsr ko_push
     jsr ball_update
     jsr rules_update
     jsr separate_players
@@ -238,11 +240,13 @@ st_half:
     lda m_half
     cmp #1
     bne @noad
-    jsr screen_off
+    lda #0
+    jsr result_screen           ; score de la mi-temps (rend l'ecran eteint)
     lda #1
     jsr ad_show
     jsr ensure_stadium_bg
     jsr layers_match
+    jsr bg2_crowd_map
     jsr bg3_clear
     lda #1
     sta ad_flag
@@ -270,6 +274,8 @@ st_half:
     stz m_acc
     jsr hud_draw_static
     jsr new_kickoff
+    lda #MUS_CHANT
+    jsr sfx_play
     lda ad_flag
     beq @w
     jsr camera_snap
@@ -314,20 +320,11 @@ st_end:
     jsr ball_update
     lda m_timer
     bne @w
-    lda joy_new
-    ora joy_new+2
-    and #(JOY_START | JOY_A | JOY_B)
-    bne @quit
-    lda game_mode
-    cmp #MODE_CPU
-    bne @w
-    lda joy_cur                 ; mode demo : retour automatique
-    ora joy_cur+2
-    bne @quit
-@w: clc
-    rts
-@quit:
+    lda #1
+    jsr result_screen           ; statistiques de fin de match
     sec
+    rts
+@w: clc
     rts
 
 ; --- faute : courte interruption puis remise en jeu
@@ -378,7 +375,9 @@ clock_update:
 
 period_over:
     .a16
-    lda #SFX_BUZZER
+    lda #SFX_BUZZLONG
+    jsr sfx_play
+    lda #MUS_STOP
     jsr sfx_play
     lda #T_GOAL
     sta m_timer
@@ -713,3 +712,110 @@ str_radar_off: .byte "RADAR OFF", 0
 str_quit:   .byte "QUIT MATCH", 0
 str_teamset: .byte "TEAM SETUP", 0
 .segment "CODE"
+
+; -----------------------------------------------------------------------------
+;  Coup d'envoi : le porteur (ko_p1) doit passer a son partenaire (ko_p2). Le match
+;  reprend quand le partenaire a le ballon. D'ici la, personne d'autre n'entre dans
+;  le rond central et le porteur ne bouge pas.
+; -----------------------------------------------------------------------------
+ko_update:
+    .a16
+    .i16
+    lda ko_active
+    bne :+
+    rts
+:   lda ko_lim
+    sec
+    sbc rc+RC_TDEC
+    bpl :+
+    lda #0
+:   sta ko_lim
+    beq @end
+    ; le partenaire attend le ballon sur place
+    lda ko_p2
+    asl a
+    tax
+    stz p_want,x
+    stz p_act,x
+    lda b_owner
+    cmp ko_p1
+    beq @carrier
+    cmp #NO_OWNER
+    beq @rts                    ; ballon en l'air
+@end:
+    stz ko_active               ; recu (ou intercepte) : le match reprend
+@rts:
+    rts
+@carrier:
+    asl a
+    tax
+    stx cp
+    stz p_want,x
+    stz b_carry                 ; pas de limite de port avant la passe
+    lda p_act,x
+    and #.loword(~JOY_R)
+    stz p_act,x
+    ldy p_human,x
+    beq @ai
+    cmp #0
+    bne @pass                   ; humain : n'importe quel bouton d'action
+    rts
+@ai:
+    lda ko_t
+    sec
+    sbc rc+RC_TDEC
+    bpl :+
+    lda #0
+:   sta ko_t
+    beq @pass
+    rts
+@pass:
+    ldx cp
+    lda ko_p2
+    asl a
+    tay
+    lda rc+RC_PASS_H
+    sta l_spd
+    lda #9
+    sta t0
+    lda #12
+    sta l_zt
+    stz l_foot
+    jsr pass_to_player
+    ldx cp
+    lda #SPR_THROW
+    sta p_spr,x
+    lda #SFX_PASS
+    jmp sfx_play
+
+; ko_push : pendant le coup d'envoi, les autres joueurs restent hors du rond central
+ko_push:
+    .a16
+    .i16
+    lda ko_active
+    bne :+
+    rts
+:   lda #FIELD_CX
+    sta kz_cx
+    lda #FIELD_CY
+    sta kz_cy
+    lda #44
+    sta kz_r
+    ldx #0
+@l: stx cp
+    txa
+    lsr a
+    cmp ko_p1
+    beq @n
+    cmp ko_p2
+    beq @n
+    lda p_state,x
+    cmp #PS_OUT
+    beq @n
+    jsr push_out
+@n: ldx cp
+    inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne @l
+    rts

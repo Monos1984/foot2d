@@ -88,7 +88,7 @@ gk_try:
     sta t3
     lda p_speed,x
     clc
-    adc #7
+    adc #2                      ; (raquettes interdites : gardien un peu moins sur)
     sec
     sbc t3
     sta t3

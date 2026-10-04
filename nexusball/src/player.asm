@@ -363,54 +363,68 @@ player_step:
     jsr player_anim
     rts
 
-; keep_out_zone : X = cp. Un joueur de champ ne peut pas entrer dans la zone de son gardien
-; (demi-cercle de rayon ZONE_R devant son anneau) : il est repousse sur le bord.
+; keep_out_zone : X = cp. Seul le gardien peut entrer dans une raquette (demi-cercle de
+; rayon ZONE_R devant chaque anneau) : un joueur de champ est repousse sur le bord.
 keep_out_zone:
     .a16
     .i16
     lda p_role,x
     bne :+
     rts
-:   jsr own_goal_x
-    sta zn_gx
+:   lda #ZONE_R + 4
+    sta kz_r
+    lda #FIELD_CY
+    sta kz_cy
+    lda #FIELD_L
+    sta kz_cx
+    jsr push_out
+    lda #FIELD_R
+    sta kz_cx
+    jmp push_out
+
+; push_out : X = cp -> si le joueur est a moins de kz_r pixels de (kz_cx, kz_cy),
+; il est replace sur le cercle. Preserve X.
+push_out:
+    .a16
+    .i16
     lda p_x,x
     ASR_A 4
     sec
-    sbc zn_gx
+    sbc kz_cx
     sta t0
     lda p_y,x
     ASR_A 4
     sec
-    sbc #FIELD_CY
+    sbc kz_cy
     sta t1
     jsr dist_approx
     ldx cp
-    cmp #ZONE_R + 4
+    cmp kz_r
     bcc :+
     rts
 :   lda p_x,x
     ASR_A 4
     sec
-    sbc zn_gx
+    sbc kz_cx
     sta t0
     lda p_y,x
     ASR_A 4
     sec
-    sbc #FIELD_CY
+    sbc kz_cy
     sta t1
     ora t0
     bne :+
     inc t1                      ; centre exact : direction arbitraire
 :   jsr atan64
     pha
-    lda #ZONE_R + 4
+    lda kz_r
     sta t2
     pla
     jsr vel_from_dir
     ldx cp
     lda t0
     clc
-    adc zn_gx
+    adc kz_cx
     asl a
     asl a
     asl a
@@ -418,7 +432,7 @@ keep_out_zone:
     sta p_x,x
     lda t1
     clc
-    adc #FIELD_CY
+    adc kz_cy
     asl a
     asl a
     asl a
@@ -1148,7 +1162,7 @@ act_shoot:
     bcs :+
     lda l_err
     clc
-    adc #6
+    adc #3
     sta l_err
 :   lda #RING_Z
     sta l_zt
