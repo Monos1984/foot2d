@@ -4,7 +4,7 @@
 
 NUM_FORMS = 6
 
-.segment "RODATA"
+.segment "DATA0"
 ; par formation, 5 slots de champ : x, y (pixels, equipe attaquant vers la droite), poste
 ; le slot 5 (dernier) est le plus avance : il donne le coup d'envoi
 form_tab:
@@ -45,7 +45,16 @@ form_slot_ptr:
     adc t6                      ; (slot-1)*6
     adc t7
     adc #.loword(form_tab)
-    tay
+    phx                         ; table en banque $C0 : copie de l'entree dans fs_buf
+    tax
+    lda f:$C00000,x
+    sta fs_buf
+    lda f:$C00002,x
+    sta fs_buf+2
+    lda f:$C00004,x
+    sta fs_buf+4
+    plx
+    ldy #.loword(fs_buf)
     rts
 
 ; -----------------------------------------------------------------------------

@@ -378,9 +378,7 @@ clock_update:
 
 period_over:
     .a16
-    lda #SFX_WHISTLE
-    jsr sfx_play
-    lda #SFX_WHISTLE
+    lda #SFX_BUZZER
     jsr sfx_play
     lda #T_GOAL
     sta m_timer
@@ -452,6 +450,7 @@ goal_scored:
     bne :+
     jmp so_goal
 :   sta t0
+    sta gs_team
     ; but contre son camp : toujours 1 point
     lda b_last
     cmp #NO_OWNER
@@ -487,15 +486,29 @@ goal_scored:
     jsr sfx_play
     lda #SFX_WHISTLE
     jsr sfx_play
+    ldy #.loword(str_goal1)
     lda b_points
     cmp #2
-    beq @two
-    ldy #.loword(str_goal1)
-    bra @msg
-@two:
+    bne :+
     ldy #.loword(str_goal2)
-@msg:
-    jsr show_msg
+:   ; marqueur : dernier joueur de l'equipe qui marque a avoir touche le ballon
+    ldx #$FF
+    lda b_last
+    cmp #NO_OWNER
+    beq :+
+    asl a
+    tax
+    lda p_team,x
+    cmp gs_team
+    php
+    txa
+    lsr a
+    tax
+    plp
+    beq :+
+    ldx #$FF
+:   lda gs_team
+    jsr show_tmsg
     lda #T_GOAL
     sta msg_time
     ; public en folie

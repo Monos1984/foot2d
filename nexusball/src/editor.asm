@@ -1415,7 +1415,10 @@ te_colors:
     lda te_c1
     jsr kitcol_ptr
     ldx #0
-@h: lda kitcol_kit,y
+@h: phx
+    tyx
+    lda f:kitcol_kit,x
+    plx
     sta ed_team+T_KIT,x
     iny
     iny
@@ -1431,7 +1434,10 @@ te_colors:
     lda te_c2
     jsr kitcol_ptr
     ldx #0
-@a: lda kitcol_kit,y
+@a: phx
+    tyx
+    lda f:kitcol_kit,x
+    plx
     sta ed_team+T_AWAY,x
     iny
     iny

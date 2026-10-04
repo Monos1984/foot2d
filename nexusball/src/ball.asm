@@ -25,6 +25,8 @@ ball_reset:
     sta b_points
     lda #$7FFF
     sta b_passt
+    lda #$FFFF
+    sta b_relx
     rts
 
 ; -----------------------------------------------------------------------------
@@ -206,7 +208,9 @@ ball_update:
     lda #1
     bra :++
 :   lda #0
-:   jsr goal_scored
+:   jsr goal_valid
+    bcc @bl
+    jsr goal_scored
     lda #(FIELD_L - 3) * FP
     sta b_x
     stz b_vx
@@ -230,7 +234,9 @@ ball_update:
     lda #1
     bra :++
 :   lda #0
-:   jsr goal_scored
+:   jsr goal_valid
+    bcc @br
+    jsr goal_scored
     lda #(FIELD_R + 3) * FP
     sta b_x
     stz b_vx
@@ -364,7 +370,7 @@ ball_pickup:
     sbc p_y,x
     ABS_A
     cmp #7 * FP
-    bcs @n
+    jcs @n
     ; hauteur atteignable
     lda p_z,x
     clc
@@ -407,6 +413,10 @@ ball_pickup:
     lsr a
     sta b_nograb
     sta b_last
+    lda #$FFFF
+    sta b_relx
+    txa
+    lsr a
     lda #T_NOGRAB / 2
     sta b_nograb_t
     rts
@@ -421,3 +431,59 @@ ball_pickup:
     dec near_tmp+2
     jne @l
     rts
+
+; -----------------------------------------------------------------------------
+;  goal_valid : A = equipe qui marquerait -> C = 1 si le point compte (A preserve).
+;  Un tir lance depuis sa propre moitie de terrain ne compte pas (sauf contre son
+;  camp et pendant les tirs au but) : message "NO SCORE FROM OWN HALF".
+; -----------------------------------------------------------------------------
+goal_valid:
+    .a16
+    .i16
+    pha
+    sta gv_team
+    ldx m_state
+    cpx #MS_SHOOT
+    beq @ok
+    lda b_relx
+    cmp #$FFFF
+    beq @ok
+    lda b_last
+    cmp #NO_OWNER
+    beq @ok
+    asl a
+    tax
+    lda p_team,x
+    cmp gv_team
+    bne @ok                     ; contre son camp
+    lda gv_team
+    asl a
+    tax
+    lda team_dir,x
+    bne @left
+    lda b_relx                  ; attaque vers la droite : moitie gauche interdite
+    cmp #FIELD_CX
+    bcc @no
+    bra @ok
+@left:
+    lda b_relx
+    cmp #FIELD_CX
+    bcs @no
+@ok:
+    pla
+    sec
+    rts
+@no:
+    lda #$FFFF
+    sta b_relx
+    lda gv_team
+    ldx #$FF
+    ldy #.loword(str_ownhalf)
+    jsr show_tmsg
+    pla
+    clc
+    rts
+
+.segment "RODATA"
+str_ownhalf:    .byte "NO SCORE FROM OWN HALF", 0
+.segment "CODE"

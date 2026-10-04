@@ -850,23 +850,8 @@ def build_font():
             if opaque and code == 95:  # '_' -> bord accentue
                 px = [3] * 8 + [1] * 56
             data += enc_tile(px, 2)
-    # gros titre : lettres 16x16 (glyph 5x7 x2 + ombre) -> 4 tiles chacune, a partir de 128
-    letters = sorted(set(BIG_TITLE))
-    for ch in letters:
-        im = Img(16, 16, 0)
-        g = FONT[ch]
-        for r, row in enumerate(g):
-            for k, b in enumerate(row):
-                if b == "1":
-                    im.rect(k * 2 + 2, r * 2 + 2, k * 2 + 3, r * 2 + 3, 1)
-        for r, row in enumerate(g):
-            for k, b in enumerate(row):
-                if b == "1":
-                    im.rect(k * 2 + 1, r * 2 + 1, k * 2 + 2, r * 2 + 2, 3 if r < 3 else 2)
-        for ty in (0, 1):
-            for tx in (0, 1):
-                data += enc_tile([im.get(tx * 8 + c, ty * 8 + r) for r in range(8) for c in range(8)], 2)
-    hud = build_hud_tiles(128 + 4 * len(letters))
+    letters = []
+    hud = build_hud_tiles(128)
     for t in hud["tiles"]:
         data += enc_tile(t, 2)
     assert len(data) // 16 <= 256, len(data) // 16
@@ -974,6 +959,41 @@ def build_hud_tiles(base):
                 edge = x == lim if side == 1 else x == 7 - lim
                 t.append(3 if edge else (1 if inside else 0))
         tiles.append(t)
+    # bandeau des messages du match (8x8) : 1 fond sombre, 2 couleur d'accent, 3 blanc
+    def tile8(name, f):
+        syms[name] = base + len(tiles)
+        tiles.append([f(x, y) for y in range(8) for x in range(8)])
+
+    def top(x, y, cut):
+        if y < 3:
+            return 0
+        if cut == 1 and x < 7 - (y - 3) * 2:
+            return 0
+        if cut == 2 and x > (y - 3) * 2:
+            return 0
+        if y in (3, 4):
+            return 3 if y == 3 and cut == 0 and x % 4 == 0 else 2
+        return 1
+
+    def bot(x, y, cut):
+        if y > 4:
+            return 0
+        if cut == 1 and x < y * 2 - 1:
+            return 0
+        if cut == 2 and x > 8 - y * 2:
+            return 0
+        if y in (3, 4):
+            return 2
+        return 1
+    tile8("BN_TL", lambda x, y: top(x, y, 1))
+    tile8("BN_T", lambda x, y: top(x, y, 0))
+    tile8("BN_TR", lambda x, y: top(x, y, 2))
+    tile8("BN_BL", lambda x, y: bot(x, y, 1))
+    tile8("BN_B", lambda x, y: bot(x, y, 0))
+    tile8("BN_BR", lambda x, y: bot(x, y, 2))
+    tile8("BN_L", lambda x, y: 2 if x in (2, 3) else (3 if x == 5 and 2 <= y <= 5 else (1 if x > 3 else 0)))
+    tile8("BN_R", lambda x, y: 2 if x in (4, 5) else (3 if x == 2 and 2 <= y <= 5 else (1 if x < 4 else 0)))
+    tile8("BN_CHEV", lambda x, y: 2 if (abs(y - 3.5) < 4 and (x - abs(y - 3.5)) in (1, 2, 4, 5)) else 1)
     return {"tiles": tiles, "syms": syms}
 
 
@@ -1008,9 +1028,11 @@ def main():
             seg = "DATA2"
             f.write('.segment "%s"\nstad%d_chr: .incbin "data/gen/stad%d.chr.lz"\n'
                     'stad%d_map: .incbin "data/gen/stad%d.map.lz"\n' % (seg, n, n, n, n))
-        f.write('.segment "RODATA"\n')
+        f.write('.segment "DATA0"\n')
         for n, st in enumerate(STADIUMS):
             f.write('stad%d_pal: .incbin "data/gen/stad%d.pal"\n' % (n, n))
+        f.write('.segment "RODATA"\n')
+        for n, st in enumerate(STADIUMS):
             f.write('stad%d_name: .byte "%s", 0\n' % (n, st["name"]))
         f.write("; par stade : chr compresse (long), reserve, map compressee (long), palette, nom\nstadium_tab:\n")
         for n in range(len(STADIUMS)):
@@ -1067,12 +1089,15 @@ def main():
         cols = []
         for g in sorted(groups):
             cols += groups[g]
+        if name.startswith("ad"):
+            cols += [0] * (64 - len(cols))
         open(os.path.join(GEN, name + ".pal"), "wb").write(b"".join(struct.pack("<H", c) for c in cols))
         write_png(os.path.join(PREV, "preview_%s.png" % name), cv.w, cv.h, scenes.preview(cv, groups))
         print("%s : %d tiles" % (name, len(st)))
     scene_out("menubg", scenes.build_menubg(), scenes.MENU_GROUPS)
     for n in range(2):
         scene_out("ad%d" % n, scenes.build_ad(n), scenes.AD_GROUPS)
+    scene_out("ad2", scenes.build_offgame(), scenes.LOGO_GROUPS)
     pal[0] = FIELD_PAL[0]
     logo = build_logo()
     lchr, lmap, lcount = build_logo_data(logo)

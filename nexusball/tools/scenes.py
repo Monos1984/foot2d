@@ -463,3 +463,67 @@ def build_ad(n):
         ad_hyperion(cv, 12, 30, 243, 104)
         ad_zentek(cv, 12, 116, 243, 196)
     return cv
+
+
+# ----------------------------------------------------------------------------- logo OFFGAME
+LOGO_GROUPS = {
+    1: SKY + [c5(2, 4, 12), c5(4, 10, 22), c5(6, 18, 30), c5(14, 26, 31), c5(26, 30, 31),
+              c5(31, 31, 31), c5(16, 6, 24), c5(24, 10, 28), c5(31, 16, 6), c5(3, 3, 8)],
+}
+
+
+def build_offgame():
+    G = 16
+    cv = Canvas(256, 224)
+    for y in range(224):
+        v = 1.6 - abs(y - 100) / 70.0
+        for x in range(256):
+            cv.put(x, y, max(0, min(3, dith(v + 0.4 * math.exp(-((x - 128) / 90.0) ** 2), x, y))))
+    word = "OFFGAME"
+    sc = 5
+    w = text_w(word, sc)
+    x0, y0 = 128 - w // 2, 92
+    # embleme : anneau lumineux et triangle "play"
+    ex, ey = 128, 50
+    for yy in range(ey - 20, ey + 21):
+        for xx in range(ex - 20, ex + 21):
+            d = math.hypot(xx - ex, yy - ey)
+            if 15 <= d <= 18:
+                cv.put(xx, yy, G + (10 if d < 16 else 9 if d < 17 else 8))
+            elif 18 < d <= 19.5 and (xx + yy) % 2 == 0:
+                cv.put(xx, yy, G + 7)
+    for yy in range(-8, 9):
+        for xx in range(-6, 10):
+            if xx >= -6 and abs(yy) <= (10 - xx) * 0.5 and xx <= 9:
+                cv.put(ex + xx, ey + yy, G + (14 if xx < 2 else 13))
+    # contour sombre puis degrade vertical (blanc -> cyan -> bleu)
+    text(cv, word, x0, y0, sc, G + 15, outline=G + 15)
+    pts = []
+    for yy in range(y0, y0 + 7 * sc):
+        for xx in range(x0, x0 + w):
+            pass
+    tmp = Canvas(256, 224)
+    text(tmp, word, x0, y0, sc, 1)
+    for yy in range(y0, y0 + 7 * sc):
+        t = (yy - y0) / (7 * sc)
+        col = G + (10 if t < 0.2 else 9 if t < 0.45 else 8 if t < 0.75 else 7)
+        for xx in range(x0, x0 + w + 2):
+            if tmp.get(xx, yy):
+                cv.put(xx, yy, col)
+    # reflet attenue sous le mot
+    for yy in range(0, 12):
+        sy = y0 + 7 * sc - 1 - yy * 2
+        for xx in range(x0, x0 + w + 2):
+            if tmp.get(xx, sy) and (xx + yy) % 2 == 0:
+                cv.put(xx, y0 + 7 * sc + 6 + yy, G + 6)
+    # filets neon
+    for xx in range(x0 - 20, x0 + w + 20):
+        a = 1 - abs(xx - 128) / (w / 2 + 20)
+        if a > 0.15:
+            cv.put(xx, y0 - 8, G + (12 if a > 0.5 else 13))
+            cv.put(xx, y0 + 7 * sc + 3, G + (14 if a > 0.6 else 12))
+    for k, xx in enumerate(range(x0 - 20, x0 + w + 20, 6)):
+        pass
+    pw = text_w("PRESENTS", 1, spacing=2)
+    text(cv, "PRESENTS", 128 - pw // 2, y0 + 7 * sc + 24, 1, G + 9, spacing=2)
+    return cv

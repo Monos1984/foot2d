@@ -3,7 +3,7 @@
 ;  Usage : lda rc+RC_GRAV
 ; =============================================================================
 
-.segment "RODATA"
+.segment "DATA0"
 
 RC_PASS_BUILD .set 0
 
@@ -40,15 +40,13 @@ init_region:
     rep #$30
     .a16
     .i16
-    ldy #.loword(rc_table_ntsc)
-    lda is_pal
-    beq :+
-    ldy #.loword(rc_table_pal)
-:   ldx #0
-@l: lda a:0,y
-    sta rc,x
-    iny
-    iny
+    ldx #0
+@l: lda is_pal
+    bne :+
+    lda f:rc_table_ntsc,x
+    bra :++
+:   lda f:rc_table_pal,x
+:   sta rc,x
     inx
     inx
     cpx #RC_SIZE

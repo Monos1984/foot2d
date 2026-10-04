@@ -713,11 +713,11 @@ comp_match_info:
     asl a
     clc
     adc t4
-    tay
-    lda a:0,y
+    tax                         ; tables en banque $C0
+    lda f:$C00000,x
     and #$00FF
     sta t0
-    lda a:1,y
+    lda f:$C00001,x
     and #$00FF
     sta t1
     lda t0

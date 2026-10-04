@@ -279,68 +279,286 @@ hud_update:
     jsr clear_msg
 @d: rts
 
-; clear_msg : vide la ligne de message
+; clear_msg : efface le bandeau des messages (3 lignes)
 clear_msg:
     .a16
     .i16
-    ldx #TPOS(0, MSG_ROW)
-    ldy #32
+    ldx #TPOS(0, MSG_ROW - 1)
+    ldy #96
     lda #0
     jsr fill_tiles
     rts
 
 ; -----------------------------------------------------------------------------
-;  show_msg : Y = chaine -> centree sur la ligne de message, sur panneau
+;  Bandeau des messages du match (3 lignes centrees sur MSG_ROW) :
+;    show_msg  : Y = message (cadre cyan)
+;    show_tmsg : A = equipe, X = joueur ($FF aucun), Y = message
+;                -> cadre a la couleur de l'equipe, ">> EUR  MESSAGE  NOM"
 ; -----------------------------------------------------------------------------
 show_msg:
     .a16
     .i16
-    jsr tr_str                  ; longueur de la chaine traduite
-    phy
+    lda #$FF
+    sta bn_team
+    sta bn_pl
+    bra show_banner
+show_tmsg:
+    .a16
+    .i16
+    sta bn_team
+    stx bn_pl
+show_banner:
+    jsr tr_str
+    sty bn_msg
     jsr clear_msg
-    ply
-    ; longueur
-    ldx #0
-    phy
-@len:
+    stz bn_n
+    lda #TXT_ATTR + $1400       ; palette 5 (cyan)
+    ldx bn_team
+    cpx #$FF
+    beq :+
+    lda #TXT_ATTR + $0400       ; palette 1 / 3 : couleur de l'equipe
+    cpx #0
+    beq :+
+    lda #TXT_ATTR + $0C00
+:   sta bn_attr
+    ; equipe : chevron + nom court
+    lda bn_team
+    cmp #$FF
+    beq @msg
+    lda #HT_BN_CHEV
+    clc
+    adc bn_attr
+    jsr bn_put
+    lda #' '
+    jsr bn_chr_team
+    lda bn_team
+    jsr team_rec
+    tya
+    clc
+    adc #T_SHORT
+    tay
+    ldx #4
+@tn:
     lda a:0,y
     and #$00FF
-    beq @lend
-    inx
-    iny
-    bra @len
-@lend:
+    beq @tnd
+    phy
+    phx
+    jsr bn_chr_team
+    plx
     ply
-    ; colonne = (32 - (len + 2)) / 2
-    stx t1
-    txa
+    iny
+    dex
+    bne @tn
+@tnd:
+    lda #' '
+    jsr bn_chr_team
+    lda #' '
+    jsr bn_chr_team
+@msg:
+    ldy bn_msg
+@ml:
+    lda a:0,y
+    and #$00FF
+    beq @mld
     clc
-    adc #2
-    sta t2
+    adc #TXT_PANEL - 32
+    clc
+    adc #TXT_ATTR
+    phy
+    jsr bn_put
+    ply
+    iny
+    bra @ml
+@mld:
+    ; joueur
+    lda bn_pl
+    cmp #$FF
+    beq @draw
+    jsr bn_player_name
+@draw:
+    ; largeur totale = contenu + 4, colonne de depart centree
+    lda bn_n
+    clc
+    adc #4
+    sta bn_w
     lda #32
     sec
-    sbc t2
+    sbc bn_w
     lsr a
-    sta t3
     asl a
+    sta bn_x                    ; offset en octets dans la ligne
+    ; ligne du haut
+    clc
+    adc #TPOS(0, MSG_ROW - 1)
+    tax
+    lda #HT_BN_TL
+    ldy #HT_BN_T
+    jsr bn_row
+    lda bn_x
+    clc
+    adc #TPOS(0, MSG_ROW + 1)
+    tax
+    lda #HT_BN_BL
+    ldy #HT_BN_B
+    jsr bn_row
+    ; ligne du milieu
+    lda bn_x
     clc
     adc #TPOS(0, MSG_ROW)
     tax
+    lda #HT_BN_L
+    clc
+    adc bn_attr
+    sta bg3_map,x
+    inx
+    inx
+    lda #TXT_PANEL
+    clc
+    adc bn_attr
+    sta bg3_map,x
+    inx
+    inx
+    ldy #0
+@c: cpy bn_n
+    beq @cd
     phy
-    phx
-    ldy t2
-    lda #HUD_ATTR
-    jsr fill_tiles
-    plx
+    tya
+    asl a
+    tay
+    lda bn_line,y
     ply
+    sta bg3_map,x
     inx
     inx
-    lda #HUD_ATTR
-    sta t0
-    jsr print
+    iny
+    bra @c
+@cd:
+    lda #TXT_PANEL
+    clc
+    adc bn_attr
+    sta bg3_map,x
+    inx
+    inx
+    lda #HT_BN_R
+    clc
+    adc bn_attr
+    sta bg3_map,x
+    lda #1
+    sta bg3_dirty
     lda #T_MSG
     sta msg_time
     rts
+
+; bn_row : X = position, A = tile du coin gauche (coin droit = +2), Y = tile du bord
+bn_row:
+    .a16
+    .i16
+    sty bn_t
+    pha
+    clc
+    adc bn_attr
+    sta bg3_map,x
+    inx
+    inx
+    ldy bn_w
+    dey
+    dey
+@r: lda bn_t
+    clc
+    adc bn_attr
+    sta bg3_map,x
+    inx
+    inx
+    dey
+    bne @r
+    pla
+    clc
+    adc #2
+    adc bn_attr
+    sta bg3_map,x
+    rts
+
+; bn_put : A = tile -> contenu du bandeau (28 au plus)
+bn_put:
+    .a16
+    .i16
+    ldx bn_n
+    cpx #28
+    bcs :+
+    pha
+    txa
+    asl a
+    tax
+    pla
+    sta bn_line,x
+    inc bn_n
+:   rts
+
+; bn_chr_team : A = caractere -> police opaque, couleur de l'equipe
+bn_chr_team:
+    .a16
+    clc
+    adc #TXT_PANEL - 32
+    clc
+    adc bn_attr
+    jmp bn_put
+
+; bn_player_name : nom du joueur bn_pl (8 caracteres au plus, sans espaces finaux), en or
+bn_player_name:
+    .a16
+    .i16
+    lda bn_pl
+    asl a
+    tax
+    jsr lineup_index
+    lda lineup,y
+    pha
+    lda bn_pl
+    asl a
+    tax
+    lda p_team,x
+    plx
+    jsr roster_rec              ; Y = enregistrement, nom en +0
+    ; longueur utile
+    sty bn_t
+    ldx #0
+    stx bn_w
+@len:
+    lda a:0,y
+    and #$00FF
+    beq @ld
+    cmp #' '
+    beq :+
+    inx
+    stx bn_w                    ; dernier caractere non blanc
+    dex
+:   inx
+    iny
+    cpx #8
+    bne @len
+@ld:
+    lda bn_w
+    beq @d
+    lda #' '
+    jsr bn_chr_team
+    lda #' '
+    jsr bn_chr_team
+    ldy bn_t
+@cp:
+    lda a:0,y
+    and #$00FF
+    clc
+    adc #TXT_PANEL - 32
+    clc
+    adc #TXT_ATTR + $1000       ; palette 4 : or
+    phy
+    jsr bn_put
+    ply
+    iny
+    dec bn_w
+    bne @cp
+@d: rts
 
 ; hud_full_time : ecran de fin de match
 hud_full_time:
@@ -349,11 +567,11 @@ hud_full_time:
     ldy #.loword(str_fulltime)
     jsr show_msg
     stz msg_time                ; reste affiche
-    ldx #TPOS(8, MSG_ROW + 1)
+    ldx #TPOS(8, MSG_ROW + 2)
     ldy #16
     lda #HUD_ATTR
     jsr fill_tiles
-    ldx #TPOS(8, MSG_ROW + 2)
+    ldx #TPOS(8, MSG_ROW + 3)
     ldy #16
     jsr fill_tiles
     lda #HUD_TEAMA
@@ -364,7 +582,7 @@ hud_full_time:
     clc
     adc #T_SHORT
     tay
-    ldx #TPOS(9, MSG_ROW + 1)
+    ldx #TPOS(9, MSG_ROW + 2)
     jsr print
     lda #HUD_TEAMB
     sta t0
@@ -374,24 +592,24 @@ hud_full_time:
     clc
     adc #T_SHORT
     tay
-    ldx #TPOS(20, MSG_ROW + 1)
+    ldx #TPOS(20, MSG_ROW + 2)
     jsr print
     lda #HUD_ATTR
     sta t0
     lda score
-    ldx #TPOS(13, MSG_ROW + 1)
+    ldx #TPOS(13, MSG_ROW + 2)
     jsr print_num2
     lda score+2
-    ldx #TPOS(17, MSG_ROW + 1)
+    ldx #TPOS(17, MSG_ROW + 2)
     jsr print_num2
-    ldx #TPOS(16, MSG_ROW + 1)
+    ldx #TPOS(16, MSG_ROW + 2)
     lda #('-' - 32 + HUD_ATTR)
     sta bg3_map,x
-    ldx #TPOS(10, MSG_ROW + 2)
+    ldx #TPOS(10, MSG_ROW + 3)
     ldy #.loword(str_press_start)
     jsr print
     ; statistiques
-    lda #MSG_ROW + 4
+    lda #MSG_ROW + 5
     sta hs_row
     ldy #.loword(str_st_shots)
     lda st_shots
@@ -411,22 +629,22 @@ hud_full_time:
     ; resultat des tirs au but
     lda so_active
     beq @d
-    ldx #TPOS(8, MSG_ROW + 3)
+    ldx #TPOS(8, MSG_ROW + 4)
     ldy #16
     lda #HUD_ATTR
     jsr fill_tiles
     lda #HUD_ATTR
     sta t0
-    ldx #TPOS(9, MSG_ROW + 3)
+    ldx #TPOS(9, MSG_ROW + 4)
     ldy #.loword(str_so_res)
     jsr print
     lda so_goals
-    ldx #TPOS(19, MSG_ROW + 3)
+    ldx #TPOS(19, MSG_ROW + 4)
     jsr print_digit
     lda #('-' - 32 + HUD_ATTR)
-    sta bg3_map + TPOS(20, MSG_ROW + 3)
+    sta bg3_map + TPOS(20, MSG_ROW + 4)
     lda so_goals+2
-    ldx #TPOS(21, MSG_ROW + 3)
+    ldx #TPOS(21, MSG_ROW + 4)
     jsr print_digit
 @d: rts
 

@@ -358,7 +358,72 @@ player_step:
     bcc :+
     lda #FIELD_B * FP
 :   sta p_y,x
+    jsr keep_out_zone
+    ldx cp
     jsr player_anim
+    rts
+
+; keep_out_zone : X = cp. Un joueur de champ ne peut pas entrer dans la zone de son gardien
+; (demi-cercle de rayon ZONE_R devant son anneau) : il est repousse sur le bord.
+keep_out_zone:
+    .a16
+    .i16
+    lda p_role,x
+    bne :+
+    rts
+:   jsr own_goal_x
+    sta zn_gx
+    lda p_x,x
+    ASR_A 4
+    sec
+    sbc zn_gx
+    sta t0
+    lda p_y,x
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    sta t1
+    jsr dist_approx
+    ldx cp
+    cmp #ZONE_R + 4
+    bcc :+
+    rts
+:   lda p_x,x
+    ASR_A 4
+    sec
+    sbc zn_gx
+    sta t0
+    lda p_y,x
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    sta t1
+    ora t0
+    bne :+
+    inc t1                      ; centre exact : direction arbitraire
+:   jsr atan64
+    pha
+    lda #ZONE_R + 4
+    sta t2
+    pla
+    jsr vel_from_dir
+    ldx cp
+    lda t0
+    clc
+    adc zn_gx
+    asl a
+    asl a
+    asl a
+    asl a
+    sta p_x,x
+    lda t1
+    clc
+    adc #FIELD_CY
+    asl a
+    asl a
+    asl a
+    asl a
+    sta p_y,x
     rts
 
 ; -----------------------------------------------------------------------------
@@ -1303,6 +1368,9 @@ release_ball:
     sta b_nograb
     sta b_passer
     sta b_last
+    lda p_x,x
+    ASR_A 4
+    sta b_relx                  ; position du lanceur (regle de la moitie de terrain)
     lda #T_NOGRAB
     sta b_nograb_t
     stz b_passt

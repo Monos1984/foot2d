@@ -1,5 +1,24 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.10.0 — règles, buzzer, bandeaux, intro, choix des équipes
+
+- Règle : seul le gardien peut entrer dans sa raquette (les joueurs de champ sont repoussés sur
+  le bord de la zone).
+- Règle : aucun point ne peut être marqué depuis sa propre moitié de terrain (position du
+  lanceur au moment du tir ; message « NO SCORE FROM OWN HALF »). Les buts contre son camp et
+  les tirs au but ne sont pas concernés.
+- Buzzer (nouvel échantillon SPC700) pour la fin des périodes et les fautes.
+- Messages du match en bandeau : cadre néon sur 3 lignes, à la couleur de l'équipe concernée,
+  avec son nom court et le nom du joueur (marqueur, fautif). Fautes, points, avantage, port trop
+  long, tir depuis sa moitié.
+- Démarrage : logo OFFGAME, écran titre « PRESS START », puis le menu.
+- Choix visuel des équipes (avant MATCH SETUP, ou A sur HOME / AWAY) : deux fiches avec les
+  joueurs au maillot de l'équipe qui courent, nom, planète, style, niveau en étoiles et moyennes
+  de l'effectif (vitesse, puissance, passe, défense) ; gauche / droite change d'équipe,
+  haut / bas change de côté.
+- Place en banque $80 : tables de calendrier, couleurs de maillots, constantes de région,
+  formations et palettes des stades déplacées en banque $C0.
+
 ## 0.9.1 — corrections, publicités, fond des menus
 
 - Correction : un but contre son camp vaut toujours 1 point (il pouvait en donner 2 si le

@@ -219,6 +219,10 @@ match_setup:
     .a16
     .i16
     stz ui_sel
+    lda #0
+    jsr team_select             ; d'abord le choix visuel des equipes
+    bcc @redraw_all
+    jmp title_screen
 @redraw_all:
     jsr safe_screen_off
     jsr bg3_clear
@@ -256,7 +260,15 @@ match_setup:
 :   dec a
     cmp #2
     bcs @n01
-    ; equipe domicile / exterieur
+    ; equipe domicile / exterieur (A : ecran de choix visuel)
+    pha
+    lda t7
+    and #JOY_A
+    beq :+
+    pla
+    jsr team_select
+    jmp @redraw_all
+:   pla
     asl a
     tax
     lda team_id,x

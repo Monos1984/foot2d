@@ -249,30 +249,36 @@ load_stadium:
     .a16
     ; palette (CGRAM 32..47), fond (CGRAM 0) et couleurs du public
     lda stadium_tab+8,y
-    sta t2
-    ldy t2
-    lda a:0,y
+    sta tr_zp                   ; palettes en banque $C0
+    lda #$C0
+    sta tr_zp+2
+    ldy #0
+    lda [tr_zp],y
     ldx #0
     jsr cg_write
     ldx #32
-@p: lda a:0,y
+@p: lda [tr_zp],y
     jsr cg_write
     iny
     iny
     inx
     cpx #48
     bne @p
-    ldy t2
-    lda a:24,y
+    ldy #24
+    lda [tr_zp],y
     sta crowd_pal
-    lda a:26,y
+    ldy #26
+    lda [tr_zp],y
     sta crowd_pal+2
-    lda a:28,y
+    ldy #28
+    lda [tr_zp],y
     sta crowd_pal+4
-    lda a:20,y
+    ldy #20
+    lda [tr_zp],y
     sta ring_pal
     sta ring_base
-    lda a:22,y
+    ldy #22
+    lda [tr_zp],y
     sta ring_pal+2
     sta ring_base+2
     rts

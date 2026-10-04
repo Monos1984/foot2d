@@ -150,9 +150,11 @@ def main():
     out.append("kitcol_names:")
     for nm, rgb, fam in KITCOLS:
         out.append('    .byte "%-8s", 0' % nm)
+    out.append('.segment "DATA0"')
     out.append("kitcol_kit:")
     for nm, rgb, fam in KITCOLS:
         out.append("    .word " + ", ".join("$%04X" % c for c in kit(rgb)))
+    out.append('.segment "RODATA"')
     out.append("kitcol_main:")
     out.append("    .word " + ", ".join("$%04X" % c5(*rgb) for nm, rgb, fam in KITCOLS))
     out.append("kitcol_fam:")

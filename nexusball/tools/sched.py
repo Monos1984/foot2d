@@ -28,7 +28,7 @@ def rounds(n):
 
 
 def main():
-    out = ["; genere par tools/sched.py"]
+    out = ["; genere par tools/sched.py", '.segment "DATA0"']
     for n in range(4, 17, 2):
         rs = rounds(n)
         pairs = set()
@@ -39,6 +39,7 @@ def main():
         out.append("rr_%d:" % n)
         for rd in rs:
             out.append("    .byte " + ", ".join("%d,%d" % ab for ab in rd))
+    out.append('.segment "RODATA"')
     out.append("rr_ptr:")
     out.append("    .word 0, 0, " + ", ".join(".loword(rr_%d)" % n for n in range(4, 17, 2)))
     open(OUT, "w").write("\n".join(out) + "\n")

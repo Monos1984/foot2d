@@ -233,6 +233,16 @@ def main():
                 lastpos = pos
             state["pad"][0] = set()
             print("bot: erreurs", errs, "immobile max", maxstuck)
+        elif a[0] == "until":
+            # until SYM N NAME : jusqu'a N frames, s'arrete quand le mot SYM devient non nul -> capture
+            ptr = core.retro_get_memory_data(2)
+            for _ in range(int(a[2])):
+                core.retro_run(); nframe += 1
+                if int.from_bytes(C.string_at(ptr + addr_of(a[1]), 2), "little"):
+                    break
+            for _ in range(8):
+                core.retro_run(); nframe += 1
+            save_png("%s_%s.png" % (out, a[3]))
         elif a[0] == "k":
             # k ADDR VALEUR : ecrit un mot en WRAM
             ptr = core.retro_get_memory_data(2)

@@ -18,6 +18,8 @@ title_screen:
     jsr title_hdma
     jsr load_logo_chr
     jsr bg2_logo
+    lda title_mode
+    beq @nopanel
     lda #MENU_COL - 3
     sta pn_x
     sta bar_x0
@@ -31,6 +33,7 @@ title_screen:
     lda #22
     sta bar_w
     inc bar_x0
+@nopanel:
     ldx #TPOS(3, 10)
     lda #TXT_ATTR
     sta t0
@@ -48,8 +51,10 @@ title_screen:
     beq :+
     ldy #.loword(str_pal)
 :   jsr print
+    lda title_mode
+    beq :+
     jsr menu_draw
-    jsr screen_on
+:   jsr screen_on
     lda title_music
     bne :+
     lda #1
@@ -65,6 +70,32 @@ title_screen:
     jsr oam_begin
     jsr oam_finish
     jsr crowd_update
+    lda title_mode
+    bne @menu
+    ; ecran titre : PRESS START clignotant
+    lda frame
+    and #$0020
+    beq :+
+    lda #TXT_ATTR + $1000
+    sta t0
+    ldx #TPOS(10, 16)
+    ldy #.loword(str_press_start)
+    jsr print
+    bra :++
+:   ldx #TPOS(8, 16)
+    ldy #16
+    lda #0
+    jsr fill_tiles
+:   lda joy_new
+    ora joy_new+2
+    and #(JOY_START | JOY_A)
+    beq @loop
+    lda #SFX_OK
+    jsr sfx_play
+    lda #1
+    sta title_mode
+    jmp title_screen
+@menu:
     lda joy_new
     ora joy_new+2
     sta t7
@@ -390,8 +421,6 @@ credits_screen:
     jmp title_screen
 
 .segment "RODATA"
-big_title:
-    .byte BIG_N, BIG_E, BIG_X, BIG_U, BIG_S, 1, BIG_B, BIG_A, BIG_L, BIG_L, 0
 str_sub:        .byte "INTERPLANETARY SPORT LEAGUE", 0
 str_t_exh:      .byte "EXHIBITION", 0
 str_t_champ:    .byte "CHAMPIONSHIP", 0

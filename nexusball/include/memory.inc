@@ -304,3 +304,31 @@ rl_page:    .res 2
 sw_cand:    .res 2          ; changement automatique de joueur
 sw_lim:     .res 2
 ad_flag:    .res 2          ; mi-temps : ecran de publicite affiche
+zn_gx:      .res 2
+b_relx:     .res 2          ; x (pixels) du dernier lanceur, $FFFF : pas un tir
+gv_team:    .res 2
+bn_team:    .res 2          ; bandeau des messages
+bn_pl:      .res 2
+bn_msg:     .res 2
+bn_attr:    .res 2
+bn_n:       .res 2
+bn_w:       .res 2
+bn_x:       .res 2
+bn_t:       .res 2
+bn_line:    .res 56
+gs_team:    .res 2
+title_mode: .res 2          ; 0 : ecran titre PRESS START, 1 : menu
+ts_side:    .res 2          ; choix des equipes
+ts_init:    .res 2
+ts_cur_side: .res 2
+ts_x:       .res 2
+ts_row:     .res 2
+ts_ptr:     .res 2
+ts_n:       .res 2
+ts_k:       .res 2
+ts_ofs:     .res 2
+ts_sum:     .res 2
+ts_slot:    .res 2
+ts_t:       .res 2
+ts_attr:    .res 2
+fs_buf:     .res 6

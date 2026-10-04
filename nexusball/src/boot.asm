@@ -90,6 +90,10 @@ FastReset:
     lda #1
     sta difficulty
     stz draw_rule
+    ; logo OFFGAME, puis ecran titre (PRESS START), puis menu
+    lda #2
+    jsr ad_show
+    stz title_mode
     jmp title_screen
 
 ; -----------------------------------------------------------------------------

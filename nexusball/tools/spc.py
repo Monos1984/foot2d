@@ -140,11 +140,13 @@ def gen_samples():
     s["thump"] = (thump, False)
     click = [int(12000 * math.exp(-i / 30) * (rng.random() * 2 - 1)) for i in range(256)]
     s["click"] = (click, False)
+    # buzzer : dent de scie + carre (riche en harmoniques), boucle de 64 echantillons
+    s["buzz"] = ([int(6000 * (2 * (i / 64) - 1) + (5000 if (i // 8) % 2 else -5000)) for i in range(64)], True)
     return s
 
 
-SAMPLE_ORDER = ["square", "sine", "thump", "click"]
-SQUARE, SINE, THUMP, CLICK = range(4)
+SAMPLE_ORDER = ["square", "sine", "thump", "click", "buzz"]
+SQUARE, SINE, THUMP, CLICK, BUZZ = range(5)
 
 # effets : nom -> (voix, echantillon, pitch, volume, adsr1, adsr2)
 SFX = [
@@ -158,6 +160,7 @@ SFX = [
     ("MENU",    7, SINE,  0x2000, 0x28, 0x8F, 0xFA),
     ("OK",      7, SINE,  0x3000, 0x30, 0x8F, 0xF8),
     ("OOH",     3, SINE,  0x1000, 0x30, 0x88, 0xE9),
+    ("BUZZER",  5, BUZZ,  0x0700, 0x60, 0x8F, 0xF1),   # fin de periode, fautes
 ]
 
 # ----------------------------------------------------------------- musique

@@ -46,6 +46,7 @@
 .include "audio.asm"
 .include "comp.asm"
 .include "editor.asm"
+.include "tsel.asm"
 .include "lang.asm"
 
 ; -----------------------------------------------------------------------------
@@ -68,12 +69,16 @@ gfx_ad0_pal:    .incbin "data/gen/ad0.pal"
 gfx_ad1_chr:    .incbin "data/gen/ad1.chr.lz"
 gfx_ad1_map:    .incbin "data/gen/ad1.map.lz"
 gfx_ad1_pal:    .incbin "data/gen/ad1.pal"
+gfx_ad2_chr:    .incbin "data/gen/ad2.chr.lz"
+gfx_ad2_map:    .incbin "data/gen/ad2.map.lz"
+gfx_ad2_pal:    .incbin "data/gen/ad2.pal"
 
 .segment "RODATA"
 ; publicites : chr, banque, map, palette (banque $C1)
 ad_tab:
     .word .loword(gfx_ad0_chr), ^gfx_ad0_chr, .loword(gfx_ad0_map), .loword(gfx_ad0_pal)
     .word .loword(gfx_ad1_chr), ^gfx_ad1_chr, .loword(gfx_ad1_map), .loword(gfx_ad1_pal)
+    .word .loword(gfx_ad2_chr), ^gfx_ad2_chr, .loword(gfx_ad2_map), .loword(gfx_ad2_pal)
 .segment "GFX"
 ; stades : banques $C2 / $C3 (tiles, tilemap) et palettes en banque $80
 .include "data/gen/stadiums.inc"

@@ -65,8 +65,14 @@ carry_turnover:
     bra :++
 :   lda near_team,y
 :   jsr take_ball
+    lda b_owner                 ; equipe fautive = adversaire du nouveau porteur
+    asl a
+    tax
+    lda p_team,x
+    eor #1
+    ldx #$FF
     ldy #.loword(str_toolong)
-    jsr show_msg
+    jsr show_tmsg
     lda #MS_FOUL
     sta m_state
     lda #TU_SEC / 2
@@ -286,6 +292,10 @@ resolve_tackle:
     lsr a
     sta b_nograb
     sta b_last
+    lda #$FFFF
+    sta b_relx
+    lda t7
+    lsr a
     lda #T_NOGRAB * 2
     sta b_nograb_t
     stz b_gkdone
@@ -312,8 +322,11 @@ resolve_tackle:
     stz p_vy,x
     lda tk_foul
     beq :+
+    lda p_team,x                ; avantage a l'equipe adverse du chargeur
+    eor #1
+    ldx #$FF
     ldy #.loword(str_advantage)  ; avantage : on laisse jouer
-    jsr show_msg
+    jsr show_tmsg
 :   rts
 
 call_foul_t:
@@ -333,7 +346,7 @@ call_foul:
     lda st_fouls,y
     inc a
     sta st_fouls,y
-    lda #SFX_WHISTLE
+    lda #SFX_BUZZER
     jsr sfx_play
     ldx cp
     lda #PS_DOWN
@@ -372,14 +385,14 @@ call_foul:
     lda tk_foul
     bne @major
     ldy #.loword(str_foul)
-    jmp show_msg
+    jmp foul_msg
 @major:
     ; exclusion temporaire de 20 secondes de jeu (une seule a la fois)
     lda sent_off
     cmp #NO_OWNER
     beq :+
     ldy #.loword(str_foul)
-    jmp show_msg
+    jmp foul_msg
 :   lda cp
     lsr a
     sta sent_off
@@ -414,7 +427,20 @@ call_foul:
     cpy #4
     bne @pad
     ldy #.loword(str_major)
-    jmp show_msg
+    jmp foul_msg
+
+; foul_msg : Y = message, cp = fautif -> bandeau a la couleur de son equipe, avec son nom
+foul_msg:
+    .a16
+    .i16
+    ldx cp
+    lda p_team,x
+    pha
+    txa
+    lsr a
+    tax
+    pla
+    jmp show_tmsg
 
 ; return_sent_off : fin d'exclusion, retour pres de son propre but
 return_sent_off:
