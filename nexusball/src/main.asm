@@ -41,18 +41,19 @@
 .include "teams.asm"
 .include "ui.asm"
 .include "shootout.asm"
+.include "audio.asm"
 
 ; -----------------------------------------------------------------------------
 ;  donnees graphiques (banque $C1)
 ; -----------------------------------------------------------------------------
 .segment "GFX"
-gfx_field_chr:  .incbin "data/gen/field.chr"
-gfx_field_chr_end:
-gfx_field_map:  .incbin "data/gen/field.map"
 gfx_obj_chr:    .incbin "data/gen/obj.chr"
 gfx_font_chr:   .incbin "data/gen/font.chr"
 gfx_font_chr_end:
 gfx_pal:        .incbin "data/gen/pal.bin"
+
+; stades : banques $C2 / $C3 (tiles, tilemap) et palettes en banque $80
+.include "data/gen/stadiums.inc"
 
 ; -----------------------------------------------------------------------------
 ;  en-tete cartouche ($FFB0) et vecteurs ($FFE0)

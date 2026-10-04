@@ -1,5 +1,14 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.3.0 — présentation (Milestone 6)
+
+- 6 stades générés (palettes, sols, bannières différents ; géométrie officielle identique),
+  stockés en banques $C2/$C3, choix dans MATCH SETUP.
+- Audio : pilote SPC700 assemblé par tools/spc.py (mini-assembleur intégré), chargé par le
+  protocole IPL au démarrage. Effets sonores, ambiance du public par canal de bruit,
+  séquenceur 3 voix (musique de titre en boucle, jingle de fin de match).
+- File de commandes son (une commande par frame).
+
 ## 0.2.0 — règles complètes et tactique (Milestones 4 et 5)
 
 - 16 équipes officielles générées (tools/teams.py) : effectif de 12 (2 GK, 4 DF, 3 MF, 3 FW),

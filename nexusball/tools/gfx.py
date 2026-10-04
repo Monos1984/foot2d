@@ -60,6 +60,34 @@ FIELD_PAL = [
 ]
 
 
+
+# ---------------------------------------------------------------- stades (geometrie identique)
+def stadium_pal(floor_d, floor, joint, line, long_line, wall_d, wall, wall_l, neon, ring_o, ring_y, crowd):
+    return [c5(1, 1, 3), c5(*floor_d), c5(*floor), c5(*joint), c5(*line), c5(*long_line),
+            c5(*wall_d), c5(*wall), c5(*wall_l), c5(*neon), c5(*ring_o), c5(*ring_y),
+            c5(*crowd[0]), c5(*crowd[1]), c5(*crowd[2]), c5(14, 10, 8)]
+
+
+STADIUMS = [
+    dict(name="ORBITAL ARENA", words=("NEXUS", "ARENA"), floor="check",
+         pal=FIELD_PAL),
+    dict(name="MARS DOME", words=("MARS", "DOME"), floor="stripe",
+         pal=stadium_pal((9, 4, 3), (11, 5, 3), (14, 7, 4), (28, 24, 20), (30, 22, 6), (6, 3, 2), (11, 6, 4),
+                         (16, 9, 6), (31, 10, 4), (31, 14, 2), (31, 27, 10), ((22, 6, 4), (12, 4, 14), (26, 16, 6)))),
+    dict(name="EUROPA ICE", words=("EUROPA", "ICE"), floor="grid",
+         pal=stadium_pal((4, 7, 11), (5, 9, 13), (8, 13, 17), (28, 30, 31), (31, 18, 4), (5, 7, 10), (10, 14, 19),
+                         (16, 21, 26), (20, 28, 31), (31, 14, 2), (31, 27, 10), ((6, 14, 24), (24, 26, 30), (4, 8, 16)))),
+    dict(name="ANDROMEDA PRIME", words=("ANDRO", "PRIME"), floor="diamond",
+         pal=stadium_pal((5, 3, 9), (7, 4, 12), (10, 6, 16), (26, 24, 31), (8, 26, 22), (4, 2, 7), (9, 5, 14),
+                         (14, 9, 20), (26, 8, 30), (31, 14, 2), (31, 27, 10), ((20, 6, 24), (6, 10, 26), (28, 16, 28)))),
+    dict(name="TITAN INDUSTRIAL", words=("TITAN", "WORKS"), floor="plate",
+         pal=stadium_pal((6, 6, 6), (8, 8, 8), (11, 11, 10), (29, 29, 26), (31, 24, 2), (4, 4, 4), (9, 9, 9),
+                         (14, 14, 13), (31, 22, 2), (31, 12, 2), (31, 27, 10), ((16, 16, 16), (24, 20, 6), (10, 10, 12)))),
+    dict(name="SOLARIS ARENA", words=("SOLAR", "ARENA"), floor="stripe",
+         pal=stadium_pal((10, 6, 3), (12, 8, 4), (15, 10, 5), (31, 30, 24), (8, 22, 30), (7, 4, 2), (13, 8, 4),
+                         (20, 13, 6), (31, 26, 6), (31, 12, 2), (31, 30, 14), ((30, 20, 4), (26, 10, 6), (31, 28, 12)))),
+]
+
 def team_pal(main, dark, trim, shorts, hi):
     return [0, c5(2, 2, 4), c5(27, 20, 15), c5(19, 12, 8), c5(6, 4, 3),
             main, dark, trim, shorts, c5(3, 3, 5), hi, 0, 0, 0, 0, 0]
@@ -215,7 +243,7 @@ class Img:
 
 
 # ---------------------------------------------------------------- stade
-def build_field():
+def build_field(st):
     im = Img(WORLD_W, WORLD_H, 0)
     # tribunes (motif periodique 16x8 pour limiter le nombre de tiles)
     crowd = [
@@ -245,19 +273,44 @@ def build_field():
     im.hline(0, WORLD_W - 1, 69, 6)
     im.hline(0, WORLD_W - 1, 70, 9)
     im.hline(0, WORLD_W - 1, 71, 6)
+    w1, w2 = st["words"]
     for x0 in range(0, WORLD_W, 128):
         im.rect(x0 + 8, 59, x0 + 63, 67, 6)
-        im.text("NEXUS", x0 + 21, 60, 9)
+        im.text(w1, x0 + 36 - len(w1) * 3, 60, 9)
         im.rect(x0 + 72, 59, x0 + 119, 67, 6)
-        im.text("ARENA", x0 + 81, 60, 11)
+        im.text(w2, x0 + 96 - len(w2) * 3, 60, 11)
     # sol
     im.rect(FIELD_L, FIELD_T, FIELD_R, FIELD_B, 2)
     for y in range(FIELD_T, FIELD_B + 1):
         for x in range(FIELD_L, FIELD_R + 1):
-            if (x // 32 + y // 32) % 2:
-                im.put(x, y, 1)
-            if x % 32 == 0 or y % 32 == 8:
-                im.put(x, y, 3)
+            f = st["floor"]
+            if f == "check":
+                if (x // 32 + y // 32) % 2:
+                    im.put(x, y, 1)
+                if x % 32 == 0 or y % 32 == 8:
+                    im.put(x, y, 3)
+            elif f == "stripe":
+                if (x // 24) % 2:
+                    im.put(x, y, 1)
+                if y % 32 == 8:
+                    im.put(x, y, 3)
+            elif f == "grid":
+                if x % 16 == 0 or y % 16 == 8:
+                    im.put(x, y, 3)
+                elif ((x // 16) * 7 + (y // 16) * 3) % 5 == 0:
+                    im.put(x, y, 1)
+            elif f == "diamond":
+                if ((x + y) % 32 == 0) or ((x - y) % 32 == 0):
+                    im.put(x, y, 3)
+                elif ((x + y) // 32 + (x - y) // 32) % 2:
+                    im.put(x, y, 1)
+            elif f == "plate":
+                if x % 32 == 0 or y % 16 == 8:
+                    im.put(x, y, 3)
+                elif (x % 32 in (4, 28)) and (y % 16 in (12, 4)):
+                    im.put(x, y, 3)
+                if (y // 16) % 2:
+                    im.put(x, y, 1) if im.get(x, y) == 2 else None
     # murs lateraux / fond
     for side in (0, 1):
         x0, x1 = (0, FIELD_L - 1) if side == 0 else (FIELD_R + 1, WORLD_W - 1)
@@ -519,20 +572,43 @@ def build_font():
 def main():
     os.makedirs(GEN, exist_ok=True)
     os.makedirs(PREV, exist_ok=True)
-    field = build_field()
-    tiles, tmap = tiles_from_image(field)
-    if len(tiles) > 1024:
-        sys.exit("trop de tiles terrain: %d" % len(tiles))
-    with open(os.path.join(GEN, "field.chr"), "wb") as f:
-        for t in tiles:
-            f.write(enc_tile(t, 4))
-    with open(os.path.join(GEN, "field.map"), "wb") as f:
-        # ordre SNES 64x64 : 4 ecrans 32x32 (TL, TR, BL, BR)
-        for scr in range(4):
-            sx, sy = (scr & 1) * 32, (scr >> 1) * 32
-            for y in range(32):
-                for x in range(32):
-                    f.write(struct.pack("<H", tmap[(sy + y) * 64 + sx + x]))
+    counts = []
+    for n, st in enumerate(STADIUMS):
+        field = build_field(st)
+        tiles, tmap = tiles_from_image(field)
+        if len(tiles) > 1024:
+            sys.exit("trop de tiles terrain: %d" % len(tiles))
+        counts.append(len(tiles))
+        with open(os.path.join(GEN, "stad%d.chr" % n), "wb") as f:
+            for t in tiles:
+                f.write(enc_tile(t, 4))
+        with open(os.path.join(GEN, "stad%d.map" % n), "wb") as f:
+            # ordre SNES 64x64 : 4 ecrans 32x32 (TL, TR, BL, BR)
+            for scr in range(4):
+                sx, sy = (scr & 1) * 32, (scr >> 1) * 32
+                for y in range(32):
+                    for x in range(32):
+                        f.write(struct.pack("<H", tmap[(sy + y) * 64 + sx + x]))
+        with open(os.path.join(GEN, "stad%d.pal" % n), "wb") as f:
+            for c in st["pal"]:
+                f.write(struct.pack("<H", c))
+        rows = [[v for x in range(field.w) for v in rgb(st["pal"][field.get(x, y)])] for y in range(field.h)]
+        write_png(os.path.join(PREV, "preview_stad%d.png" % n), field.w, field.h, rows)
+    with open(os.path.join(GEN, "stadiums.inc"), "w") as f:
+        f.write("; genere par tools/gfx.py\nNUM_STADIUMS = %d\n" % len(STADIUMS))
+        for n, st in enumerate(STADIUMS):
+            seg = "DATA2" if n < 3 else "DATA3"
+            f.write('.segment "%s"\nstad%d_chr: .incbin "data/gen/stad%d.chr"\nstad%d_chr_end:\n'
+                    'stad%d_map: .incbin "data/gen/stad%d.map"\n' % (seg, n, n, n, n, n))
+        f.write('.segment "RODATA"\n')
+        for n, st in enumerate(STADIUMS):
+            f.write('stad%d_pal: .incbin "data/gen/stad%d.pal"\n' % (n, n))
+            f.write('stad%d_name: .byte "%s", 0\n' % (n, st["name"]))
+        f.write("; par stade : chr (long), taille chr, map (long), palette, nom\nstadium_tab:\n")
+        for n in range(len(STADIUMS)):
+            f.write("    .faraddr stad%d_chr\n    .word stad%d_chr_end - stad%d_chr\n    .faraddr stad%d_map\n"
+                    "    .word .loword(stad%d_pal), .loword(stad%d_name)\n" % (n, n, n, n, n, n))
+        f.write('.segment "CODE"\n')
     sheet, obj = build_obj()
     with open(os.path.join(GEN, "obj.chr"), "wb") as f:
         f.write(obj)
@@ -562,11 +638,7 @@ def main():
             f.write("    .byte " + ",".join("$%02X" % v for v in cs[i:i + 16]) + "\n")
         at = [round(math.atan(r / 32) * 64 / (2 * math.pi)) for r in range(33)]
         f.write("atan_tab:\n    .byte " + ",".join(str(v) for v in at) + "\n")
-    with open(os.path.join(GEN, "field_info.inc"), "w") as f:
-        f.write("; genere par tools/gfx.py\nFIELD_TILE_COUNT = %d\n" % len(tiles))
     # apercus
-    rows = [[v for x in range(field.w) for v in rgb(FIELD_PAL[field.get(x, y)])] for y in range(field.h)]
-    write_png(os.path.join(PREV, "preview_field.png"), field.w, field.h, rows)
     sc = 4
     rows = []
     for y in range(128 * sc):
@@ -578,7 +650,7 @@ def main():
             row += rgb(OBJ_PALS[pidx][v]) if v else (40, 40, 60)
         rows.append(row)
     write_png(os.path.join(PREV, "preview_obj.png"), 128 * sc, 128 * sc, rows)
-    print("field tiles: %d, obj: %d octets, font: %d octets" % (len(tiles), len(obj), len(font)))
+    print("stades: %s tiles, obj: %d octets, font: %d octets" % (counts, len(obj), len(font)))
 
 
 if __name__ == "__main__":

@@ -170,3 +170,10 @@ so_taken:   .res 4
 so_phase:   .res 2
 so_shooter: .res 2
 str_buf:    .res 34
+stadium_id: .res 2
+
+; ---- son
+snd_q:      .res 16
+snd_qn:     .res 2
+snd_cnt:    .res 2
+title_music: .res 2

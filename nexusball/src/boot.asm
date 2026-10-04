@@ -67,6 +67,7 @@ FastReset:
     jsr detect_region
     jsr init_region
     jsr load_graphics
+    jsr spc_upload
     jsr load_options
 
     rep #$30
@@ -208,6 +209,7 @@ wait_frame:
     .a16
     inc frame
     jsr read_pads
+    jsr snd_flush
     rts
 
 ; -----------------------------------------------------------------------------

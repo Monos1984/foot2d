@@ -259,9 +259,16 @@ ball_update:
     ; hors jeu actif : rester dans l'arene
     rts
 
-; wall_bounce : A = vitesse -> -A * 3/4
+; wall_bounce : A = vitesse -> -A * 3/4 (son si le choc est fort)
 wall_bounce:
     .a16
+    pha
+    ABS_A
+    cmp #28
+    bcc :+
+    lda #SFX_BOUNCE
+    jsr sfx_play
+:   pla
     eor #$FFFF
     inc a
     sta t0

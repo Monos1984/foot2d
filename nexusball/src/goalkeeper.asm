@@ -120,6 +120,10 @@ gk_try:
     adc p_y,x
     sta p_y,x
 @catch:
+    lda #SFX_SAVE
+    jsr sfx_play
+    lda #SFX_OOH
+    jsr sfx_play
     ; capter si le ballon n'est pas trop rapide (CATCH), sinon repousser
     lda b_vx
     ABS_A

@@ -29,8 +29,6 @@ load_graphics:
     lda #$80
     sta VMAIN
 
-    VRAM_DMA gfx_field_chr, VRAM_BG1_CHR, (gfx_field_chr_end - gfx_field_chr)
-    VRAM_DMA gfx_field_map, VRAM_BG1_MAP, 8192
     VRAM_DMA gfx_font_chr,  VRAM_BG3_CHR, (gfx_font_chr_end - gfx_font_chr)
     VRAM_DMA gfx_obj_chr,   VRAM_OBJ_CHR, 8192
 
@@ -48,17 +46,10 @@ load_graphics:
     lda #$01
     sta MDMAEN
 
-    ; couleurs initiales du public
-    ldx #0
-@cp:
-    lda f:gfx_pal + 88,x
-    sta crowd_pal,x
-    inx
-    cpx #6
-    bne @cp
-
     rep #$20
     .a16
+    lda stadium_id
+    jsr load_stadium
     jsr oam_clear
     jsr bg3_clear
     plp
@@ -197,4 +188,76 @@ oam_begin:
     cpx #32
     bne @h
     stz oam_ptr
+    rts
+
+; -----------------------------------------------------------------------------
+;  load_stadium : A = stade (ecran eteint) -> tiles, tilemap, palette BG1, public
+; -----------------------------------------------------------------------------
+STAD_ENTRY = 12
+
+load_stadium:
+    .a16
+    .i16
+    sta t0
+    asl a
+    sta t1
+    asl a
+    clc
+    adc t1
+    asl a                       ; *12
+    tay
+    sep #$20
+    .a8
+    lda #$80
+    sta VMAIN
+    ; tiles
+    ldx #VRAM_BG1_CHR
+    stx VMADDL
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    ldx stadium_tab+0,y
+    stx A1T0L
+    lda stadium_tab+2,y
+    sta A1B0
+    ldx stadium_tab+3,y
+    stx DAS0L
+    lda #$01
+    sta MDMAEN
+    ; tilemap
+    ldx #VRAM_BG1_MAP
+    stx VMADDL
+    ldx stadium_tab+5,y
+    stx A1T0L
+    lda stadium_tab+7,y
+    sta A1B0
+    ldx #8192
+    stx DAS0L
+    lda #$01
+    sta MDMAEN
+    rep #$20
+    .a16
+    ; palette (CGRAM 32..47), fond (CGRAM 0) et couleurs du public
+    lda stadium_tab+8,y
+    sta t2
+    ldy t2
+    lda a:0,y
+    ldx #0
+    jsr cg_write
+    ldx #32
+@p: lda a:0,y
+    jsr cg_write
+    iny
+    iny
+    inx
+    cpx #48
+    bne @p
+    ldy t2
+    lda a:24,y
+    sta crowd_pal
+    lda a:26,y
+    sta crowd_pal+2
+    lda a:28,y
+    sta crowd_pal+4
     rts

@@ -1258,6 +1258,11 @@ release_ball:
     sta p_state,x
     lda #T_KICKANIM
     sta p_timer,x
+    lda #SFX_PASS
+    ldy l_foot
+    beq :+
+    lda #SFX_KICK
+:   jsr sfx_play
     ; valeur du point : 2 au pied depuis l'exterieur de la ligne
     lda #1
     sta b_points

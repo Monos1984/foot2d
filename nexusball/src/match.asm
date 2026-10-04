@@ -63,6 +63,8 @@ start_match:
     cpx #48
     bne :-
     jsr load_kits
+    lda stadium_id
+    jsr load_stadium
     jsr setup_teams
     jsr bg3_clear
     jsr hud_init
@@ -70,6 +72,11 @@ start_match:
     jsr camera_snap
     jsr oam_clear
     jsr screen_on
+    stz title_music
+    lda #MUS_STOP
+    jsr sfx_play
+    lda #$18
+    jsr crowd_level
 
 match_loop:
     jsr wait_frame
@@ -141,6 +148,8 @@ st_kickoff:
     jsr ball_update
     lda m_timer
     bne @w
+    lda #SFX_WHISTLE
+    jsr sfx_play
     lda #MS_PLAY
     sta m_state
     ldy #.loword(str_go)
@@ -320,6 +329,10 @@ clock_update:
 
 period_over:
     .a16
+    lda #SFX_WHISTLE
+    jsr sfx_play
+    lda #SFX_WHISTLE
+    jsr sfx_play
     lda #T_GOAL
     sta m_timer
     lda m_half
@@ -352,6 +365,8 @@ period_over:
     jsr freeze_players
     rts
 @full:
+    lda #MUS_JINGLE
+    jsr sfx_play
     lda #MS_END
     sta m_state
     jsr freeze_players
@@ -407,6 +422,10 @@ goal_scored:
     sta m_timer
     lda #NO_OWNER
     sta b_owner
+    lda #SFX_GOAL
+    jsr sfx_play
+    lda #SFX_WHISTLE
+    jsr sfx_play
     lda b_points
     cmp #2
     beq @two

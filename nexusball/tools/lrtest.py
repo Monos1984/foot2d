@@ -44,7 +44,7 @@ class AV(C.Structure):
     _fields_ = [("geom", Geometry), ("timing", Timing)]
 
 
-state = {"fmt": 0, "frame": None, "pad": [set(), set()]}
+state = {"fmt": 0, "frame": None, "pad": [set(), set()], "audio": bytearray()}
 sysdir = C.c_char_p(b"/tmp")
 
 
@@ -72,7 +72,12 @@ def inp(port, dev, idx, i):
     return 0
 
 
-cbs = [ENV_CB(env), VID_CB(video), AUD_CB(lambda l, r: None), AUDB_CB(lambda d, n: n), POLL_CB(lambda: None), STATE_CB(inp)]
+def audio_batch(data, frames):
+    state["audio"] += C.string_at(data, frames * 4)
+    return frames
+
+
+cbs = [ENV_CB(env), VID_CB(video), AUD_CB(lambda l, r: None), AUDB_CB(audio_batch), POLL_CB(lambda: None), STATE_CB(inp)]
 
 
 def save_png(path):
@@ -168,6 +173,16 @@ def main():
                     hist[v] = hist.get(v, 0) + 1
                     prev = v
             print("trace %04X:" % addr, dict(sorted(hist.items())))
+        elif a[0] == "a":
+            # a NAME : enregistre le son capture -> out_prefix_NAME.wav, affiche le niveau
+            import array, wave
+            pcm = array.array("h", bytes(state["audio"]))
+            rms = (sum(v * v for v in pcm) / max(1, len(pcm))) ** 0.5
+            w = wave.open("%s_%s.wav" % (out, a[1]), "wb")
+            w.setnchannels(2); w.setsampwidth(2); w.setframerate(int(av.timing.rate) or 32040)
+            w.writeframes(bytes(state["audio"])); w.close()
+            print("audio %s: %.1f s, rms %.0f, max %d" % (a[1], len(pcm) / 2 / (av.timing.rate or 32040), rms, max(pcm or [0])))
+            state["audio"] = bytearray()
         elif a[0] == "k":
             # k ADDR VALEUR : ecrit un mot en WRAM
             ptr = core.retro_get_memory_data(2)

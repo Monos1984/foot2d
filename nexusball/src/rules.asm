@@ -152,6 +152,8 @@ contact_xy:
 resolve_tackle:
     .a16
     .i16
+    lda #SFX_TACKLE
+    jsr sfx_play
     inc dbg_turnovers
     stz tk_foul
     ; fin de la charge du chargeur
@@ -325,6 +327,8 @@ call_foul:
     .i16
     sta tk_foul
     inc dbg_fouls
+    lda #SFX_WHISTLE
+    jsr sfx_play
     ldx cp
     lda #PS_DOWN
     sta p_state,x

@@ -5,9 +5,9 @@ Jeu de sport futuriste (héritier du football et du rugby) pour **Super Nintendo
 Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges_v0.2.md).
 
 ![Titre](docs/screen_title.png) ![Match](docs/screen_match.png) ![Fin](docs/screen_fulltime.png)
-![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png)
+![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png)
 
-## État : Milestones 0 → 5 (gameplay, règles complètes, tactique)
+## État : Milestones 0 → 6 (gameplay, règles, tactique, présentation)
 
 | Élément | État |
 |---|---|
@@ -37,7 +37,9 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | Tactiques MENTALITY / PASSING / PRESSURE / DEF LINE / ATTACK / TEMPO, utilisées par l'IA | ✅ |
 | Composition et remplacements illimités (avant match et menu pause), fatigue par joueur | ✅ |
 | Prolongation 2 min en but en or, puis tirs au but (3 + mort subite) | ✅ |
-| Championship, Cup, Custom Competition, éditeurs, plusieurs stades, audio SPC700 | ⏳ Milestones 6–8 |
+| 6 stades (Orbital Arena, Mars Dome, Europa Ice, Andromeda Prime, Titan Industrial, Solaris Arena), même géométrie | ✅ |
+| Audio SPC700 : pilote maison, échantillons BRR générés, effets (frappe, passe, rebond, sifflet, charge, arrêt, clameur), ambiance du public, musique de titre, jingle de fin | ✅ |
+| Championship, Cup, Custom Competition, Create Player / Team | ⏳ Milestones 7–8 |
 
 Graphismes temporaires générés (lisibles, contraste bleu/orange) — les graphismes finaux viendront au milestone 6.
 
@@ -72,9 +74,10 @@ Les ROMs construites sont aussi versionnées dans `build/` pour être testées d
 ```
 include/   registres, constantes, constantes de région (region.inc), carte mémoire, macros
 src/       main.asm (inclut tous les modules), boot, nmi, video, input, math, region, text,
-           save, menu, ui, match, shootout, formation, player, ball, goalkeeper, ai, rules,
+           save, menu, ui, match, shootout, audio, formation, player, ball, goalkeeper, ai, rules,
            camera, hud, sprites, teams
-tools/     gfx.py (génère tiles/tilemap/palettes/tables), teams.py (équipes), checksum.py,
+tools/     gfx.py (stades, sprites, police, tables), teams.py (équipes), spc.py (assembleur
+           SPC700 + pilote audio + BRR), checksum.py,
            lrtest.py (banc de test headless libretro), fixbranch.py (outil de dev)
 data/gen/  données générées (non versionnées)
 docs/      cahier des charges, référence visuelle, captures

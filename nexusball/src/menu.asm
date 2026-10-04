@@ -60,6 +60,15 @@ title_screen:
 :   jsr print
     jsr menu_draw
     jsr screen_on
+    lda title_music
+    bne :+
+    lda #1
+    sta title_music
+    lda #MUS_TITLE
+    jsr sfx_play
+    lda #0
+    jsr crowd_level
+:
 
 @loop:
     jsr wait_frame

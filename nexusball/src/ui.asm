@@ -97,6 +97,7 @@ ui_updown:
     bit #JOY_DOWN
     beq :+
     pla
+    jsr ui_click
     inc a
     cmp t6
     bcc @r
@@ -105,6 +106,7 @@ ui_updown:
 :   bit #JOY_UP
     beq :+
     pla
+    jsr ui_click
     dec a
     bpl @r
     lda t6
@@ -112,6 +114,15 @@ ui_updown:
     rts
 :   pla
 @r: rts
+
+; ui_click : petit son de menu (preserve A, X, Y)
+ui_click:
+    .a16
+    pha
+    lda #SFX_MENU
+    jsr sfx_play
+    pla
+    rts
 
 ; ui_lr : t7 = boutons, A = valeur, Y = nombre de valeurs -> A modifiee (gauche/droite, A/B)
 ui_lr:
@@ -123,6 +134,7 @@ ui_lr:
     bit #JOY_LEFT
     beq :+
     pla
+    jsr ui_click
     dec a
     bpl @r
     lda t6
@@ -131,6 +143,7 @@ ui_lr:
 :   and #(JOY_RIGHT | JOY_A)
     beq :+
     pla
+    jsr ui_click
     inc a
     cmp t6
     bcc @r
@@ -142,7 +155,7 @@ ui_lr:
 ; =============================================================================
 ;  match_setup : choix des equipes, tactiques, difficulte, regles
 ; =============================================================================
-SETUP_ITEMS = 7
+SETUP_ITEMS = 8
 
 match_setup:
     .a16
@@ -212,6 +225,15 @@ match_setup:
     jmp @redraw_all
 @n23:
     cmp #4
+    bne @n3s
+    lda stadium_id
+    ldy #NUM_STADIUMS
+    jsr ui_lr
+    sta stadium_id
+    jsr setup_draw
+    jmp @loop
+@n3s:
+    cmp #5
     bne @n4
     lda difficulty
     ldy #4
@@ -220,7 +242,7 @@ match_setup:
     jsr setup_draw
     jmp @loop
 @n4:
-    cmp #5
+    cmp #6
     bne @n5
     lda draw_rule
     ldy #2
@@ -235,7 +257,7 @@ match_setup:
     jmp start_match
 
 setup_rows:
-    .byte 5, 8, 11, 12, 14, 15, 17
+    .byte 5, 8, 11, 12, 14, 15, 16, 18
 
 setup_draw:
     .a16
@@ -358,29 +380,19 @@ setup_draw:
     ldy #.loword(str_away_tac)
     jsr print
     ldx #TPOS(2, 14)
-    ldy #.loword(str_difficulty)
+    ldy #.loword(str_stadium)
     jsr print
-    lda difficulty
+    lda stadium_id
+    asl a
+    sta t5
+    asl a
+    clc
+    adc t5
     asl a
     tay
-    lda diff_names,y
+    lda stadium_tab+10,y
     tay
     ldx #TPOS(14, 14)
-    lda #UI_HI
-    sta t0
-    lda #10
-    sta t1
-    jsr print_w
-    lda #UI_ATTR
-    sta t0
-    ldx #TPOS(2, 15)
-    ldy #.loword(str_rules)
-    jsr print
-    ldy #.loword(str_rule0)
-    lda draw_rule
-    beq :+
-    ldy #.loword(str_rule1)
-:   ldx #TPOS(14, 15)
     lda #UI_HI
     sta t0
     lda #17
@@ -388,7 +400,38 @@ setup_draw:
     jsr print_w
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(2, 17)
+    ldx #TPOS(2, 15)
+    ldy #.loword(str_difficulty)
+    jsr print
+    lda difficulty
+    asl a
+    tay
+    lda diff_names,y
+    tay
+    ldx #TPOS(14, 15)
+    lda #UI_HI
+    sta t0
+    lda #10
+    sta t1
+    jsr print_w
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 16)
+    ldy #.loword(str_rules)
+    jsr print
+    ldy #.loword(str_rule0)
+    lda draw_rule
+    beq :+
+    ldy #.loword(str_rule1)
+:   ldx #TPOS(14, 16)
+    lda #UI_HI
+    sta t0
+    lda #17
+    sta t1
+    jsr print_w
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 18)
     ldy #.loword(str_start)
     jsr print
     ldx #TPOS(2, 25)
@@ -920,11 +963,12 @@ str_p2:         .byte "P2 ", 0
 str_home_tac:   .byte "HOME TACTICS", 0
 str_away_tac:   .byte "AWAY TACTICS", 0
 str_difficulty: .byte "DIFFICULTY", 0
+str_stadium:    .byte "STADIUM", 0
 str_rules:      .byte "TIE RULE", 0
 str_rule0:      .byte "DRAW ALLOWED", 0
 str_rule1:      .byte "OVERTIME+SHOOTOUT", 0
 str_start:      .byte "START MATCH", 0
-str_setup_help: .byte "<> CHANGE A OK B BACK START PLAY", 0
+str_setup_help: .byte "<> CHANGE  A OK  B BACK  START", 0
 str_formation:  .byte "FORMATION", 0
 str_lineup:     .byte "LINEUP / SUBS", 0
 str_done:       .byte "DONE", 0
