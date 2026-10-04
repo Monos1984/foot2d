@@ -1,5 +1,15 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.11.2 — curseurs des menus
+
+- Correction : curseur et barre de sélection absents ou mal placés dans CREATE PLAYER,
+  CREATE TEAM, les compétitions (CONTINUE / NEW, réglages, journée, avant-match). Les tables de
+  lignes de ces écrans étaient restées dans le segment de code déplacé en $C0:0000-7FFF, où la
+  lecture par la banque de données ($80) tombait en WRAM : elles sont revenues en RODATA.
+- Correction : retour d'un sous-écran (tactiques depuis MATCH SETUP ou l'avant-match,
+  composition depuis les tactiques) avec le curseur sur la mauvaise ligne (ui_sel partagé).
+- Compétition : retour du classement / tableau avec le curseur sur TABLE / BRACKET.
+
 ## 0.11.1 — corrections et coup franc
 
 - Correction : animation de course figée (l'index du cycle valait toujours 0).

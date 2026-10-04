@@ -77,7 +77,9 @@ comp_menu:
 @new:
     jmp comp_new
 
+.segment "RODATA"
 cm_rows: .byte 8, 9, 10
+.segment "CODE2"
 
 ; comp_title : titre de la competition (ligne 1)
 comp_title:
@@ -203,8 +205,10 @@ cs_loop:
     tax
     jmp (.loword(cs_opt_tab),x)
 
+.segment "RODATA"
 cs_opt_tab:
     .word .loword(cs_type), .loword(cs_len), .loword(cs_diff), .loword(cs_stad), .loword(cs_start)
+.segment "CODE2"
 
 cs_type:
     lda c_slot
@@ -328,8 +332,10 @@ cs_scroll:
     sta cs_top
 @d: rts
 
+.segment "RODATA"
 cs_opt_rows:
     .byte 20, 21, 22, 23, 25
+.segment "CODE2"
 
 cs_draw:
     .a16
@@ -930,8 +936,11 @@ sim_points:
 comp_hub:
     .a16
     .i16
+    lda #0
+; comp_hub_at : A = ligne du curseur
+comp_hub_at:
+    sta ui_sel
     stz comp_active
-    stz ui_sel
     jsr safe_screen_off
     jsr bg3_clear
     jsr oam_clear
@@ -983,15 +992,19 @@ comp_hub:
     lda c_type
     bne :+
     jsr table_screen
-    jmp comp_hub
+    lda #1
+    jmp comp_hub_at
 :   jsr bracket_screen
-    jmp comp_hub
+    lda #1
+    jmp comp_hub_at
 @play:
     lda c_done
     bne @loop
     jmp comp_play
 
+.segment "RODATA"
 hub_rows: .byte 23, 24, 25, 26
+.segment "CODE2"
 
 hub_cursor:
     .a16
@@ -1454,7 +1467,11 @@ comp_prematch:
     dec a
     sta ui_team
     stz ui_back
+    lda ui_sel
+    pha
     jsr team_screen
+    pla
+    sta ui_sel
     jmp @redraw
 @go:
     lda pm_conf
@@ -1484,7 +1501,9 @@ comp_prematch:
     sta game_mode
     jmp start_match
 
+.segment "RODATA"
 pm_rows: .byte 15, 17, 18, 20
+.segment "CODE2"
 
 ; pm_side_draw : camp choisi (ou "-" si pas de conflit)
 pm_side_draw:

@@ -694,9 +694,11 @@ pe_edit:
     jsr sfx_play
     rts
 
+.segment "RODATA"
 pe_field_tab:
     .word 0, .loword(pe_number), .loword(pe_pos), .loword(pe_pos2)
     .word .loword(pe_skin), .loword(pe_hair), .loword(pe_hcol)
+.segment "CODE2"
 
 ; pe_byte : X = offset dans ed_pl, Y = nombre de valeurs -> modifie l'octet par gauche / droite
 pe_byte:
@@ -885,8 +887,10 @@ pe_name:
     bne @r
     rts
 
+.segment "RODATA"
 pe_rows:
     .byte 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23
+.segment "CODE2"
 
 pe_draw:
     .a16
@@ -1352,8 +1356,10 @@ te_edit:
     jsr sfx_play
     rts
 
+.segment "RODATA"
 te_field_tab:
     .word .loword(te_col1), .loword(te_col2), .loword(te_form), .loword(te_ment), .loword(te_press)
+.segment "CODE2"
 
 te_col1:
     lda te_c1
@@ -1719,10 +1725,12 @@ te_finalize:
     .a16
     rts
 
+.segment "RODATA"
 te_rows:
     .byte 3, 4, 5, 6, 7, 8, 9, 10
     .byte 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
     .byte 25, 26, 27
+.segment "CODE2"
 
 te_draw:
     .a16

@@ -295,7 +295,11 @@ match_setup:
     sbc #3
     sta ui_team
     stz ui_back
+    lda ui_sel                  ; l'ecran des tactiques utilise aussi ui_sel
+    pha
     jsr team_screen
+    pla
+    sta ui_sel
     jmp @redraw_all
 @n23:
     cmp #4
@@ -613,7 +617,10 @@ team_screen:
     lda ui_sel
     cmp #8
     beq @done
+    pha
     jsr subs_screen
+    pla
+    sta ui_sel
     brl @redraw
 @done:
     rts
