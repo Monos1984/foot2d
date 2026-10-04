@@ -39,6 +39,8 @@ BG3_PAL = [  # palettes BG3 (couleurs 0-15) : 0 texte blanc, 1 equipe A, 2 titre
     c5(0, 0, 0), c5(2, 3, 8), c5(10, 20, 31), c5(31, 24, 6),
     c5(0, 0, 0), c5(1, 1, 4), c5(31, 27, 8), c5(31, 31, 31),
     c5(0, 0, 0), c5(2, 3, 8), c5(31, 15, 3), c5(31, 24, 6),
+    c5(0, 0, 0), c5(2, 3, 8), c5(31, 18, 4), c5(31, 26, 8),     # 4 : texte accentue (menus)
+    c5(0, 0, 0), c5(2, 3, 8), c5(12, 24, 31), c5(31, 26, 8),    # 5 : equipe humaine (menus)
 ]
 FIELD_PAL = [
     c5(1, 1, 3),     # 0 noir

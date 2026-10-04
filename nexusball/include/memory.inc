@@ -177,3 +177,50 @@ snd_q:      .res 16
 snd_qn:     .res 2
 snd_cnt:    .res 2
 title_music: .res 2
+
+; ---- competition en cours (bloc sauvegarde tel quel en SRAM)
+comp_active: .res 2         ; 1 = le match en cours appartient a la competition
+comp_data:
+c_slot:     .res 2          ; 0 CHAMPIONSHIP, 1 CUP, 2 CUSTOM
+c_type:     .res 2          ; 0 ligue, 1 coupe
+c_n:        .res 2          ; nombre de participants
+c_nn:       .res 2          ; ligue : taille de calendrier (paire) ; coupe : = c_n
+c_len:      .res 2
+c_diff:     .res 2
+c_stad:     .res 2          ; 0..5, 6 = rotation
+c_round:    .res 2
+c_match:    .res 2
+c_done:     .res 2
+c_champ:    .res 2          ; equipe championne
+c_cur:      .res 2          ; match global en cours (humain)
+c_teams:    .res 16         ; equipes participantes (index participant -> equipe)
+c_ctrl:     .res 16         ; par equipe : 0 absente, 1 CPU, 2 P1, 3 P2
+c_res:      .res 240        ; scores (domicile, exterieur), $FF = non joue
+c_br:       .res 32         ; coupe : participant par case du tableau
+c_so:       .res 16         ; coupe : vainqueur aux tirs au but (0 dom, 1 ext, $FF aucun)
+comp_data_end:
+; classement (calcule)
+st_order:   .res 16
+st_pts:     .res 32
+st_w:       .res 32
+st_d:       .res 32
+st_l:       .res 32
+st_pf:      .res 32
+st_pa:      .res 32
+c_slot_sel: .res 2
+cs_hs:      .res 2
+cs_as:      .res 2
+cs_so:      .res 2
+sim_lh:     .res 2
+sim_la:     .res 2
+sim_th:     .res 2
+sim_ta:     .res 2
+sim_t:      .res 2
+sim_p:      .res 2
+sim_k:      .res 2
+pm_h:       .res 2
+pm_a:       .res 2
+pm_len:     .res 2
+pm_diff:    .res 2
+pm_rule:    .res 2
+hub_i:      .res 2

@@ -1,5 +1,17 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.4.0 — modes de jeu (Milestone 7)
+
+- Menu principal conforme au cahier des charges (sans Career) ; écran OPTIONS (radar, durée).
+- MATCH SETUP : choix du mode (1P vs CPU, 1P vs 2P, CPU vs CPU).
+- Compétitions : CHAMPIONSHIP (ligue), CUP (4/8/16), CUSTOM COMPETITION (ligue ou coupe) ;
+  chaque équipe CPU / P1 / P2 ; calendrier par la méthode du cercle (tools/sched.py) ;
+  tirage au sort de la coupe ; prolongation et tirs au but en coupe.
+- Simulation instantanée des matchs CPU contre CPU (niveau des équipes, 1 ou 2 points).
+- Écrans : journée / tour, classement, tableau, avant-match, champion.
+- Sauvegarde automatique après chaque match et chaque journée, reprise (CONTINUE).
+- Textes de menu sur des palettes BG3 dédiées (plus d'interférence avec les maillots).
+
 ## 0.3.0 — présentation (Milestone 6)
 
 - 6 stades générés (palettes, sols, bannières différents ; géométrie officielle identique),

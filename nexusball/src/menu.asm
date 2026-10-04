@@ -4,7 +4,7 @@
 
 MENU_ITEMS = 6
 MENU_ROW   = 12
-MENU_COL   = 9
+MENU_COL   = 8
 
 title_screen:
     .a16
@@ -39,7 +39,7 @@ title_screen:
     clc
     adc #(MENU_COL - 2) * 2
     tax
-    ldy #18
+    ldy #22
     lda #TXT_ATTR + TXT_PANEL
     jsr fill_tiles
     pla
@@ -89,67 +89,40 @@ title_screen:
     ora joy_new+2
     sta t7
     beq @loop
-    bit #JOY_DOWN
-    beq :+
     lda menu_sel
-    inc a
-    cmp #MENU_ITEMS
-    bcc @set
-    lda #0
-    bra @set
-:   bit #JOY_UP
+    ldy #MENU_ITEMS
+    jsr ui_updown
+    cmp menu_sel
     beq :+
-    lda menu_sel
-    dec a
-    bpl @set
-    lda #MENU_ITEMS - 1
-    bra @set
-:   lda menu_sel
-    cmp #3
-    beq @radar
-    cmp #4
-    beq @len
-    lda t7
-    and #(JOY_START | JOY_A | JOY_B)
-    beq @loop
-    lda menu_sel
-    cmp #5
-    beq @credits
-    sta game_mode
-    jmp match_setup
-@credits:
-    jmp credits_screen
-@radar:
-    lda t7
-    and #(JOY_LEFT | JOY_RIGHT | JOY_A | JOY_B | JOY_START)
-    beq @loop
-    lda opt_radar
-    eor #1
-    sta opt_radar
-    jsr save_options
-    bra @redraw
-@len:
-    lda t7
-    bit #JOY_LEFT
-    beq :+
-    lda menu_len
-    dec a
-    and #$0003
-    bra @slen
-:   and #(JOY_RIGHT | JOY_A | JOY_B | JOY_START)
-    jeq @loop
-    lda menu_len
-    inc a
-    and #$0003
-@slen:
-    sta menu_len
-    jsr save_options
-    bra @redraw
-@set:
     sta menu_sel
-@redraw:
     jsr menu_draw
-    jmp @loop
+    bra @loop
+:   lda t7
+    and #(JOY_START | JOY_A)
+    beq @loop
+    lda #SFX_OK
+    jsr sfx_play
+    lda menu_sel
+    asl a
+    tax
+    jmp (.loword(title_jump),x)
+
+title_jump:
+    .word .loword(go_exhibition), .loword(go_champ), .loword(go_cup)
+    .word .loword(go_custom), .loword(options_screen), .loword(credits_screen)
+
+go_exhibition:
+    stz comp_active
+    jmp match_setup
+go_champ:
+    lda #0
+    jmp comp_menu
+go_cup:
+    lda #1
+    jmp comp_menu
+go_custom:
+    lda #2
+    jmp comp_menu
 
 ; menu_draw : textes et curseur du menu
 menu_draw:
@@ -157,35 +130,13 @@ menu_draw:
     .i16
     lda #TXT_ATTR + TXT_PANEL
     sta t0
-    ldx #TPOS(MENU_COL, MENU_ROW)
-    ldy #.loword(str_m1p)
-    jsr print
-    ldx #TPOS(MENU_COL, MENU_ROW + 1)
-    ldy #.loword(str_m2p)
-    jsr print
-    ldx #TPOS(MENU_COL, MENU_ROW + 2)
-    ldy #.loword(str_mcpu)
-    jsr print
-    ldx #TPOS(MENU_COL, MENU_ROW + 3)
-    ldy #.loword(str_mradar_on)
-    lda opt_radar
-    bne :+
-    ldy #.loword(str_mradar_off)
-:   jsr print
-    ldx #TPOS(MENU_COL, MENU_ROW + 4)
-    ldy #.loword(str_mlen)
-    jsr print
-    lda menu_len
-    clc
-    adc #2
-    ldx #TPOS(MENU_COL + 10, MENU_ROW + 4)
-    jsr print_digit
-    ldx #TPOS(MENU_COL, MENU_ROW + 5)
-    ldy #.loword(str_mcredits)
-    jsr print
-    ; curseur
-    ldx #0
-@c: txa
+    stz t5
+@l: lda t5
+    asl a
+    tay
+    lda title_items,y
+    tay
+    lda t5
     clc
     adc #MENU_ROW
     asl a
@@ -195,19 +146,156 @@ menu_draw:
     asl a
     asl a
     clc
+    adc #MENU_COL * 2
+    tax
+    jsr print
+    inc t5
+    lda t5
+    cmp #MENU_ITEMS
+    bne @l
+    lda #.loword(title_rows)
+    sta t3
+    lda #MENU_ITEMS
+    sta t4
+    lda menu_sel
+    jsr ui_cursor_col
+    rts
+
+title_rows:
+    .byte MENU_ROW, MENU_ROW + 1, MENU_ROW + 2, MENU_ROW + 3, MENU_ROW + 4, MENU_ROW + 5
+
+; ui_cursor_col : comme ui_cursor mais en colonne MENU_COL - 2
+ui_cursor_col:
+    .a16
+    .i16
+    sta t5
+    ldy t3
+@l: lda a:0,y
+    and #$00FF
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
     adc #(MENU_COL - 2) * 2
-    tay
-    lda #TXT_ATTR + TXT_PANEL
-    cpx menu_sel
+    tax
+    phy
+    tya
+    sec
+    sbc t3
+    cmp t5
     bne :+
-    lda #('>' - 32 + TXT_ATTR + TXT_PANEL + $0C00)
-:   sta bg3_map,y
-    inx
-    cpx #MENU_ITEMS
-    bne @c
+    lda #('>' - 32 + TXT_ATTR + TXT_PANEL + $1000)
+    bra :++
+:   lda #TXT_ATTR + TXT_PANEL
+:   sta bg3_map,x
+    ply
+    iny
+    dec t4
+    bne @l
     lda #1
     sta bg3_dirty
     rts
+
+; -----------------------------------------------------------------------------
+;  options_screen : RADAR, MATCH LENGTH (sauvegardes en SRAM)
+; -----------------------------------------------------------------------------
+options_screen:
+    .a16
+    .i16
+    stz ui_sel
+    jsr safe_screen_off
+    jsr bg3_clear
+    jsr ui_fill
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(12, 3)
+    ldy #.loword(str_options)
+    jsr print
+    jsr opt_draw
+    jsr screen_on
+@loop:
+    jsr ui_wait
+    lda t7
+    beq @loop
+    and #JOY_B
+    bne @back
+    lda ui_sel
+    ldy #3
+    jsr ui_updown
+    cmp ui_sel
+    beq :+
+    sta ui_sel
+    jsr opt_draw
+    bra @loop
+:   lda ui_sel
+    bne :+
+    lda opt_radar
+    ldy #2
+    jsr ui_lr
+    sta opt_radar
+    bra @chg
+:   cmp #1
+    bne @done
+    lda menu_len
+    ldy #4
+    jsr ui_lr
+    sta menu_len
+@chg:
+    jsr save_options
+    jsr opt_draw
+    bra @loop
+@done:
+    lda t7
+    and #(JOY_A | JOY_START)
+    beq @loop
+@back:
+    jmp title_screen
+
+opt_rows:
+    .byte 6, 7, 9
+
+opt_draw:
+    .a16
+    .i16
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 6)
+    ldy #.loword(str_o_radar)
+    jsr print
+    ldy #.loword(str_on)
+    lda opt_radar
+    bne :+
+    ldy #.loword(str_off)
+:   ldx #TPOS(18, 6)
+    lda #UI_HI
+    sta t0
+    jsr print
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 7)
+    ldy #.loword(str_o_len)
+    jsr print
+    lda #UI_HI
+    sta t0
+    lda menu_len
+    clc
+    adc #2
+    ldx #TPOS(20, 7)
+    jsr print_digit
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 9)
+    ldy #.loword(str_back)
+    jsr print
+    lda #.loword(opt_rows)
+    sta t3
+    lda #3
+    sta t4
+    lda ui_sel
+    jmp ui_cursor
 
 ; safe_screen_off : eteint l'ecran (meme si le NMI n'est pas encore actif)
 safe_screen_off:
@@ -268,13 +356,21 @@ credits_screen:
 big_title:
     .byte BIG_N, BIG_E, BIG_X, BIG_U, BIG_S, 1, BIG_B, BIG_A, BIG_L, BIG_L, 0
 str_sub:        .byte "FUTURE SPORT LEAGUE", 0
-str_m1p:        .byte "1P VS CPU  ", 0
-str_m2p:        .byte "1P VS 2P   ", 0
-str_mcpu:       .byte "CPU VS CPU ", 0
-str_mradar_on:  .byte "RADAR    ON ", 0
-str_mradar_off: .byte "RADAR    OFF", 0
-str_mlen:       .byte "LENGTH  2X  MIN", 0
-str_mcredits:   .byte "CREDITS", 0
+str_t_exh:      .byte "EXHIBITION", 0
+str_t_champ:    .byte "CHAMPIONSHIP", 0
+str_t_cup:      .byte "CUP", 0
+str_t_custom:   .byte "CUSTOM COMPETITION", 0
+str_t_opt:      .byte "OPTIONS", 0
+str_t_cred:     .byte "CREDITS", 0
+title_items:
+    .word .loword(str_t_exh), .loword(str_t_champ), .loword(str_t_cup)
+    .word .loword(str_t_custom), .loword(str_t_opt), .loword(str_t_cred)
+str_options:    .byte "OPTIONS", 0
+str_o_radar:    .byte "RADAR", 0
+str_o_len:      .byte "MATCH LENGTH    2X  MIN", 0
+str_on:         .byte "ON ", 0
+str_off:        .byte "OFF", 0
+str_back:       .byte "BACK", 0
 str_project:    .byte " AN OFFGAME PROJECT ", 0
 str_ntsc:       .byte " NTSC 60HZ ", 0
 str_pal:        .byte " PAL 50HZ  ", 0

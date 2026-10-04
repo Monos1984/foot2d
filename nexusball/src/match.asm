@@ -9,7 +9,10 @@ start_match:
     .a16
     .i16
     jsr screen_off
-    ; manettes -> equipes
+    ; manettes -> equipes (deja reglees par une competition)
+    lda game_mode
+    cmp #MODE_PRESET
+    beq @pads_ok
     lda #0
     sta pad_team
     lda #NO_OWNER
@@ -25,6 +28,7 @@ start_match:
     lda #NO_OWNER
     sta pad_team
 :
+@pads_ok:
     stz team_dir
     lda #1
     sta team_dir+2
@@ -82,7 +86,10 @@ match_loop:
     jsr wait_frame
     jsr match_frame
     bcc match_loop
-    jmp title_screen
+    lda comp_active
+    beq :+
+    jmp comp_after_match
+:   jmp title_screen
 
 ; -----------------------------------------------------------------------------
 ;  new_kickoff : place les joueurs, etat KICKOFF

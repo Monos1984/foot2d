@@ -4,8 +4,8 @@
 ; =============================================================================
 
 UI_ATTR  = TXT_ATTR + TXT_PANEL
-UI_HI    = UI_ATTR + $0C00          ; texte accentue (palette 3)
-UI_A     = UI_ATTR + $0400          ; couleur equipe 1
+UI_HI    = UI_ATTR + $1000          ; texte accentue (palette 4)
+UI_A     = UI_ATTR + $1400          ; equipe humaine (palette 5)
 NUM_TACT = 6
 
 ; ui_fill : ecran entier sur panneau opaque
@@ -155,7 +155,7 @@ ui_lr:
 ; =============================================================================
 ;  match_setup : choix des equipes, tactiques, difficulte, regles
 ; =============================================================================
-SETUP_ITEMS = 8
+SETUP_ITEMS = 9
 
 match_setup:
     .a16
@@ -168,7 +168,7 @@ match_setup:
     jsr ui_fill
     lda #UI_HI
     sta t0
-    ldx #TPOS(10, 2)
+    ldx #TPOS(10, 1)
     ldy #.loword(str_setup)
     jsr print
     jsr setup_draw
@@ -193,6 +193,9 @@ match_setup:
     beq :+
     jmp start_match             ; START : on joue tout de suite
 :   lda ui_sel
+    bne :+
+    jmp @mode
+:   dec a
     cmp #2
     bcs @n01
     ; equipe domicile / exterieur
@@ -218,7 +221,7 @@ match_setup:
     beq @loop
     lda ui_sel
     sec
-    sbc #2
+    sbc #3
     sta ui_team
     stz ui_back
     jsr team_screen
@@ -255,13 +258,36 @@ match_setup:
     and #(JOY_A | JOY_START)
     jeq @loop
     jmp start_match
+@mode:
+    lda game_mode
+    ldy #3
+    jsr ui_lr
+    sta game_mode
+    jsr setup_draw
+    jmp @loop
 
 setup_rows:
-    .byte 5, 8, 11, 12, 14, 15, 16, 18
+    .byte 3, 5, 8, 11, 12, 14, 15, 16, 18
 
 setup_draw:
     .a16
     .i16
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 3)
+    ldy #.loword(str_mode)
+    jsr print
+    lda game_mode
+    asl a
+    tay
+    lda mode_names,y
+    tay
+    lda #UI_HI
+    sta t0
+    lda #12
+    sta t1
+    ldx #TPOS(8, 3)
+    jsr print_w
     ; equipes
     ldx #0
 @side:
@@ -284,7 +310,7 @@ setup_draw:
     lda #UI_A
     ldx t5
     beq :+
-    lda #UI_ATTR + $0C00
+    lda #UI_HI
 :   sta t0
     plx
     phx
@@ -954,6 +980,11 @@ subs_draw:
 
 .segment "RODATA"
 str_setup:      .byte "MATCH SETUP", 0
+str_mode:       .byte "MODE", 0
+str_md0:        .byte "1P VS CPU", 0
+str_md1:        .byte "1P VS 2P", 0
+str_md2:        .byte "CPU VS CPU", 0
+mode_names:     .word .loword(str_md0), .loword(str_md1), .loword(str_md2)
 str_home:       .byte "HOME", 0
 str_away:       .byte "AWAY", 0
 str_lv:         .byte "LEVEL ", 0

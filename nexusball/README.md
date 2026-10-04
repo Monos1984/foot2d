@@ -5,9 +5,9 @@ Jeu de sport futuriste (héritier du football et du rugby) pour **Super Nintendo
 Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges_v0.2.md).
 
 ![Titre](docs/screen_title.png) ![Match](docs/screen_match.png) ![Fin](docs/screen_fulltime.png)
-![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png)
+![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png) ![Classement](docs/screen_table.png) ![Coupe](docs/screen_bracket.png)
 
-## État : Milestones 0 → 6 (gameplay, règles, tactique, présentation)
+## État : Milestones 0 → 7 (gameplay, règles, tactique, présentation, compétitions)
 
 | Élément | État |
 |---|---|
@@ -39,7 +39,13 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | Prolongation 2 min en but en or, puis tirs au but (3 + mort subite) | ✅ |
 | 6 stades (Orbital Arena, Mars Dome, Europa Ice, Andromeda Prime, Titan Industrial, Solaris Arena), même géométrie | ✅ |
 | Audio SPC700 : pilote maison, échantillons BRR générés, effets (frappe, passe, rebond, sifflet, charge, arrêt, clameur), ambiance du public, musique de titre, jingle de fin | ✅ |
-| Championship, Cup, Custom Competition, Create Player / Team | ⏳ Milestones 7–8 |
+| Menu principal EXHIBITION / CHAMPIONSHIP / CUP / CUSTOM COMPETITION / OPTIONS / CREDITS | ✅ |
+| Championship (ligue 3 à 16 équipes, aller simple, 3/1/0 pts, départage différence puis points marqués) | ✅ |
+| Cup 4 / 8 / 16 équipes, tirage au sort, prolongation + tirs au but, tableau | ✅ |
+| Custom Competition (ligue ou coupe), équipes CPU / P1 / P2, durée, difficulté, stade fixe ou rotation | ✅ |
+| Matchs CPU contre CPU simulés instantanément, écran d'avant-match, champion | ✅ |
+| Sauvegarde / reprise des 3 compétitions en SRAM (en-tête, version, longueur, checksum) | ✅ |
+| Create Player / Create Team, équipes personnalisées | ⏳ Milestone 8 |
 
 Graphismes temporaires générés (lisibles, contraste bleu/orange) — les graphismes finaux viendront au milestone 6.
 
@@ -74,9 +80,9 @@ Les ROMs construites sont aussi versionnées dans `build/` pour être testées d
 ```
 include/   registres, constantes, constantes de région (region.inc), carte mémoire, macros
 src/       main.asm (inclut tous les modules), boot, nmi, video, input, math, region, text,
-           save, menu, ui, match, shootout, audio, formation, player, ball, goalkeeper, ai, rules,
+           save, menu, ui, comp, match, shootout, audio, formation, player, ball, goalkeeper, ai, rules,
            camera, hud, sprites, teams
-tools/     gfx.py (stades, sprites, police, tables), teams.py (équipes), spc.py (assembleur
+tools/     gfx.py (stades, sprites, police, tables), teams.py (équipes), sched.py (calendriers), spc.py (assembleur
            SPC700 + pilote audio + BRR), checksum.py,
            lrtest.py (banc de test headless libretro), fixbranch.py (outil de dev)
 data/gen/  données générées (non versionnées)
