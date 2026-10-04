@@ -2,7 +2,7 @@
 ;  menu.asm - ecran titre, options, credits
 ; =============================================================================
 
-MENU_ITEMS = 8
+MENU_ITEMS = 9
 MENU_ROW   = 12
 MENU_COL   = 8
 
@@ -105,7 +105,7 @@ title_screen:
 title_jump:
     .word .loword(go_exhibition), .loword(go_champ), .loword(go_cup)
     .word .loword(go_custom), .loword(create_team), .loword(create_player)
-    .word .loword(options_screen), .loword(credits_screen)
+    .word .loword(rules_screen), .loword(options_screen), .loword(credits_screen)
 
 go_exhibition:
     stz comp_active
@@ -159,7 +159,7 @@ menu_draw:
 
 title_rows:
     .byte MENU_ROW, MENU_ROW + 1, MENU_ROW + 2, MENU_ROW + 3, MENU_ROW + 4, MENU_ROW + 5
-    .byte MENU_ROW + 6, MENU_ROW + 7
+    .byte MENU_ROW + 6, MENU_ROW + 7, MENU_ROW + 8
 
 ; ui_cursor_col : comme ui_cursor mais en colonne MENU_COL - 2
 ui_cursor_col:
@@ -207,6 +207,7 @@ options_screen:
     .a16
     .i16
     stz ui_sel
+options_redraw:
     jsr safe_screen_off
     jsr bg3_clear
     jsr ui_fill
@@ -224,7 +225,7 @@ options_screen:
     and #JOY_B
     bne @back
     lda ui_sel
-    ldy #4
+    ldy #5
     jsr ui_updown
     cmp ui_sel
     beq :+
@@ -246,11 +247,22 @@ options_screen:
     sta menu_len
     bra @chg
 :   cmp #2
-    bne @done
+    bne :+
     lda opt_ctrl
     ldy #3
     jsr ui_lr
     sta opt_ctrl
+    bra @chg
+:   cmp #3
+    bne @done
+    lda lang
+    ldy #2
+    jsr ui_lr
+    cmp lang
+    beq @loop
+    sta lang
+    jsr save_options
+    jmp options_redraw           ; tous les textes changent de longueur
 @chg:
     jsr save_options
     jsr opt_draw
@@ -258,12 +270,12 @@ options_screen:
 @done:
     lda t7
     and #(JOY_A | JOY_START)
-    beq @loop
+    jeq @loop
 @back:
     jmp title_screen
 
 opt_rows:
-    .byte 6, 7, 8, 11
+    .byte 6, 7, 8, 11, 13
 
 opt_draw:
     .a16
@@ -315,11 +327,24 @@ opt_draw:
     ldx #TPOS(2, 9)
     jsr print
     ldx #TPOS(2, 11)
+    ldy #.loword(str_lang)
+    jsr print
+    ldy #.loword(str_english)
+    lda lang
+    beq :+
+    ldy #.loword(str_french)
+:   lda #UI_HI
+    sta t0
+    ldx #TPOS(18, 11)
+    jsr print
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(2, 13)
     ldy #.loword(str_back)
     jsr print
     lda #.loword(opt_rows)
     sta t3
-    lda #4
+    lda #5
     sta t4
     lda ui_sel
     jmp ui_cursor
@@ -394,7 +419,7 @@ str_t_cred:     .byte "CREDITS", 0
 title_items:
     .word .loword(str_t_exh), .loword(str_t_champ), .loword(str_t_cup)
     .word .loword(str_t_custom), .loword(str_t_cteam), .loword(str_t_cplayer)
-    .word .loword(str_t_opt), .loword(str_t_cred)
+    .word .loword(str_t_rules), .loword(str_t_opt), .loword(str_t_cred)
 str_options:    .byte "OPTIONS", 0
 str_o_radar:    .byte "RADAR", 0
 str_o_len:      .byte "MATCH LENGTH    2X  MIN", 0

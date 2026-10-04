@@ -3,7 +3,7 @@
 ;
 ;  Bloc OPTIONS a $A06000 :
 ;    +0 "NXBL"  +4 version  +5 longueur des donnees (4)
-;    +6 radar   +7 duree de match (index)  +8 boutons  +9 reserve
+;    +6 radar   +7 duree de match (index)  +8 boutons  +9 langue (0 EN, 1 FR)
 ;    +10 checksum 16 bits (somme des octets 0..9)
 ;  Un bloc invalide est remplace par les valeurs par defaut, sans toucher
 ;  au reste de la SRAM.
@@ -42,10 +42,14 @@ load_options:
     bcc :+
     lda #0
 :   sta opt_ctrl
+    lda f:SRAM_OPT+9
+    and #$0001
+    sta lang
     plp
     rts
 @default:
     stz opt_ctrl
+    stz lang
     lda #1
     sta opt_radar
     lda #2                      ; 2 x 4 min
@@ -69,7 +73,9 @@ save_options:
     xba
     ora opt_radar
     sta f:SRAM_OPT+6
-    lda opt_ctrl
+    lda lang
+    xba
+    ora opt_ctrl
     sta f:SRAM_OPT+8
     jsr opt_checksum
     sta f:SRAM_OPT+10

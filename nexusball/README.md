@@ -71,7 +71,8 @@ Graphismes temporaires générés (lisibles, contraste bleu/orange) — les grap
 | **SELECT** (pause) | radar ON/OFF | |
 | **X / Y** près d'un ballon libre | | reprise de volée / tir en l'air |
 
-OPTIONS propose 3 configurations de boutons (TYPE A ci-dessus, B et C).
+OPTIONS propose 3 configurations de boutons (TYPE A ci-dessus, B et C) et la langue
+(ENGLISH / FRANÇAIS, sauvegardée en SRAM). Le menu RULES / RÈGLES explique les règles en 5 pages.
 
 ## Construire
 

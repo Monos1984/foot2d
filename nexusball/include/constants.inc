@@ -111,6 +111,8 @@ SPR_DOTB    = 165
 SPR_DOTW    = 166
 SPR_WARN    = 167
 SPR_BALLHI  = 168
+SPR_OVAL    = 176            ; ballon ovale 16x16 : + 4*orientation + 2*phase
+SPR_OSHADOW = 208
 
 ; ---- VRAM (adresses en mots)
 VRAM_BG1_CHR = $0000

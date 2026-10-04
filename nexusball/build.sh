@@ -13,6 +13,7 @@ done
 python3 tools/teams.py
 python3 tools/spc.py
 python3 tools/sched.py
+python3 tools/lang.py
 ca65 --cpu 65816 -I include -I src -I . --bin-include-dir . -g \
      -l build/nexusball.lst -o build/main.o src/main.asm
 ld65 -C hirom.cfg -o build/nexusball.sfc -m build/nexusball.map \

@@ -46,6 +46,7 @@
 .include "audio.asm"
 .include "comp.asm"
 .include "editor.asm"
+.include "lang.asm"
 
 ; -----------------------------------------------------------------------------
 ;  donnees graphiques (banque $C1)

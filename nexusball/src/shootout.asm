@@ -188,6 +188,9 @@ so_goal:
 so_result:
     .a16
     .i16
+    pha
+    jsr tr_str
+    pla
     sta t5
     lda so_team
     asl a

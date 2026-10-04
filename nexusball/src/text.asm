@@ -24,6 +24,24 @@ bg3_clear:
 print:
     .a16
     .i16
+    lda lang
+    beq print_raw
+    jsr tr_str
+    bcc print_raw
+    jsr print_raw
+    ldy tr_y                    ; Y = fin de la chaine d'origine (comme sans traduction)
+@e: lda a:0,y
+    and #$00FF
+    beq :+
+    iny
+    bra @e
+:   lda #1
+    rts
+
+; print_raw : comme print, sans traduction
+print_raw:
+    .a16
+    .i16
 @l: lda a:0,y
     and #$00FF
     beq @d

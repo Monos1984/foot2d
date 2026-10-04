@@ -295,6 +295,7 @@ clear_msg:
 show_msg:
     .a16
     .i16
+    jsr tr_str                  ; longueur de la chaine traduite
     phy
     jsr clear_msg
     ply
@@ -582,7 +583,7 @@ str_2nd:        .byte "2ND", 0
 str_ot:         .byte "OT ", 0
 str_so:         .byte "SO ", 0
 half_names:     .word .loword(str_1st), .loword(str_2nd), .loword(str_ot), .loword(str_so)
-str_so_res:     .byte "SHOOTOUT", 0
+str_so_res:     .byte "SHOOTOUT ", 0
 str_st_shots:   .byte "SHOTS", 0
 str_st_poss:    .byte "POSS.", 0
 str_st_fouls:   .byte "FOULS", 0

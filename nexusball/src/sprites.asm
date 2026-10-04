@@ -186,13 +186,68 @@ draw_player:
 draw_ball:
     .a16
     .i16
-    lda #SPR_BALL | PAL_BALL | OBJ_PRIO
-    ldx b_z
-    cpx #12 * FP
-    bcc :+
-    lda #SPR_BALLHI | PAL_BALL | OBJ_PRIO
-:   sta t1
-    stz t2
+    ; orientation : direction du porteur, sinon vitesse du ballon
+    lda b_owner
+    cmp #NO_OWNER
+    beq @free
+    asl a
+    tax
+    lda p_dir,x
+    and #$0003
+    sta b_orient
+    stz t5                      ; phase
+    bra @spr
+@free:
+    lda b_vx
+    ABS_A
+    sta t6
+    lda b_vy
+    ABS_A
+    sta t7
+    ora t6
+    cmp #4
+    bcc @still                  ; immobile : orientation conservee
+    lda t7
+    asl a
+    cmp t6
+    bcs :+
+    stz b_orient                ; horizontal
+    bra @ph
+:   lda t6
+    asl a
+    cmp t7
+    bcs :+
+    lda #2                      ; vertical
+    sta b_orient
+    bra @ph
+:   lda b_vx
+    eor b_vy
+    bmi :+
+    lda #1                      ; diagonale descendante
+    sta b_orient
+    bra @ph
+:   lda #3
+    sta b_orient
+@ph:
+    lda frame
+    lsr a
+    lsr a
+    and #$0001
+    sta t5
+    bra @spr
+@still:
+    stz t5
+@spr:
+    lda b_orient
+    asl a
+    clc
+    adc t5
+    asl a
+    clc
+    adc #SPR_OVAL | PAL_BALL | OBJ_PRIO
+    sta t1
+    lda #1
+    sta t2
     lda b_y
     sec
     sbc b_z
@@ -200,35 +255,36 @@ draw_ball:
     sec
     sbc scroll_y
     sec
-    sbc #8
+    sbc #12
     sta t0
     lda b_x
     ASR_A 4
     sec
     sbc scroll_x
     sec
-    sbc #4
+    sbc #8
     jsr oam_add
     rts
 
 draw_ball_shadow:
     .a16
-    lda #SPR_SHADOW | PAL_BALL | $2000
+    lda #SPR_OSHADOW | PAL_BALL | $2000
     sta t1
-    stz t2
+    lda #1
+    sta t2
     lda b_y
     ASR_A 4
     sec
     sbc scroll_y
     sec
-    sbc #6
+    sbc #10
     sta t0
     lda b_x
     ASR_A 4
     sec
     sbc scroll_x
     sec
-    sbc #4
+    sbc #8
     jsr oam_add
     rts
 

@@ -36,6 +36,8 @@ l_zt:       .res 2
 l_err:      .res 2
 l_foot:     .res 2
 l_t:        .res 2
+tr_zp:      .res 3          ; pointeur long (traductions, regles)
+tr_zp2:     .res 2
 
 .segment "BSS"
 oam_buf:    .res 544
@@ -292,3 +294,10 @@ dp_x:       .res 2
 bg2_mode:   .res 2          ; tiles BG2 en VRAM : 1 logo, 2 tribunes
 bg2_hofs:   .res 2
 bg2_vofs:   .res 2
+b_orient:   .res 2          ; orientation du ballon ovale (0..3)
+lang:       .res 2          ; 0 anglais, 1 francais
+tr_y:       .res 2
+tr_h:       .res 2
+tr_c:       .res 2
+tr_buf:     .res 40
+rl_page:    .res 2

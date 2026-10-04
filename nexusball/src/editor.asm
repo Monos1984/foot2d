@@ -1956,7 +1956,7 @@ str_co:         .byte "CONTROL", 0
 str_de:         .byte "DEFENSE", 0
 str_sta:        .byte "STAMINA", 0
 str_re:         .byte "REFLEX", 0
-str_pos:        .byte "POSITION", 0
+str_pos:        .byte "POSITION ", 0
 str_th:         .byte "THROW", 0
 str_ca:         .byte "CATCH", 0
 stat_labels:

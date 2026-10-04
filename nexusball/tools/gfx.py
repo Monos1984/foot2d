@@ -109,6 +109,12 @@ OBJ_PALS = [
 
 # ---------------------------------------------------------------- police 5x7
 FONT = {
+    '@': ["00010", "11111", "10000", "11110", "10000", "10000", "11111"],   # E aigu
+    '[': ["01000", "11111", "10000", "11110", "10000", "10000", "11111"],   # E grave
+    '^': ["01110", "00000", "11111", "10000", "11110", "10000", "11111"],   # E circonflexe
+    ']': ["01000", "01110", "10001", "10001", "11111", "10001", "10001"],   # A grave
+    '\\': ["01110", "10001", "10000", "10000", "10001", "01110", "00100"],  # C cedille
+    '#': ["01110", "00000", "01110", "10001", "10001", "10001", "01110"],   # O circonflexe
     'A': ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
     'B': ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
     'C': ["01110", "10001", "10000", "10000", "10000", "10001", "01110"],
@@ -611,12 +617,66 @@ def build_obj():
             for c, ch in enumerate(row):
                 v = 0 if ch == "." else int(ch, 16)
                 sheet.put(tx * 8 + c, ty * 8 + r, v)
+    # ballon ovale 16x16 : 4 orientations x 2 phases de rotation (tiles 176 + 2*f), ombre (208)
+    for f, im in enumerate(ball_frames()):
+        bx, by = f * 16, 88
+        for y in range(16):
+            for x in range(16):
+                sheet.put(bx + x, by + y, im.get(x, y))
+    for y in range(16):
+        for x in range(16):
+            dx, dy = (x - 7.5) / 6.5, (y - 9.5) / 3.0
+            if dx * dx + dy * dy <= 1.0:
+                sheet.put(x, 104 + y, 5)
     data = bytearray()
     for ty in range(16):
         for tx in range(16):
             px = [sheet.get(tx * 8 + c, ty * 8 + r) for r in range(8) for c in range(8)]
             data += enc_tile(px, 4)
     return sheet, bytes(data)
+
+
+def ball_frames():
+    """ballon ovale futuriste (palette 4) : coque metal bleu, couture neon orange le long du
+    grand axe, anneau blanc au centre, pointes lumineuses. Orientation : 0 horizontal,
+    1 diagonale descendante, 2 vertical, 3 diagonale montante ; phase = couture qui tourne."""
+    out = []
+    for o in range(4):
+        ang = math.radians(o * 45)
+        ca, sa = math.cos(ang), math.sin(ang)
+        for ph in range(2):
+            im = Img(16, 16, 0)
+            A, B = 6.6, 4.2
+            for y in range(16):
+                for x in range(16):
+                    px, py = x - 7.5, y - 7.5
+                    u = px * ca + py * sa          # grand axe
+                    v = -px * sa + py * ca         # petit axe
+                    d = (u / A) ** 2 + (v / B) ** 2
+                    if d > 1.0:
+                        continue
+                    if d > 0.72:
+                        c = 5                       # contour
+                    else:
+                        # eclairage par le haut-gauche
+                        lum = -(px * 0.55 + py * 0.8) / 6.0 + (1 - d) * 0.6
+                        c = 1 if lum > 1.0 else 2 if lum > 0.7 else 3 if lum > 0.2 else 4
+                    # anneau central (petit axe)
+                    if abs(u) < 0.6 and d <= 0.72:
+                        c = 1 if c in (3, 4) else 15
+                    # couture neon le long du grand axe, en tirets qui defilent
+                    seam = v * (1 if ph == 0 else -1)
+                    if abs(seam - 0.0) < 0.55 and 1.2 < abs(u) < A - 1.0 and d <= 0.8:
+                        if int((u + 20 + ph * 1.5) // 1.5) % 2 == 0:
+                            c = 13
+                        else:
+                            c = 6
+                    # pointes lumineuses
+                    if abs(u) > A - 1.3 and abs(v) < 0.8:
+                        c = 6
+                    im.put(x, y, c)
+            out.append(im)
+    return out
 
 
 # ---------------------------------------------------------------- police BG3

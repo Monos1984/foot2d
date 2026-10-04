@@ -1,5 +1,18 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.9.0 — ballon ovale, règles, français
+
+- Ballon ovale futuriste (sprite 16×16) : coque bleu métal, couture néon qui tourne, anneau
+  central, pointes lumineuses ; 4 orientations selon la trajectoire (ou la direction du porteur),
+  ombre ovale.
+- Nouveau menu RULES / RÈGLES : 5 pages (le jeu, le score, port et passes, charges et fautes,
+  match et commandes), gauche / droite pour changer de page.
+- Langue : option LANGUAGE dans OPTIONS (ENGLISH / FRANÇAIS), sauvegardée en SRAM (octet 9 du
+  bloc options). Traduction de tous les menus, écrans de match, éditeurs et compétitions :
+  print remplace la chaîne anglaise par sa traduction (table générée par tools/lang.py, banque
+  $C0, recherche par hash + vérification du texte). Lettres accentuées É È Ê À Ç Ô ajoutées
+  à la police.
+
 ## 0.8.0 — joueurs, stades et HUD
 
 - Joueurs agrandis : silhouette 16×24 dans des cadres 16×32 (deux sprites), tête, maillot avec
