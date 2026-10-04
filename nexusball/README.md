@@ -126,4 +126,8 @@ python3 tools/lrtest.py /chemin/snes9x_libretro.so build/nexusball_ntsc.sfc \
   "w 30; p D 2; w 4; p D 2; w 4; p STA 2; t 30000 m_state; m score 4; s fin" /tmp/test
 ```
 
-(`dbg_fouls`, `dbg_turnovers`, `dbg_late`, `dbg_gkzone` sont des compteurs lus par ces tests.)
+(`dbg_fouls`, `dbg_turnovers`, `dbg_late`, `dbg_gkzone`, `dbg_saves`, `dbg_ringmiss` sont des
+compteurs lus par ces tests.)
+
+`tools/balance.sh` enchaîne des matchs CPU contre CPU entre équipes de niveaux différents et affiche
+score, tirs et tirs manqués : c'est la référence utilisée pour l'équilibrage.
