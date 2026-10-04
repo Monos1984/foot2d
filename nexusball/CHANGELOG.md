@@ -15,6 +15,8 @@
   gardien moins infaillible (portée et réussite réduites), duels de charge plus incertains,
   écart de vitesse entre SPEED 1 et 9 réduit. Avant : ~1 point pour 30 tirs et domination totale
   d'une équipe de niveau +1 ; après : 2 à 8 points par match de 4 min, le favori gagne sans écraser.
+- IA : jeu contre le mur — un porteur bloqué frappe en diagonale vers le mur le plus proche
+  pour contourner le défenseur (rebond vers l'avant).
 
 ## 0.5.0 — création (Milestone 8)
 

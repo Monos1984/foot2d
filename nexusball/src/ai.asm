@@ -94,8 +94,8 @@ ai_update:
     jsr think_period
     sta p_think,x
     lda p_act,x
-    and #JOY_A
-    bne @n                      ; charge : direction deja fixee
+    and #(JOY_A | JOY_X)
+    bne @n                      ; charge / frappe : direction deja fixee
 :   ; deplacement vers la cible
     lda p_tx,x
     cmp #AI_CHASE
@@ -272,7 +272,7 @@ ai_carrier:
     cmp #72
     bcs :+
     lda #JOY_Y                  ; lancer a 1 point
-    bra @act
+    brl @act
 :   cmp #LONG_R + 2
     bcc @run
     cmp #LONG_R + 26
@@ -302,7 +302,34 @@ ai_carrier:
     and #$0003
     beq @dodge
     cmp #1
+    beq @hand
+    cmp #2
     bne @go
+    ; jeu contre le mur : frappe en diagonale vers le mur le plus proche
+    jsr attack_sign
+    sta t5
+    ldy #1                      ; bas-droite
+    lda p_y,x
+    cmp #FIELD_CY * FP
+    bcs :+
+    ldy #7                      ; haut-droite
+:   lda t5
+    bpl :+
+    tya
+    eor #$FFFF
+    sec
+    adc #4                      ; miroir horizontal : (4 - d) & 7
+    and #$0007
+    tay
+:   tya
+    sta p_dir,x
+    lda dir8_pad,y
+    and #$00FF
+    xba
+    sta p_want,x
+    lda #JOY_X
+    bra @act
+@hand:
     jsr find_hand_target
     cmp #NO_OWNER
     beq @go
