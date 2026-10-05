@@ -16,7 +16,7 @@ il décrit l'état du moteur, les décisions prises et ce qui reste à valider s
 | Coup d'envoi | Deux joueurs dans le rond central ; le porteur doit passer à son partenaire ; personne d'autre n'entre dans le rond avant la réception (6 s au plus). |
 | Exclusions | Faute grave = 20 s de jeu, **un minuteur par joueur** (`p_pen`) : plusieurs exclusions simultanées possibles. Retour au poste le long du mur du haut, ou du bas si le ballon est près du haut. |
 | Fin de période à 0:00 | **Arrêt immédiat** (option A, arcade) : buzzer long, joueurs figés. Un tir déjà parti ne compte pas (la détection du but n'est active qu'en jeu, coup franc et tirs au but). |
-| Pause | Le jeu est entièrement figé (chronomètre, physique, IA, fatigue, exclusions). À la reprise, les boutons pressés pendant la frame de sortie sont ignorés (pas d'action fantôme). |
+| Pause | Le jeu est entièrement figé (chronomètre, physique, IA, fatigue, exclusions) et la foule se tait. À la reprise, les boutons pressés pendant la frame de sortie sont ignorés (pas d'action fantôme). |
 
 ## 2. Sprites (OAM)
 
@@ -57,9 +57,10 @@ complets PAL et NTSC (compteur de frames du jeu = compteur de NMI), contre ~1 % 
   $C0:8000-FFFF (code principal, chaînes, tables lues par la banque de données $80) et
   $C0:0000-7FFF (compétitions, éditeurs, écran de score + tables lues en adressage long).
   Les tables utilisées en adressage absolu doivent rester en `RODATA`.
-- WRAM basse : `BSS` $0200-$18AB (~5,8 Kio sur 6,5 Kio disponibles avant la pile). Les
+- WRAM basse : `BSS` $0200-$1791 (~5,4 Kio sur 6,5 Kio disponibles avant la pile). Les
   prochains gros buffers doivent aller en WRAM haute ($7E:2000+ ou $7F:xxxx, accès long).
-  Déjà en WRAM haute : copie de la tilemap BG2 ($7E:2000), tampon de décompression ($7F:0000).
+  Déjà en WRAM haute : copie de la tilemap BG2 ($7E:2000), sauvegarde des lignes BG3 du menu
+  pause ($7E:3000), tampon de décompression ($7F:0000).
 - `build.sh` affiche à chaque build l'occupation de chaque segment (`tools/romcheck.py`).
 
 ## 5. SRAM (32 Kio)
@@ -84,7 +85,9 @@ anciennes sauvegardes (sans copie B) restent lisibles.
   cette version : écrans de publicité et de score, coup d'envoi, coup franc, règle des 4 s.
 - Caméra : l'anticipation vaut 133 ms de trajectoire dans les deux régions (×5/6 en PAL) et
   l'amortissement est réglé pour le même temps de réponse (1/16 par frame à 60 Hz, ~1/13 à 50 Hz).
-- Restent en frames (purement visuels) : clignotement de PRESS START, cycle des étoiles des menus.
+- Restent en frames (purement visuels, sans effet sur le jeu) : clignotement de PRESS START,
+  du curseur du porteur et des anneaux après un but, rotation du ballon, petits sauts de
+  célébration, alternance d'équité du ramassage du ballon.
 
 ## 7. Audio
 
@@ -101,9 +104,22 @@ ou une fin de match ne sont jamais perdus.
   lecture / écriture WRAM, `bot N SEED` (entrées aléatoires + invariants du contrôle humain :
   manette sur un joueur de sa propre équipe, un seul joueur contrôlé, joueur bloqué).
 - `tools/balance.sh` : matchs CPU contre CPU entre équipes de niveaux différents.
-- Vérifié en émulation : passage interpolé dans l'anneau, gardien et ballon lent dans la
-  raquette, coup franc (distance 40 px), exclusions simultanées, sauvegarde / reprise A/B,
-  matchs complets PAL et NTSC sans frame perdue (bsnes).
+- `bot N SEED 2` : les deux manettes jouent en même temps (1P vs 2P) ; contrôle en plus qu'elles
+  ne pilotent jamais le même joueur.
+- Version `DEBUG=1` : **SELECT maintenu** aligne les 12 joueurs sur la ligne du ballon (test de
+  surcharge des lignes de sprites, des collisions et de la séparation) ; marques de profilage
+  dans la construction des sprites.
+- Vérifié en émulation :
+  - passage interpolé dans l'anneau, gardien et ballon lent dans la raquette (5 positions),
+    coup franc (distance 40 px), exclusions simultanées, sauvegarde / reprise A/B ;
+  - matchs complets PAL et NTSC sans frame perdue (bsnes) ;
+  - surcharge : 12 joueurs sur la même ligne + ballon + curseurs = 27 OBJ, aucun sprite perdu
+    (bsnes ; 29 tranches de 8 px sur 34 par ligne) ;
+  - 1P vs 2P : deux matchs complets au bot sur les deux manettes, aucune erreur de contrôle ;
+  - Championship 8 équipes joué jusqu'au champion (28 matchs simulés, 0 à 6 points par équipe,
+    pas de score extrême) ; Cup 8 équipes jusqu'à la finale (demi-finales décidées aux tirs au
+    but simulés) ;
+  - tirs au but en match : fin anticipée correcte (0-2 après deux tirs chacun), écran final.
 
 **Reste à valider sur matériel réel** (non faisable ici) : SF Forge / Mesen2 / vraie console /
 flashcart, reset à chaud, deux manettes physiques, comportement réel des lignes surchargées

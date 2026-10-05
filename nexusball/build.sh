@@ -16,18 +16,15 @@ python3 tools/teams.py
 python3 tools/spc.py
 python3 tools/sched.py
 python3 tools/lang.py
+OUT=nexusball
+[ "$DEBUG" != "0" ] && OUT=nexusball_debug
 ca65 --cpu 65816 -D DEBUG=$DEBUG -I include -I src -I . --bin-include-dir . -g \
-     -l build/nexusball.lst -o build/main.o src/main.asm
-ld65 -C hirom.cfg -o build/nexusball.sfc -m build/nexusball.map \
-     --dbgfile build/nexusball.dbg -Ln build/nexusball.lbl build/main.o
-cp build/nexusball.sfc build/nexusball_ntsc.sfc
-python3 tools/checksum.py build/nexusball.sfc pal
-python3 tools/checksum.py build/nexusball_ntsc.sfc ntsc
-python3 tools/romcheck.py build/nexusball.sfc pal build/nexusball.map
-python3 tools/romcheck.py build/nexusball_ntsc.sfc ntsc > /dev/null
-if [ "$DEBUG" != "0" ]; then
-    mv build/nexusball.sfc build/nexusball_debug.sfc
-    mv build/nexusball_ntsc.sfc build/nexusball_debug_ntsc.sfc
-    git checkout -- build/nexusball.sfc build/nexusball_ntsc.sfc 2>/dev/null || true
-    echo "ROM de debug : build/nexusball_debug.sfc"
-fi
+     -l build/$OUT.lst -o build/$OUT.o src/main.asm
+ld65 -C hirom.cfg -o build/$OUT.sfc -m build/$OUT.map \
+     --dbgfile build/$OUT.dbg -Ln build/$OUT.lbl build/$OUT.o
+cp build/$OUT.sfc build/${OUT}_ntsc.sfc
+cp build/$OUT.lbl build/${OUT}_ntsc.lbl
+python3 tools/checksum.py build/$OUT.sfc pal
+python3 tools/checksum.py build/${OUT}_ntsc.sfc ntsc
+python3 tools/romcheck.py build/$OUT.sfc pal build/$OUT.map
+python3 tools/romcheck.py build/${OUT}_ntsc.sfc ntsc > /dev/null

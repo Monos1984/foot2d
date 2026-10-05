@@ -97,7 +97,7 @@ start_match:
     stz title_music
     lda #MUS_STOP
     jsr sfx_play
-    lda #$0C
+    lda #CROWD_MATCH
     jsr crowd_level
 
 match_loop:
@@ -150,6 +150,14 @@ match_frame:
     lda #0
 :   sta m_timer
 
+.if DEBUG
+    ; test de stress : SELECT maintenu = tous les joueurs alignes sur la ligne du ballon
+    lda joy_cur
+    and #JOY_SELECT
+    beq :+
+    jsr dbg_regroup
+:
+.endif
     lda m_state
     asl a
     tax
@@ -585,10 +593,15 @@ goal_scored:
 ; -----------------------------------------------------------------------------
 PAUSE_ITEMS = 3
 
+PAUSE_SAVE  = $7E3000           ; lignes BG3 sauvegardees (WRAM haute)
+CROWD_MATCH = $0C               ; volume de la foule en match
+
 pause_menu:
     .a16
     .i16
     stz pause_sel
+    lda #0                      ; pause : la foule se tait
+    jsr crowd_level
     ; equipe de la manette qui a mis en pause (equipe 1 par defaut)
     stz ui_team
     lda joy_new+2
@@ -602,7 +615,7 @@ pause_menu:
     ldx #0
 @sv:
     lda bg3_map + 10*64,x
-    sta pause_save,x
+    sta f:PAUSE_SAVE,x
     inx
     inx
     cpx #(5*64)
@@ -694,6 +707,8 @@ pause_menu:
     jmp @draw
 @resume:
     jsr pause_restore
+    lda #CROWD_MATCH
+    jsr crowd_level
     clc
     rts
 
@@ -701,7 +716,8 @@ pause_menu:
 pause_restore_clear:
     .a16
     ldx #0
-@l: stz pause_save,x
+    lda #0
+@l: sta f:PAUSE_SAVE,x
     inx
     inx
     cpx #(5*64)
@@ -711,7 +727,7 @@ pause_restore_clear:
 pause_restore:
     .a16
     ldx #0
-@l: lda pause_save,x
+@l: lda f:PAUSE_SAVE,x
     sta bg3_map + 10*64,x
     inx
     inx
@@ -1043,5 +1059,30 @@ prof_mark:
     sta prof_max,x
 :   pla
     sta prof_last
+    rts
+.endif
+
+.if DEBUG
+; dbg_regroup : les 12 joueurs sur la meme ligne que le ballon, espaces de 12 px
+; (surcharge maximale des lignes de sprites, collisions, separation)
+dbg_regroup:
+    .a16
+    .i16
+    lda b_x
+    sec
+    sbc #66 * FP
+    sta t0
+    ldx #0
+@l: lda t0
+    sta p_x,x
+    clc
+    adc #12 * FP
+    sta t0
+    lda b_y
+    sta p_y,x
+    inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne @l
     rts
 .endif

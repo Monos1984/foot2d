@@ -120,7 +120,9 @@ def addr_of(tok):
 
 
 def main():
-    lbl = os.path.join(os.path.dirname(sys.argv[2]), "nexusball.lbl")
+    lbl = os.path.splitext(sys.argv[2])[0] + ".lbl"          # symboles de cette ROM
+    if not os.path.exists(lbl):
+        lbl = os.path.join(os.path.dirname(sys.argv[2]), "nexusball.lbl")
     if os.path.exists(lbl):
         for line in open(lbl):
             p = line.split()
@@ -185,53 +187,65 @@ def main():
             print("audio %s: %.1f s, rms %.0f, max %d" % (a[1], len(pcm) / 2 / (av.timing.rate or 32040), rms, max(pcm or [0])))
             state["audio"] = bytearray()
         elif a[0] == "bot":
-            # bot N [SEED] : N frames d'entrees pseudo-aleatoires sur la manette 1 et
-            # verification des invariants du controle humain
+            # bot N [SEED] [PADS] : N frames d'entrees pseudo-aleatoires (manette 1, ou 1 et 2 si
+            # PADS = 2) et verification des invariants du controle humain pour chaque manette
             import random
             rnd = random.Random(int(a[2]) if len(a) > 2 else 1)
+            npads = int(a[3]) if len(a) > 3 else 1
             ptr = core.retro_get_memory_data(2)
             rd = lambda sym, i=0: int.from_bytes(C.string_at(ptr + addr_of(sym) + i, 2), "little")
             dirs = ["U", "D", "L", "R", "U+L", "U+R", "D+L", "D+R"]
-            held, hold_t, stuck, maxstuck, errs = set(), 0, 0, 0, {}
-            lastpos = None
+            held = [set(), set()]
+            hold_t = [0, 0]
+            stuck, lastpos = [0, 0], [None, None]
+            maxstuck, errs = 0, {}
             for f in range(int(a[1])):
-                if hold_t <= 0:
-                    d = rnd.choice(dirs)
-                    held = set(d.split("+"))
-                    if rnd.random() < 0.5:
-                        held.add(rnd.choice(["B", "Y", "A", "X", "L1", "R1"]))
-                    hold_t = rnd.randint(5, 40)
-                hold_t -= 1
-                state["pad"][0] = {BTN[b] for b in held}
+                for pd in range(npads):
+                    if hold_t[pd] <= 0:
+                        d = rnd.choice(dirs)
+                        held[pd] = set(d.split("+"))
+                        if rnd.random() < 0.5:
+                            held[pd].add(rnd.choice(["B", "Y", "A", "X", "L1", "R1"]))
+                        hold_t[pd] = rnd.randint(5, 40)
+                    hold_t[pd] -= 1
+                    state["pad"][pd] = {BTN[b] for b in held[pd]}
                 core.retro_run(); nframe += 1
-                state["pad"][0] = {BTN[b] for b in held if b not in ("B", "Y", "A", "X", "L1")}
-                c = rd("ctrl") & 0xFF
+                for pd in range(npads):
+                    state["pad"][pd] = {BTN[b] for b in held[pd] if b not in ("B", "Y", "A", "X", "L1")}
                 ms = rd("m_state")
-                def err(k):
-                    errs[k] = errs.get(k, 0) + 1
-                    if errs[k] == 1:
-                        print("  ! %s frame %d ctrl=%d m_state=%d half=%d" % (k, nframe, c, ms, rd("m_half")))
-                if c == 0xFF:
-                    err("no_ctrl")
-                    continue
-                if rd("p_team", c * 2) != rd("pad_team"):
-                    err("ctrl_other_team")
-                if rd("p_human", c * 2) != 1:
-                    err("p_human_off")
-                for i in range(12):
-                    if i != c and rd("p_human", i * 2) == 1:
-                        err("p_human_extra")
-                st = rd("p_state", c * 2)
-                pos = (rd("p_x", c * 2), rd("p_y", c * 2))
-                if ms == 1 and st == 0 and pos == lastpos:
-                    stuck += 1
-                    maxstuck = max(maxstuck, stuck)
-                    if stuck == 120:
-                        err("stuck_2s")
-                else:
-                    stuck = 0
-                lastpos = pos
-            state["pad"][0] = set()
+                for pd in range(npads):
+                    c = rd("ctrl", pd * 2) & 0xFF
+                    team = rd("pad_team", pd * 2) & 0xFF
+                    if team == 0xFF:
+                        continue
+                    def err(k):
+                        k = "p%d_%s" % (pd + 1, k)
+                        errs[k] = errs.get(k, 0) + 1
+                        if errs[k] == 1:
+                            print("  ! %s frame %d ctrl=%d m_state=%d half=%d" % (k, nframe, c, ms, rd("m_half")))
+                    if c == 0xFF:
+                        err("no_ctrl")
+                        continue
+                    if rd("p_team", c * 2) != team:
+                        err("ctrl_other_team")
+                    if rd("p_human", c * 2) != pd + 1:
+                        err("p_human_off")
+                    for i in range(12):
+                        if i != c and rd("p_human", i * 2) == pd + 1:
+                            err("p_human_extra")
+                    st = rd("p_state", c * 2)
+                    pos = (rd("p_x", c * 2), rd("p_y", c * 2))
+                    if ms == 1 and st == 0 and pos == lastpos[pd]:
+                        stuck[pd] += 1
+                        maxstuck = max(maxstuck, stuck[pd])
+                        if stuck[pd] == 120:
+                            err("stuck_2s")
+                    else:
+                        stuck[pd] = 0
+                    lastpos[pd] = pos
+                if npads == 2 and rd("ctrl") & 0xFF == rd("ctrl", 2) & 0xFF and rd("ctrl") & 0xFF != 0xFF:
+                    errs["same_player"] = errs.get("same_player", 0) + 1
+            state["pad"] = [set(), set()]
             print("bot: erreurs", errs, "immobile max", maxstuck)
         elif a[0] == "until":
             # until SYM N NAME : jusqu'a N frames, s'arrete quand le mot SYM devient non nul -> capture

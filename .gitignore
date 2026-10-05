@@ -1,2 +1,3 @@
 __pycache__/
 nexusball/build/nexusball_debug*.sfc
+nexusball/build/nexusball_debug*

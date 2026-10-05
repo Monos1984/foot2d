@@ -66,7 +66,6 @@ menu_len:   .res 2          ; 0..3 -> 2..5 minutes par periode
 pause_sel:  .res 2
 sort_buf:   .res 14
 sort_key:   .res (NUM_PLAYERS + 1) * 2
-pause_save: .res 320
 b_gkdone:   .res 2          ; le gardien a deja tente l'arret sur ce tir
 near_tmp:   .res 6
 gk_best:    .res 2

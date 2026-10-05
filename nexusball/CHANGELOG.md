@@ -1,5 +1,15 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.12.3 — suite de la feuille de route
+
+- Pause : la foule se tait (reprise du volume au retour en jeu).
+- WRAM basse : sauvegarde des lignes du menu pause déplacée en WRAM haute ($7E:3000), −320 octets.
+- Version DEBUG : SELECT maintenu = test de stress (12 joueurs alignés sur la ligne du ballon).
+- Banc de test : `bot` sur les deux manettes (1P vs 2P), ROM de debug construite à part avec
+  ses propres symboles (la version normale n'est plus touchée).
+- Tests de bout en bout : Championship et Cup terminés, tirs au but, surcharge de sprites,
+  1P vs 2P (détails dans docs/TECHNIQUE.md).
+
 ## 0.12.2 — sans radar
 
 - Mini-radar retiré : plus d'affichage en match, plus d'option RADAR dans OPTIONS ni dans le menu
