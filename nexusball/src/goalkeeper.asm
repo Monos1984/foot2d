@@ -152,11 +152,23 @@ gk_try:
     sta p_spr,x
 :   rts
 @punch:
+    ; repousse toujours vers le terrain (jamais vers son propre anneau)
     lda b_vx
-    ASR_A 1
+    ABS_A
+    lsr a
+    cmp #24
+    bcs :+
+    lda #24
+:   sta t3
+    ldx cp
+    jsr attack_sign
+    bpl :+
+    lda t3
     eor #$FFFF
     inc a
-    sta b_vx
+    bra :++
+:   lda t3
+:   sta b_vx
     jsr rand
     and #$003F
     sec

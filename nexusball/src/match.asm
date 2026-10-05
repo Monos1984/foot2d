@@ -502,15 +502,20 @@ goal_scored:
     ; but contre son camp : toujours 1 point
     lda b_last
     cmp #NO_OWNER
-    beq :+
+    beq @gs_own
     asl a
     tax
     lda p_team,x
     cmp t0
-    beq :+
-    lda #1
+    beq @gs_own
+    inc dbg_og
+    lda p_role,x
+    bne :+
+    inc dbg_gkog
+:   lda #1
     sta b_points
-:   lda t0
+@gs_own:
+    lda t0
     asl a
     tax
     lda score,x
@@ -734,16 +739,19 @@ pause_menu:
     sta pause_sel
     jmp @draw
 :   lda t7
-    bit #JOY_START
+    bit #(JOY_START | JOY_B)
     bne @resume
-    and #(JOY_A | JOY_B)
+    and #JOY_A
     beq @wait
     lda pause_sel
     beq @resume
     cmp #1
     beq @team
-    ; quitter
-    jsr pause_restore
+    ; quitter : confirmation
+    jsr pause_confirm
+    bcs :+
+    jmp @draw
+:   jsr pause_restore
     sec
     rts
 @team:
@@ -761,6 +769,114 @@ pause_menu:
     jsr pause_restore
     lda #CROWD_MATCH
     jsr crowd_level
+    clc
+    rts
+
+; pause_confirm : "QUIT MATCH?" NO / YES dans le cadre de pause -> C = 1 si YES
+pause_confirm:
+    .a16
+    .i16
+    stz pc_sel                  ; NO par defaut
+@draw:
+    ; interieur du cadre (lignes PZ_ROW+1 .. PZ_ROW+5) efface
+    lda #PZ_ROW + 1
+@cl:
+    pha
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #9 * 2
+    tax
+    ldy #14
+    lda #TXT_ATTR + TXT_PANEL
+    jsr fill_tiles
+    pla
+    inc a
+    cmp #PZ_ROW + 6
+    bne @cl
+    lda #TXT_ATTR + TXT_PANEL + $1400
+    sta t0
+    ldx #TPOS(10, PZ_ROW + 1)
+    ldy #.loword(str_quit_q)
+    jsr print
+    ldx #TPOS(10, PZ_ROW + 2)
+    ldy #12
+    lda #('_' - 32) + TXT_ATTR + TXT_PANEL + $1400
+    jsr fill_tiles
+    stz t5
+@it:
+    lda t5
+    asl a
+    tay
+    lda confirm_items,y
+    tay
+    lda #TXT_ATTR + TXT_PANEL
+    ldx t5
+    cpx pc_sel
+    bne :+
+    lda #TXT_ATTR + TXT_PANEL + $1000
+:   sta t0
+    lda t5
+    clc
+    adc #PZ_ROW + 3
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #14 * 2
+    tax
+    jsr print
+    inc t5
+    lda t5
+    cmp #2
+    bne @it
+    lda pc_sel
+    clc
+    adc #PZ_ROW + 3
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    tax
+    lda #('>' - 32 + TXT_ATTR + TXT_PANEL + $1000)
+    sta bg3_map + 12*2,x
+    lda #('<' - 32 + TXT_ATTR + TXT_PANEL + $1000)
+    sta bg3_map + 20*2,x
+    lda #1
+    sta bg3_dirty
+@wait:
+    jsr build_sprites
+    jsr wait_frame
+    lda joy_new
+    ora joy_new+2
+    sta t7
+    beq @wait
+    lda pc_sel
+    ldy #2
+    jsr ui_updown
+    cmp pc_sel
+    beq :+
+    sta pc_sel
+    jmp @draw
+:   lda t7
+    bit #JOY_B
+    bne @no
+    and #(JOY_A | JOY_START)
+    beq @wait
+    lda pc_sel
+    beq @no
+    sec
+    rts
+@no:
     clc
     rts
 
@@ -797,6 +913,10 @@ str_overtime: .byte "OVERTIME - GOLDEN SCORE", 0
 str_goal1:  .byte "SCORE! +1", 0
 str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
+str_quit_q:  .byte "QUIT MATCH?", 0
+str_no:      .byte "NO", 0
+str_yes:     .byte "YES", 0
+confirm_items: .word .loword(str_no), .loword(str_yes)
 pause_items: .word .loword(str_resume), .loword(str_teamset), .loword(str_quit)
 str_resume: .byte "RESUME", 0
 str_quit:   .byte "QUIT MATCH", 0

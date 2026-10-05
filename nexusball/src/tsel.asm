@@ -87,8 +87,11 @@ team_select:
     beq @lr
     jsr ui_click
     lda ts_side
+    jsr ts_arrows_off           ; fleches retirees de l'ancienne fiche
+    lda ts_side
     eor #1
     sta ts_side
+    jsr ts_arrows_on
     jsr ts_bar
     bra @loop
 @lr:
@@ -246,15 +249,12 @@ ts_draw_card:
     lda #7
     jsr ts_pos
     jsr ts_word
-    ; fleches
-    lda #('<' - 32 + UI_HI)
-    pha
-    lda #6
-    jsr ts_pos
-    pla
-    sta bg3_map-2,x
-    lda #('>' - 32 + UI_HI)
-    sta bg3_map+(TS_CARD_W - 3) * 2,x
+    ; fleches (fiche active seulement, elles clignotent : voir ts_arrows)
+    lda ts_cur_side
+    cmp ts_side
+    bne :+
+    jsr ts_arrows_on
+:
     ; monde d'origine
     lda #UI_ATTR
     sta t0
@@ -357,6 +357,34 @@ ts_draw_card:
     sta bg3_dirty
     rts
 
+; ts_arrows_on / ts_arrows_off : A = cote -> fleches < > autour du nom (ligne 6)
+ts_arrows_on:
+    .a16
+    .i16
+    cmp #0
+    jsr ts_col
+    lda #6
+    jsr ts_pos
+    lda #('<' - 32 + UI_HI)
+    sta bg3_map-2,x
+    lda #('>' - 32 + UI_HI)
+    sta bg3_map+(TS_CARD_W - 3) * 2,x
+    lda #1
+    sta bg3_dirty
+    rts
+ts_arrows_off:
+    .a16
+    .i16
+    cmp #0
+    jsr ts_col
+    lda #6
+    jsr ts_pos
+    stz bg3_map-2,x
+    stz bg3_map+(TS_CARD_W - 3) * 2,x
+    lda #1
+    sta bg3_dirty
+    rts
+
 ; ts_word : ecrit un mot du nom (Y avance apres l'espace), X = position
 ts_word:
     .a16
@@ -434,6 +462,47 @@ ts_sprites:
     .a16
     .i16
     jsr oam_begin
+    ; indicateur de la fiche active : deux curseurs qui rebondissent au-dessus de l'en-tete
+    lda frame
+    lsr a
+    lsr a
+    lsr a
+    and #$0003
+    cmp #2
+    bcc :+
+    eor #$0003
+:   sta ts_t                    ; 0 1 1 0 ...
+    lda #20
+    sec
+    sbc ts_t
+    sta t0
+    stz t2
+    lda #SPR_CUR1 | $0800 | $3000
+    sta t1
+    lda ts_side
+    beq :+
+    lda #128
+:   clc
+    adc #16
+    pha
+    jsr oam_add
+    pla
+    clc
+    adc #88
+    jsr oam_add
+    ; fleches de la fiche active qui clignotent
+    lda frame
+    and #$000F
+    bne @nb
+    lda frame
+    and #$0010
+    beq :+
+    lda ts_side
+    jsr ts_arrows_off
+    bra @nb
+:   lda ts_side
+    jsr ts_arrows_on
+@nb:
     stz ts_k
 @l: lda ts_k
     tay

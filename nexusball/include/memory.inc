@@ -268,6 +268,8 @@ st_fouls:   .res 4
 hs_row:     .res 2
 dbg_saves:  .res 2
 dbg_ringmiss: .res 2
+dbg_og:     .res 2          ; buts contre son camp (dont gardien)
+dbg_gkog:   .res 2
 
 ; ---- calques des menus
 bg1_mode:   .res 2          ; 0 stade, 1 fond des menus
@@ -384,3 +386,4 @@ sort_ok:    .res 2
 oam_prev:   .res 2
 oam_lim:    .res 2
 kit_pick:   .res 4          ; tenue choisie par cote : 0 auto, 1 domicile, 2 exterieur
+pc_sel:     .res 2

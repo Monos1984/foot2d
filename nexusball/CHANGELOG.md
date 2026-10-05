@@ -1,5 +1,21 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.15.0 — confirmation, choix des équipes, gardiens
+
+- Pause : QUIT MATCH demande une confirmation (QUIT MATCH? NO / YES, NO par défaut) ;
+  B reprend le match, A valide.
+- Choix des équipes : la fiche en cours de modification est signalée par deux curseurs
+  animés au-dessus de son titre et des flèches clignotantes autour du nom ; HAUT / BAS change
+  de fiche.
+- Gardien : un ballon repoussé part toujours vers le terrain (plus de but contre son camp sur
+  une parade), une relance ne vise qu'un coéquipier nettement devant, sinon dégagement long
+  vers le camp adverse ; ballon relâché toujours devant la ligne de fond.
+- Gardien de l'équipe du joueur : quand il a le ballon, la manette en prend le contrôle (passe,
+  tir, lancer), sans pouvoir sortir de sa raquette ; dès qu'il l'a lâché, retour au joueur de
+  champ le plus proche.
+- Tests : compteurs de buts contre son camp (`dbg_og`, `dbg_gkog`) ; 3 matchs CPU contre CPU :
+  aucun.
+
 ## 0.14.1 — menu pause et chronomètre
 
 - Chronomètre arrêté pendant les engagements : coup d'envoi (jusqu'à la passe reçue par le

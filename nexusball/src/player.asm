@@ -94,18 +94,29 @@ human_input:
     cmp #NO_OWNER
     beq @def
     cmp ctrl,y
-    beq @input
+    jeq @input
     asl a
     tax
     lda p_team,x
     cmp t6
     bne @def
-    lda p_role,x
-    beq @input                  ; gardien : on garde le joueur actuel
-    lda b_owner
+    lda b_owner                 ; porteur de l'equipe (gardien compris) : la manette le prend
     jsr set_ctrl
     bra @input
 @def:
+    ; le gardien n'est controle que tant qu'il a le ballon : retour au joueur de champ le plus proche
+    lda ctrl,y
+    asl a
+    tax
+    lda p_role,x
+    bne @defn
+    jsr nearest_other
+    cmp #NO_OWNER
+    beq @defn
+    jsr set_ctrl
+    lda #T_SWITCH_AUTO
+    sta switch_t,y
+@defn:
     ; L : joueur le plus proche du ballon (autre que l'actuel)
     lda joy_new,y
     and #JOY_L
@@ -360,6 +371,8 @@ player_step:
 :   sta p_y,x
     jsr keep_out_zone
     ldx cp
+    jsr keep_in_zone
+    ldx cp
     jsr player_anim
     rts
 
@@ -381,6 +394,65 @@ keep_out_zone:
     lda #FIELD_R
     sta kz_cx
     jmp push_out
+
+; keep_in_zone : X = cp. Gardien controle a la manette : il ne sort pas de sa raquette.
+keep_in_zone:
+    .a16
+    .i16
+    lda p_role,x
+    jne @d
+    lda p_human,x
+    jeq @d
+    jsr own_goal_x
+    sta kz_cx
+    lda p_x,x
+    ASR_A 4
+    sec
+    sbc kz_cx
+    sta t0
+    lda p_y,x
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    sta t1
+    jsr dist_approx
+    ldx cp
+    cmp #ZONE_R - 2
+    bcc @d
+    lda p_x,x
+    ASR_A 4
+    sec
+    sbc kz_cx
+    sta t0
+    lda p_y,x
+    ASR_A 4
+    sec
+    sbc #FIELD_CY
+    sta t1
+    jsr atan64
+    pha
+    lda #ZONE_R - 3
+    sta t2
+    pla
+    jsr vel_from_dir
+    ldx cp
+    lda t0
+    clc
+    adc kz_cx
+    asl a
+    asl a
+    asl a
+    asl a
+    sta p_x,x
+    lda t1
+    clc
+    adc #FIELD_CY
+    asl a
+    asl a
+    asl a
+    asl a
+    sta p_y,x
+@d: rts
 
 ; push_out : X = cp -> si le joueur est a moins de kz_r pixels de (kz_cx, kz_cy),
 ; il est replace sur le cercle. Preserve X.
@@ -782,7 +854,13 @@ act_jump:
 act_hand_pass:
     .a16
     .i16
-    jsr find_hand_target
+    lda p_role,x
+    bne :+
+    jsr gk_pick_target          ; gardien : relance vers un coequipier devant lui
+    ldx cp
+    bra :++
+:   jsr find_hand_target
+:
     cmp #NO_OWNER
     bne :+
     clc
@@ -1386,6 +1464,16 @@ release_ball:
     .a16
     .i16
     ldx cp
+    ; le ballon lache part toujours de l'interieur du terrain (pas derriere un anneau)
+    lda b_x
+    cmp #(FIELD_L + 2) * FP
+    bcs :+
+    lda #(FIELD_L + 2) * FP
+:   cmp #(FIELD_R - 1) * FP
+    bcc :+
+    lda #(FIELD_R - 1) * FP
+:   sta b_x
+    sta b_prevx
     lda t0
     sta b_vx
     lda t1
