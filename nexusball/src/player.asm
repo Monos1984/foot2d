@@ -387,7 +387,24 @@ keep_out_zone:
 push_out:
     .a16
     .i16
+    ; rejet rapide (le cas courant) : trop loin en x ou en y
     lda p_x,x
+    ASR_A 4
+    sec
+    sbc kz_cx
+    ABS_A
+    cmp kz_r
+    bcc :+
+    rts
+:   lda p_y,x
+    ASR_A 4
+    sec
+    sbc kz_cy
+    ABS_A
+    cmp kz_r
+    bcc :+
+    rts
+:   lda p_x,x
     ASR_A 4
     sec
     sbc kz_cx

@@ -370,7 +370,10 @@ place_kickoff:
     stz p_state,x
     stz p_timer,x
     stz p_cd,x
-    stz p_think,x
+    txa                         ; reflexions IA etalees (pas toutes sur la meme frame)
+    asl a
+    asl a
+    sta p_think,x
     stz p_want,x
     stz p_act,x
     ; regard vers l'adversaire

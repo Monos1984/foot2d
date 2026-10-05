@@ -8,6 +8,7 @@
 start_match:
     .a16
     .i16
+    stz sort_ok                 ; ordre d'affichage a reinitialiser
     jsr screen_off
     lda #0
     jsr ad_show                 ; publicites avant le match
@@ -158,7 +159,15 @@ match_frame:
     jsr camera_update
     jsr crowd_update
     jsr hud_update
+.if DEBUG = 2
+    ldx #10 * 2
+    jsr prof_mark
+.endif
     jsr build_sprites
+.if DEBUG = 2
+    ldx #11 * 2
+    jsr prof_mark
+.endif
     clc
 @quit:
     rts
@@ -186,19 +195,36 @@ st_kickoff:
     rts
 
 ; --- jeu
+.macro PROF n
+.if DEBUG = 2
+    ldx #n * 2
+    jsr prof_mark
+.endif
+.endmacro
+
 st_play:
     .a16
+    PROF 0
     jsr clock_update
     bcs @end
     jsr compute_nearest
+    PROF 1
     jsr human_input
+    PROF 2
     jsr ai_update
+    PROF 3
     jsr ko_update
+    PROF 4
     jsr players_update
+    PROF 5
     jsr ko_push
+    PROF 6
     jsr ball_update
+    PROF 7
     jsr rules_update
+    PROF 8
     jsr zone_clock
+    PROF 9
     bcs @zr                     ; 4 s dans une raquette : remise en jeu au centre
     jsr separate_players
     ; possession
@@ -931,10 +957,16 @@ zone_clock:
     .i16
     lda m_state
     cmp #MS_PLAY
-    bne @out
+    jne @out
     lda ko_active
-    bne @out
-    ; raquette gauche ?
+    jne @out
+    ; rejet rapide : ballon loin des deux fonds
+    lda b_x
+    cmp #(FIELD_L + ZONE_R) * FP
+    bcc :+
+    cmp #(FIELD_R - ZONE_R) * FP
+    bcc @out
+:   ; raquette gauche ?
     lda b_x
     ASR_A 4
     sec
@@ -1004,3 +1036,32 @@ zone_clock:
 .segment "RODATA"
 str_zone4:  .byte "4 SEC IN THE ZONE!", 0
 .segment "CODE"
+
+.if DEBUG
+; prof_mark : X = case -> prof_max,x = max(ligne video courante)
+prof_mark:
+    .a16
+    .i16
+    sep #$20
+    .a8
+    lda SLHV
+    lda OPVCT_
+    xba
+    lda OPVCT_
+    and #$01
+    xba
+    rep #$20
+    .a16
+    pha
+    sec
+    sbc prof_last               ; duree depuis la marque precedente (lignes)
+    bpl :+
+    clc
+    adc #262
+:   cmp prof_max,x
+    bcc :+
+    sta prof_max,x
+:   pla
+    sta prof_last
+    rts
+.endif

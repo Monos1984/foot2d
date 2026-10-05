@@ -83,6 +83,7 @@ load_graphics:
 oam_clear:
     .a16
     .i16
+    stz oam_prev
     ldx #0
     lda #$F000                  ; x = 0, y = 240
 @l: sta oam_buf,x
@@ -154,13 +155,12 @@ oam_add:
     and #$0003
     asl a
     tay                         ; decalage = (n & 3) * 2
-    lda t4
-@sh:
-    dey
-    bmi @shd
-    asl a
-    bra @sh
-@shd:
+    tya
+    asl a                       ; (n & 3) * 4
+    ora t4
+    tay
+    lda oam_hi_tab,y            ; bits deja decales
+    and #$00FF
     sta t4
     pla
     lsr a
@@ -190,9 +190,17 @@ oam_finish:
     lsr a
     lsr a
     sta oam_used                ; nombre d'OBJ de la frame (controle / debug)
-    ldx oam_ptr
+    ; seuls les sprites utilises a la frame precedente au-dela de oam_ptr sont a cacher
+    lda oam_prev
+    sta oam_lim
+    lda oam_ptr
+    sta oam_prev
+    cmp oam_lim
+    bcc :+
+    rts                         ; pas moins de sprites qu'avant : rien a cacher
+:   tax
     lda #$F000
-@l: cpx #512
+@l: cpx oam_lim                 ; jusqu'a l'ancienne fin
     bcs @d
     sta oam_buf,x
     stz oam_buf+2,x
@@ -293,3 +301,9 @@ load_logo_map:
     LZ_SRC gfx_logo_map
     ldx #VRAM_BG2_MAP
     jmp lz_vram
+
+.segment "RODATA"
+; oam_hi_tab[(n & 3) * 4 + v] = v << ((n & 3) * 2)  (v = bits taille / x9 du sprite n)
+oam_hi_tab:
+    .byte 0, 1, 2, 3,  0, 4, 8, 12,  0, 16, 32, 48,  0, 64, 128, 192
+.segment "CODE"

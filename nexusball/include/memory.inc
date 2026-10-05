@@ -379,3 +379,8 @@ cs_old:     .res 2
 oam_used:   .res 2
 cam_t:      .res 2
 ad_t:       .res 2
+prof_max:   .res 24
+prof_last:  .res 2
+sort_ok:    .res 2
+oam_prev:   .res 2
+oam_lim:    .res 2

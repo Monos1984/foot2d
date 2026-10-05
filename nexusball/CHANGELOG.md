@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.12.1 — performances
+
+- Mesure : ~1 % de frames perdues en NTSC sur bsnes (matchs complets). Profilage par étape
+  (version DEBUG, ligne vidéo atteinte) puis optimisations : fin d'OAM incrémentale, tri des
+  sprites persistant, bits hauts de l'OAM par table, radar sans décalages arithmétiques, rejets
+  rapides des zones interdites et de la règle des 4 s, réflexions IA étalées au coup d'envoi.
+  Résultat : 0 frame perdue.
+
 ## 0.12.0 — fiabilisation (audit « Correctifs et améliorations »)
 
 - But : passage dans l'anneau testé au point exact de franchissement du plan (interpolation de

@@ -43,6 +43,16 @@ calques et de défilement. Pire cas : ~4,7 Kio, sous la capacité DMA d'une VBla
 davantage en PAL). Les gros transferts (stades, décors, polices) se font écran éteint
 (décompression LZSS en $7F:0000 puis DMA).
 
+## 3 bis. Temps CPU par frame (mesuré, bsnes accuracy, NTSC)
+
+Profil d'une frame de match (lignes vidéo, maximum observé sur 1500-3000 frames, version
+`DEBUG`) : IA ~46, joueurs ~79, règles ~43, sprites ~39 (joueurs) + ~26 (radar) + 1 (fin OAM).
+Optimisations de la 0.12.1 : fin d'OAM incrémentale (seuls les sprites de la frame précédente
+sont cachés : 13 → 1 ligne), tri d'affichage conservé d'une frame à l'autre (presque trié),
+table pour les bits hauts de l'OAM, rejet rapide des zones interdites (raquettes, rond
+central, coup franc) et de la règle des 4 s. Résultat : **0 frame perdue** sur des matchs
+complets PAL et NTSC (compteur de frames du jeu = compteur de NMI), contre ~1 % avant.
+
 ## 4. Mémoire
 
 - ROM : 256 Kio HiROM FastROM. Le code est relié en banque $C0 (miroir rapide de $80) :

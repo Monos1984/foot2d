@@ -18,8 +18,20 @@ build_sprites:
     ; la PPU abandonne les derniers. Elements de jeu d'abord, radar en dernier.
     jsr oam_begin
     jsr draw_cursors
+.if DEBUG
+    ldx #0 * 2
+    jsr prof_mark
+.endif
     jsr draw_ball
+.if DEBUG
+    ldx #1 * 2
+    jsr prof_mark
+.endif
     jsr sort_entities
+.if DEBUG
+    ldx #2 * 2
+    jsr prof_mark
+.endif
     ; joueurs, du plus proche (y grand) au plus lointain
     ldy #0
 @l: phy
@@ -35,13 +47,26 @@ build_sprites:
     cpy #NUM_PLAYERS + 1
     bne @l
     jsr draw_ball_shadow
+.if DEBUG
+    ldx #3 * 2
+    jsr prof_mark
+.endif
     lda m_state
     cmp #MS_END
     beq :+
     lda opt_radar
     beq :+
     jsr draw_radar
-:   jsr oam_finish
+:
+.if DEBUG
+    ldx #4 * 2
+    jsr prof_mark
+.endif
+    jsr oam_finish
+.if DEBUG
+    ldx #5 * 2
+    jsr prof_mark
+.endif
     rts
 
 ; -----------------------------------------------------------------------------
@@ -65,6 +90,10 @@ sort_entities:
     clc
     adc #FP / 2                 ; le ballon tenu passe devant le porteur
 :   sta sort_key,x
+    ; ordre de la frame precedente conserve : presque trie -> insertion quasi lineaire
+    lda sort_ok
+    bne @ins
+    inc sort_ok
     sep #$20
     .a8
     ldx #0
@@ -75,6 +104,7 @@ sort_entities:
     bne @i
     rep #$20
     .a16
+@ins:
     ; insertion
     ldx #1
 @outer:
@@ -429,7 +459,13 @@ radar_row:
 ; radar_x / radar_y : A = coordonnee monde (12.4) -> position ecran du point
 radar_x:
     .a16
-    ASR_A 7                     ; / 8 pixels
+    lsr a                       ; / 8 pixels (coordonnees toujours positives)
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
     sec
     sbc #FIELD_L / 8
     clc
@@ -437,7 +473,13 @@ radar_x:
     rts
 radar_y:
     .a16
-    ASR_A 7
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
     sec
     sbc #FIELD_T / 8
     clc
