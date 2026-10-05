@@ -16,7 +16,7 @@ ROM
 
 | Dossier | Contenu | Contraintes SNES |
 |---|---|---|
-| `players/` | planches des joueurs de champ (cadres 16×32) | 4bpp, 15 couleurs + transparence ; couleurs du maillot aux index 5-8 et 10 (remplacées en jeu par celles de l'équipe) |
+| `players/` | planches des joueurs de champ (cadres 16×32) | 4bpp, 15 couleurs + transparence ; couleurs du maillot aux index 5-8 et 10 (remplacées en jeu par celles de l'équipe), équipement fixe 11-15 (métal clair / foncé, visière, néon, blanc) |
 | `goalkeepers/` | planches des gardiens (mêmes cadres) | palette OBJ dédiée (2 / 3) |
 | `ball/` | ballon (4 orientations × 2 phases, 16×16) et ombre | palette OBJ 4 partagée avec les curseurs |
 | `stadiums/` | un PNG 512×320 par stade + sa palette | BG1 4bpp, ≤ 1024 tiles uniques, palette BG 2 ; index 10-14 = couleurs animées (anneaux, public) |

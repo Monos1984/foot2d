@@ -1,5 +1,14 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.13.0 — joueurs du futur
+
+- Nouveaux sprites des joueurs (même gabarit 16×32, 16 poses) : casque à coque aux couleurs de
+  l'équipe avec visière néon cyan et crête métallique, épaulières et plastron avec ligne
+  lumineuse, ceinture à boucle néon, combinaison, gants et genouillères métalliques, bottes à
+  semelle lumineuse.
+- Couleurs d'équipement fixes (métal, néon, blanc) sur les index 11-15 des palettes de joueurs ;
+  les gardiens ont des protections claires (gants et genouillères dorés) pour être reconnus.
+
 ## 0.12.3 — suite de la feuille de route
 
 - Pause : la foule se tait (reprise du volume au retour en jeu).

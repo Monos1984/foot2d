@@ -91,19 +91,28 @@ STADIUMS = [
                          (20, 13, 6), (31, 26, 6), (31, 12, 2), (31, 30, 14), ((30, 20, 4), (26, 10, 6), (31, 28, 12)))),
 ]
 
-def team_pal(main, dark, trim, shorts, hi):
+# couleurs fixes de l'equipement futuriste (index 11-15 de toutes les palettes de joueurs)
+GEAR = [c5(21, 23, 27), c5(9, 10, 14), c5(8, 27, 31), c5(20, 31, 31), c5(31, 31, 31)]
+
+
+GEAR_GK = [c5(31, 31, 26), c5(17, 17, 11), c5(8, 27, 31), c5(20, 31, 31), c5(31, 31, 31)]
+
+
+def team_pal(main, dark, trim, shorts, hi, gear=GEAR):
     return [0, c5(2, 2, 4), c5(27, 20, 15), c5(19, 12, 8), c5(6, 4, 3),
-            main, dark, trim, shorts, c5(3, 3, 5), hi, 0, 0, 0, 0, 0]
+            main, dark, trim, shorts, c5(4, 4, 7), hi] + gear
 
 
 OBJ_PALS = [
     team_pal(c5(4, 12, 30), c5(2, 6, 18), c5(28, 30, 31), c5(3, 5, 14), c5(12, 20, 31)),   # 0 equipe A bleue
     team_pal(c5(31, 13, 2), c5(20, 6, 1), c5(31, 28, 20), c5(10, 4, 2), c5(31, 22, 10)),   # 1 equipe B orange
-    team_pal(c5(4, 24, 8), c5(1, 13, 4), c5(28, 31, 24), c5(2, 8, 3), c5(14, 31, 14)),     # 2 gardien A vert
-    team_pal(c5(30, 26, 2), c5(18, 14, 0), c5(31, 31, 24), c5(12, 9, 0), c5(31, 31, 14)),  # 3 gardien B jaune
+    team_pal(c5(4, 24, 8), c5(1, 13, 4), c5(28, 31, 24), c5(2, 8, 3), c5(14, 31, 14), GEAR_GK),     # 2 gardien A vert (gants et protections clairs)
+    team_pal(c5(30, 26, 2), c5(18, 14, 0), c5(31, 31, 24), c5(12, 9, 0), c5(31, 31, 14), GEAR_GK),  # 3 gardien B jaune
     [0, c5(31, 31, 31), c5(20, 30, 31), c5(8, 22, 31), c5(2, 6, 16), c5(1, 1, 3),
      c5(31, 29, 6), c5(24, 12, 0), c5(31, 8, 8), c5(1, 2, 6), c5(8, 18, 28), c5(4, 9, 16),
-     c5(8, 18, 31), c5(31, 15, 3), c5(31, 31, 31), c5(29, 30, 31)],                     # 4 ballon / curseurs / radar
+     c5(8, 18, 31), c5(31, 15, 3), c5(31, 31, 31), c5(29, 30, 31)],                     # 4 ballon / curseurs
+    team_pal(c5(4, 12, 30), c5(2, 6, 18), c5(28, 30, 31), c5(3, 5, 14), c5(12, 20, 31)),   # 5 equipe A, peau foncee (1-10 au runtime)
+    team_pal(c5(31, 13, 2), c5(20, 6, 1), c5(31, 28, 20), c5(10, 4, 2), c5(31, 22, 10)),   # 6 equipe B, peau foncee
 ]
 
 
@@ -435,6 +444,7 @@ def tiles_from_image(im, bpp=4):
 
 # ---------------------------------------------------------------- sprites joueurs (procedural)
 OUT, SKIN, SKINS, HAIR, KIT, KITD, TRIM, SHORT, BOOT, KITH = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+METAL, METALD, VISOR, NEON, WHITE = 11, 12, 13, 14, 15
 
 
 def limb(im, x0, y0, ang, ln, c_up, c_end, width=1):
@@ -455,38 +465,91 @@ FEET = 22
 
 
 def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
+    """athlete du futur : casque a visiere neon et crete aux couleurs de l'equipe,
+    epaulieres et plastron, combinaison, genouilleres, bottes a semelle lumineuse."""
     im = Img(FW, FH, 0)
     L = lean
     hip = 16 + crouch
     sh = 9 + crouch
-    # bras / jambe arriere
-    limb(im, 6 + L, hip, legs[1], 6.0 - crouch, SKINS, BOOT, 2)
-    limb(im, 5 + L, sh, arms[1], 5.2, KITD, SKINS, 2)
-    # torse (7 px), col, bande, short
+
+    def leg(x0, ang, front):
+        ln = 6.0 - crouch
+        a = math.radians(ang)
+        dx, dy = math.sin(a), math.cos(a)
+        for i in range(int(ln * 3) + 1):
+            t = i / (ln * 3) * ln
+            x, y = round(x0 + dx * t), round(hip + dy * t)
+            c = SHORT if front else KITD
+            if 2.2 < t < 3.6:
+                c = METAL if front else METALD          # genouillere
+            if t > ln - 1.8:
+                c = BOOT
+            im.put(x, y, c)
+            im.put(round(x0 + dx * t - 0.5), y, c)
+        fx, fy = round(x0 + dx * ln), round(hip + dy * ln)
+        im.put(fx, fy + 1, NEON if front else VISOR)     # semelle lumineuse
+        im.put(fx - 1, fy + 1, VISOR)
+
+    def arm(x0, ang, front):
+        ln = 5.2
+        a = math.radians(ang)
+        dx, dy = math.sin(a), math.cos(a)
+        for i in range(int(ln * 3) + 1):
+            t = i / (ln * 3) * ln
+            x, y = round(x0 + dx * t), round(sh + dy * t)
+            c = (KIT if front else KITD) if t < ln - 1.6 else (METAL if front else METALD)   # gant
+            im.put(x, y, c)
+            im.put(round(x0 + dx * t - 0.5), y, c)
+
+    # membres arriere
+    leg(6 + L, legs[1], False)
+    arm(5 + L, arms[1], False)
+    # torse : combinaison + plastron
     im.rect(5 + L, sh - 1, 11 + L, hip - 2, KIT)
-    im.vline(5 + L, sh - 1, hip - 2, KITD)
-    im.vline(6 + L, sh, hip - 2, KITD)
-    im.hline(6 + L, 10 + L, sh - 1, KITH)
-    im.hline(7 + L, 9 + L, sh - 1, TRIM)            # col
-    im.vline(11 + L, sh, hip - 3, KITH)
-    im.rect(8 + L, sh + 1, 9 + L, sh + 3, TRIM)     # numero / ecusson
-    im.hline(5 + L, 11 + L, hip - 2, KITD)
+    im.vline(5 + L, sh, hip - 2, KITD)
+    im.vline(11 + L, sh + 1, hip - 3, KITH)
+    im.rect(7 + L, sh, 10 + L, sh + 3, KITD)            # plastron
+    im.hline(7 + L, 10 + L, sh, METAL)
+    im.vline(8 + L, sh + 1, sh + 3, NEON)               # ligne neon
+    im.put(10 + L, sh + 2, TRIM)
+    # epaulieres
+    im.rect(4 + L, sh - 1, 6 + L, sh, METAL)
+    im.put(4 + L, sh, METALD)
+    im.rect(10 + L, sh - 1, 12 + L, sh, METAL)
+    im.put(12 + L, sh, METALD)
+    im.put(11 + L, sh - 1, WHITE)
+    # ceinture
+    im.hline(5 + L, 11 + L, hip - 2, METALD)
+    im.put(8 + L, hip - 2, VISOR)
+    # bas de combinaison
     im.rect(5 + L, hip - 1, 11 + L, hip, SHORT)
-    im.put(5 + L, hip, KITD)
-    # tete (7 px)
+    # casque
     hy = 4 + crouch
     for y in range(hy - 4, hy + 4):
         for x in range(4 + L, 13 + L):
             d = (x - 8.5 - L) ** 2 * 1.05 + (y - hy) ** 2
             if d <= 11.5:
-                hair = (y <= hy - 2) or (x <= 6 + L and y <= hy + 1)
-                im.put(x, y, HAIR if hair else SKIN)
-    im.put(11 + L, hy, OUT)                         # oeil
-    im.put(10 + L, hy + 2, SKINS)
-    im.vline(8 + L, hy + 4, sh - 2, SKINS)          # cou
-    # jambe / bras avant
-    limb(im, 9 + L, hip, legs[0], 6.0 - crouch, SKIN, BOOT, 2)
-    limb(im, 10 + L, sh, arms[0], 5.2, KIT, SKIN, 2)
+                c = KIT if y < hy else METAL               # coque aux couleurs de l'equipe
+                if x <= 5 + L:
+                    c = KITD if y < hy else METALD
+                if y >= hy + 2:
+                    c = METALD                             # mentonniere
+                if y == hy - 3 and x in (8 + L, 9 + L):
+                    c = KITH                               # reflet
+                im.put(x, y, c)
+    for x in range(7 + L, 10 + L):                         # crete metallique
+        im.put(x, hy - 4, METAL)
+    im.put(8 + L, hy - 4, WHITE)
+    for x in range(9 + L, 13 + L):                         # visiere
+        im.put(x, hy, VISOR)
+        im.put(x, hy + 1, VISOR if x < 12 + L else NEON)
+    im.put(12 + L, hy, NEON)
+    im.put(10 + L, hy + 2, SKIN)                           # menton
+    im.put(11 + L, hy + 2, SKINS)
+    im.vline(8 + L, hy + 4, sh - 2, METALD)                # col
+    # membres avant
+    leg(9 + L, legs[0], True)
+    arm(10 + L, arms[0], True)
     return im
 
 
@@ -494,19 +557,24 @@ def lying(flip=False):
     """joueur allonge (chute) ou en extension (plongeon), 16 px de long."""
     im = Img(FW, FH, 0)
     y0 = 17
-    for y in range(y0 - 3, y0 + 3):                 # tete
+    for y in range(y0 - 3, y0 + 3):                 # casque
         for x in range(0, 6):
             if (x - 2.5) ** 2 + (y - y0) ** 2 <= 6.5:
-                im.put(x, y, HAIR if y < y0 - 1 else SKIN)
+                im.put(x, y, KIT if y < y0 else METALD)
+    im.put(1, y0 - 3, METAL)
+    im.put(2, y0 - 3, METAL)
+    im.vline(0, y0, y0 + 1, VISOR)
     im.rect(5, y0 - 2, 10, y0 + 2, KIT)
     im.hline(5, 10, y0 + 2, KITD)
-    im.rect(8, y0 - 1, 9, y0, TRIM)
+    im.hline(5, 7, y0 - 2, METAL)                   # epauliere
+    im.hline(7, 9, y0, NEON)
     im.rect(11, y0 - 2, 12, y0 + 2, SHORT)
-    im.hline(13, 14, y0 - 1, SKIN)
-    im.hline(13, 15, y0 + 1, SKINS)
+    im.hline(13, 14, y0 - 1, METAL)
+    im.hline(13, 15, y0 + 1, METALD)
     im.put(15, y0 - 1, BOOT)
-    im.put(15, y0 + 1, BOOT)
-    im.hline(6, 9, y0 + 3, SKIN)                    # bras
+    im.put(15, y0 + 1, NEON)
+    im.hline(6, 9, y0 + 3, KIT)                     # bras
+    im.put(10, y0 + 3, METAL)
     if flip:
         out = Img(FW, FH, 0)
         for y in range(FH):
