@@ -1,5 +1,12 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.14.1 — menu pause et chronomètre
+
+- Chronomètre arrêté pendant les engagements : coup d'envoi (jusqu'à la passe reçue par le
+  partenaire), arrêt de jeu après une faute et coup franc (jusqu'à la passe ou au tir).
+- Nouveau menu pause : cadre néon (style des bandeaux), titre PAUSE en cyan avec filet doré,
+  ligne choisie en orange entre deux chevrons.
+
 ## 0.14.0 — terrains et menus
 
 - Terrains : éclairage (4 halos de projecteurs tramés, bords assombris), raquettes hachurées

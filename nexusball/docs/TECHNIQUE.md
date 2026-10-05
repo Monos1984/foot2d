@@ -15,6 +15,7 @@ il décrit l'état du moteur, les décisions prises et ce qui reste à valider s
 | Raquettes | Réservées aux gardiens (les joueurs de champ sont repoussés sur le bord). Le ballon ne peut pas y rester 4 s : sinon l'adversaire engage au centre. |
 | Coup d'envoi | Deux joueurs dans le rond central ; le porteur doit passer à son partenaire ; personne d'autre n'entre dans le rond avant la réception (6 s au plus). |
 | Exclusions | Faute grave = 20 s de jeu, **un minuteur par joueur** (`p_pen`) : plusieurs exclusions simultanées possibles. Retour au poste le long du mur du haut, ou du bas si le ballon est près du haut. |
+| Chronomètre | Arrêté pendant les engagements : coup d'envoi, arrêt de jeu après faute, coup franc ; il repart quand la passe / le tir d'engagement est joué (ou après 6 s de sécurité). |
 | Fin de période à 0:00 | **Arrêt immédiat** (option A, arcade) : buzzer long, joueurs figés. Un tir déjà parti ne compte pas (la détection du but n'est active qu'en jeu, coup franc et tirs au but). |
 | Pause | Le jeu est entièrement figé (chronomètre, physique, IA, fatigue, exclusions) et la foule se tait. À la reprise, les boutons pressés pendant la frame de sortie sont ignorés (pas d'action fantôme). |
 

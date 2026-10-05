@@ -213,8 +213,13 @@ st_kickoff:
 st_play:
     .a16
     PROF 0
+    ; chronometre arrete pendant un engagement (coup d'envoi, coup franc) : il repart
+    ; quand la passe / le tir d'engagement est joue
+    lda ko_active
+    bne :+
     jsr clock_update
     bcs @end
+:
     jsr compute_nearest
     PROF 1
     jsr human_input
@@ -371,13 +376,8 @@ st_end:
 ; --- faute : courte interruption puis remise en jeu
 st_foul:
     .a16
-    lda tk_foul
-    bne :+                      ; faute grave : horloge arretee
-    jsr clock_update
-    bcc :+
-    clc
-    rts
-:   jsr ball_update
+    ; arret de jeu apres une faute : chronometre arrete (il repart apres le coup franc)
+    jsr ball_update
     lda m_timer
     bne @w
     lda #MS_PLAY
@@ -592,6 +592,8 @@ goal_scored:
 ;  pause_menu : RESUME / TEAM SETUP / QUIT MATCH. Carry = 1 pour quitter.
 ; -----------------------------------------------------------------------------
 PAUSE_ITEMS = 3
+PZ_ROW      = 8                 ; premiere ligne du cadre de pause
+PZ_ROWS     = 7
 
 PAUSE_SAVE  = $7E3000           ; lignes BG3 sauvegardees (WRAM haute)
 CROWD_MATCH = $0C               ; volume de la foule en match
@@ -614,15 +616,28 @@ pause_menu:
 :   ; sauvegarde des lignes utilisees
     ldx #0
 @sv:
-    lda bg3_map + 10*64,x
+    lda bg3_map + PZ_ROW*64,x
     sta f:PAUSE_SAVE,x
     inx
     inx
-    cpx #(5*64)
+    cpx #(PZ_ROWS*64)
     bne @sv
 @draw:
-    lda #10
-@fill:
+    ; cadre neon (tiles du bandeau, palette 5) : lignes PZ_ROW .. PZ_ROW+6, colonnes 8..23
+    lda #TXT_ATTR + $1400
+    sta bn_attr
+    lda #16
+    sta bn_w
+    ldx #TPOS(8, PZ_ROW)
+    lda #HT_BN_TL
+    ldy #HT_BN_T
+    jsr bn_row
+    ldx #TPOS(8, PZ_ROW + 6)
+    lda #HT_BN_BL
+    ldy #HT_BN_B
+    jsr bn_row
+    lda #PZ_ROW + 1
+@side:
     pha
     asl a
     asl a
@@ -631,42 +646,79 @@ pause_menu:
     asl a
     asl a
     clc
-    adc #10 * 2
+    adc #8 * 2
     tax
-    ldy #12
+    lda #HT_BN_L + TXT_ATTR + $1400
+    sta bg3_map,x
+    lda #HT_BN_R + TXT_ATTR + $1400
+    sta bg3_map + 15*2,x
+    inx
+    inx
+    ldy #14
     lda #TXT_ATTR + TXT_PANEL
     jsr fill_tiles
     pla
     inc a
-    cmp #14
-    bne @fill
-    ldx #TPOS(13, 10)
+    cmp #PZ_ROW + 6
+    bne @side
+    ; titre en cyan et filet dore
+    lda #TXT_ATTR + TXT_PANEL + $1400
+    sta t0
+    ldx #TPOS(13, PZ_ROW + 1)
     ldy #.loword(str_pause)
-    jsr print_panel
-    ldx #TPOS(12, 11)
-    ldy #.loword(str_resume)
-    jsr print_panel
-    ldx #TPOS(12, 12)
-    ldy #.loword(str_teamset)
-    jsr print_panel
-    ldx #TPOS(12, 13)
-    ldy #.loword(str_quit)
-    jsr print_panel
-    ; curseur
+    jsr print
+    ldx #TPOS(10, PZ_ROW + 2)
+    ldy #12
+    lda #('_' - 32) + TXT_ATTR + TXT_PANEL + $1400
+    jsr fill_tiles
+    ; options : la ligne choisie en orange, encadree de chevrons
+    stz t5
+@it:
+    lda t5
+    asl a
+    tay
+    lda pause_items,y
+    tay
+    lda #TXT_ATTR + TXT_PANEL
+    ldx t5
+    cpx pause_sel
+    bne :+
+    lda #TXT_ATTR + TXT_PANEL + $1000
+:   sta t0
+    lda t5
+    clc
+    adc #PZ_ROW + 3
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #12 * 2
+    tax
+    jsr print
+    inc t5
+    lda t5
+    cmp #PAUSE_ITEMS
+    bne @it
+    ; chevrons de la ligne choisie
     lda pause_sel
     clc
-    adc #11
+    adc #PZ_ROW + 3
     asl a
     asl a
     asl a
     asl a
     asl a
     asl a
-    clc
-    adc #(11*2)
     tax
-    lda #('>' - 32 + TXT_ATTR + TXT_PANEL)
-    sta bg3_map,x
+    lda #('>' - 32 + TXT_ATTR + TXT_PANEL + $1000)
+    sta bg3_map + 10*2,x
+    lda #('<' - 32 + TXT_ATTR + TXT_PANEL + $1000)
+    sta bg3_map + 22*2,x
+    lda #1
+    sta bg3_dirty
 @wait:
     jsr build_sprites
     jsr wait_frame
@@ -720,7 +772,7 @@ pause_restore_clear:
 @l: sta f:PAUSE_SAVE,x
     inx
     inx
-    cpx #(5*64)
+    cpx #(PZ_ROWS*64)
     bne @l
     rts
 
@@ -728,10 +780,10 @@ pause_restore:
     .a16
     ldx #0
 @l: lda f:PAUSE_SAVE,x
-    sta bg3_map + 10*64,x
+    sta bg3_map + PZ_ROW*64,x
     inx
     inx
-    cpx #(5*64)
+    cpx #(PZ_ROWS*64)
     bne @l
     lda #1
     sta bg3_dirty
@@ -745,6 +797,7 @@ str_overtime: .byte "OVERTIME - GOLDEN SCORE", 0
 str_goal1:  .byte "SCORE! +1", 0
 str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
+pause_items: .word .loword(str_resume), .loword(str_teamset), .loword(str_quit)
 str_resume: .byte "RESUME", 0
 str_quit:   .byte "QUIT MATCH", 0
 str_teamset: .byte "TEAM SETUP", 0
