@@ -27,12 +27,10 @@ la limite matérielle (32 OBJ et 34 tranches de 8 px par ligne : la PPU abandonn
 2. ballon (1 OBJ 16×16)
 3. joueurs, du plus proche au plus lointain (12 × 2 OBJ 16×16)
 4. ombre du ballon (1 OBJ 16×16)
-5. radar : 13 points 8×8 + 8 OBJ 16×16 de cadre — **en dernier**
 
-Total maximal : 49 OBJ sur 128. Pire cas sur une ligne : 12 joueurs alignés = 24 OBJ / 48
-tranches → les joueurs les plus lointains et le radar perdent des morceaux en premier ; le
-ballon et les curseurs ne disparaissent jamais. Le radar passe désormais visuellement derrière
-les joueurs qui le croisent (choix assumé : le jeu avant la décoration).
+Total maximal : 28 OBJ sur 128 (le mini-radar a été retiré en 0.12.2). Pire cas sur une
+ligne : 12 joueurs alignés = 24 OBJ / 48 tranches → les joueurs les plus lointains perdent des
+morceaux en premier ; le ballon et les curseurs ne disparaissent jamais.
 La version `DEBUG=1` affiche le nombre d'OBJ de chaque frame.
 
 ## 3. VBlank / DMA
@@ -46,7 +44,7 @@ davantage en PAL). Les gros transferts (stades, décors, polices) se font écran
 ## 3 bis. Temps CPU par frame (mesuré, bsnes accuracy, NTSC)
 
 Profil d'une frame de match (lignes vidéo, maximum observé sur 1500-3000 frames, version
-`DEBUG`) : IA ~46, joueurs ~79, règles ~43, sprites ~39 (joueurs) + ~26 (radar) + 1 (fin OAM).
+`DEBUG`) : IA ~46, joueurs ~79, règles ~43, sprites ~39 (joueurs) + 1 (fin OAM) ; le radar (~26) a été retiré.
 Optimisations de la 0.12.1 : fin d'OAM incrémentale (seuls les sprites de la frame précédente
 sont cachés : 13 → 1 ligne), tri d'affichage conservé d'une frame à l'autre (presque trié),
 table pour les bits hauts de l'OAM, rejet rapide des zones interdites (raquettes, rond
@@ -68,7 +66,7 @@ complets PAL et NTSC (compteur de frames du jeu = compteur de NMI), contre ~1 % 
 
 | Adresse | Bloc | Protection |
 |---|---|---|
-| $A0:6000 | Options (radar, durée, boutons, langue) | signature, version, longueur, checksum |
+| $A0:6000 | Options (durée, boutons, langue ; octet radar conservé mais inutilisé) | signature, version, longueur, checksum |
 | $A0:6100 | Compétitions, copie A (3 × $400) | signature, version, taille, checksum, **génération** |
 | $A0:6D00 | Compétitions, copie B (3 × $400) | idem |
 | $A1:6000 | Joueurs et équipes créés | signature, version, longueur, checksum ; seul le bloc corrompu est réinitialisé |

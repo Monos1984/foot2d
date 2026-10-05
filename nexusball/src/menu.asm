@@ -217,7 +217,7 @@ ui_cursor_col:
     jmp bg2_bar
 
 ; -----------------------------------------------------------------------------
-;  options_screen : RADAR, MATCH LENGTH (sauvegardes en SRAM)
+;  options_screen : MATCH LENGTH, CONTROLS, LANGUAGE (sauvegardes en SRAM)
 ; -----------------------------------------------------------------------------
 options_screen:
     .a16
@@ -241,7 +241,7 @@ options_redraw:
     and #JOY_B
     bne @back
     lda ui_sel
-    ldy #5
+    ldy #4
     jsr ui_updown
     cmp ui_sel
     beq :+
@@ -250,26 +250,19 @@ options_redraw:
     bra @loop
 :   lda ui_sel
     bne :+
-    lda opt_radar
-    ldy #2
-    jsr ui_lr
-    sta opt_radar
-    bra @chg
-:   cmp #1
-    bne :+
     lda menu_len
     ldy #4
     jsr ui_lr
     sta menu_len
     bra @chg
-:   cmp #2
+:   cmp #1
     bne :+
     lda opt_ctrl
     ldy #3
     jsr ui_lr
     sta opt_ctrl
     bra @chg
-:   cmp #3
+:   cmp #2
     bne @done
     lda lang
     ldy #2
@@ -291,7 +284,7 @@ options_redraw:
     jmp title_screen
 
 opt_rows:
-    .byte 6, 7, 8, 11, 13
+    .byte 6, 7, 10, 12
 
 opt_draw:
     .a16
@@ -299,19 +292,6 @@ opt_draw:
     lda #UI_ATTR
     sta t0
     ldx #TPOS(2, 6)
-    ldy #.loword(str_o_radar)
-    jsr print
-    ldy #.loword(str_on)
-    lda opt_radar
-    bne :+
-    ldy #.loword(str_off)
-:   ldx #TPOS(18, 6)
-    lda #UI_HI
-    sta t0
-    jsr print
-    lda #UI_ATTR
-    sta t0
-    ldx #TPOS(2, 7)
     ldy #.loword(str_o_len)
     jsr print
     lda #UI_HI
@@ -319,11 +299,11 @@ opt_draw:
     lda menu_len
     clc
     adc #2
-    ldx #TPOS(20, 7)
+    ldx #TPOS(20, 6)
     jsr print_digit
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(2, 8)
+    ldx #TPOS(2, 7)
     ldy #.loword(str_o_ctrl)
     jsr print
     lda #UI_HI
@@ -331,7 +311,7 @@ opt_draw:
     lda opt_ctrl
     clc
     adc #'A' - 32 + UI_HI
-    sta bg3_map + TPOS(23, 8)
+    sta bg3_map + TPOS(23, 7)
     ; rappel des boutons
     lda opt_ctrl
     asl a
@@ -340,9 +320,9 @@ opt_draw:
     tay
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(2, 9)
+    ldx #TPOS(2, 8)
     jsr print
-    ldx #TPOS(2, 11)
+    ldx #TPOS(2, 10)
     ldy #.loword(str_lang)
     jsr print
     ldy #.loword(str_english)
@@ -351,16 +331,16 @@ opt_draw:
     ldy #.loword(str_french)
 :   lda #UI_HI
     sta t0
-    ldx #TPOS(18, 11)
+    ldx #TPOS(18, 10)
     jsr print
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(2, 13)
+    ldx #TPOS(2, 12)
     ldy #.loword(str_back)
     jsr print
     lda #.loword(opt_rows)
     sta t3
-    lda #5
+    lda #4
     sta t4
     lda ui_sel
     jmp ui_cursor
@@ -435,7 +415,6 @@ title_items:
     .word .loword(str_t_custom), .loword(str_t_cteam), .loword(str_t_cplayer)
     .word .loword(str_t_rules), .loword(str_t_opt), .loword(str_t_cred)
 str_options:    .byte "OPTIONS", 0
-str_o_radar:    .byte "RADAR", 0
 str_o_len:      .byte "MATCH LENGTH    2X  MIN", 0
 str_on:         .byte "ON ", 0
 str_off:        .byte "OFF", 0

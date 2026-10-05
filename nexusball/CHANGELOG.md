@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.12.2 — sans radar
+
+- Mini-radar retiré : plus d'affichage en match, plus d'option RADAR dans OPTIONS ni dans le menu
+  pause (RESUME / TEAM SETUP / QUIT MATCH), SELECT n'a plus d'effet. 28 OBJ au plus par frame.
+- Vérifié sur bsnes : match NTSC complet sans frame perdue (0.12.1).
+
 ## 0.12.1 — performances
 
 - Mesure : ~1 % de frames perdues en NTSC sur bsnes (matchs complets). Profilage par étape

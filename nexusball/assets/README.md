@@ -18,11 +18,10 @@ ROM
 |---|---|---|
 | `players/` | planches des joueurs de champ (cadres 16×32) | 4bpp, 15 couleurs + transparence ; couleurs du maillot aux index 5-8 et 10 (remplacées en jeu par celles de l'équipe) |
 | `goalkeepers/` | planches des gardiens (mêmes cadres) | palette OBJ dédiée (2 / 3) |
-| `ball/` | ballon (4 orientations × 2 phases, 16×16) et ombre | palette OBJ 4 partagée avec curseurs et radar |
+| `ball/` | ballon (4 orientations × 2 phases, 16×16) et ombre | palette OBJ 4 partagée avec les curseurs |
 | `stadiums/` | un PNG 512×320 par stade + sa palette | BG1 4bpp, ≤ 1024 tiles uniques, palette BG 2 ; index 10-14 = couleurs animées (anneaux, public) |
 | `ui/` | fonds des menus, écrans de publicité, écran titre | BG1 4bpp multi-palettes (BG 2, 5, 6, 7), 256×224 |
 | `hud/` | plaques d'équipe, chiffres du score, bandeaux | BG3 2bpp, 4 couleurs, tiles 128-255 de la police |
-| `radar/` | cadre et points du mini-radar | OBJ, priorité la plus basse de l'OAM |
 | `logos/` | logo NEXUS BALL (BG2) et logo OFFGAME | BG2 4bpp palette 3 / BG1 |
 | `portraits/` | (prévu) portraits de joueurs pour les éditeurs | |
 | `effects/` | (prévu) étincelles, halo des anneaux, traînée du ballon | OBJ 8×8 / 16×16 |

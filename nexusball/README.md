@@ -32,8 +32,8 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | Fatigue légère (sprint / STAMINA), caractéristiques 1–9 | ✅ |
 | 1P vs CPU, 1P vs 2P, CPU vs CPU | ✅ |
 | Horloge, mi-temps avec changement de côté, fin de match | ✅ |
-| HUD compact, mini-radar ON/OFF sauvegardé en SRAM (signature, version, checksum) | ✅ |
-| Menu pause (RESUME / TEAM SETUP / RADAR / QUIT MATCH), crédits | ✅ |
+| HUD compact (plaques d'équipe, score, temps), options sauvegardées en SRAM (signature, version, checksum) | ✅ |
+| Menu pause (RESUME / TEAM SETUP / QUIT MATCH), crédits | ✅ |
 | Public animé (cycle de palette, s'emballe sur les actions) | ✅ |
 | 16 équipes officielles (nom, monde, style, niveau, maillots domicile/extérieur, 12 joueurs) | ✅ |
 | Choix des équipes, difficulté (EASY → EXPERT), règle d'égalité | ✅ |
@@ -77,7 +77,6 @@ Documentation technique (règles arrêtées, OAM, VBlank, SRAM, PAL/NTSC, tests)
 | **L** | — | changer de joueur |
 | **R** | sprint (fatigue) | sprint |
 | **START** | pause | pause |
-| **SELECT** (pause) | radar ON/OFF | |
 | **X / Y** près d'un ballon libre | | reprise de volée / tir en l'air |
 
 OPTIONS propose 3 configurations de boutons (TYPE A ci-dessus, B et C) et la langue

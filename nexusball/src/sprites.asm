@@ -1,21 +1,19 @@
 ; =============================================================================
-;  sprites.asm - construction de l'OAM : radar, curseurs, joueurs et ballon
+;  sprites.asm - construction de l'OAM : curseurs, joueurs et ballon
 ;  tries par profondeur (y), ombres.
 ;  Ordre OAM = ordre d'affichage (le premier est devant) et priorite en cas de
-;  surcharge : curseurs, ballon, joueurs (par profondeur), ombre, radar.
+;  surcharge : curseurs, ballon, joueurs (par profondeur), ombre.
 ; =============================================================================
 
 OBJ_PRIO   = $3000              ; priorite 3
 PAL_BALL   = $0800              ; palette OBJ 4
-RADAR_X    = 186
-RADAR_Y    = 182
 ENT_BALL   = NUM_PLAYERS
 
 build_sprites:
     .a16
     .i16
     ; ordre OAM = priorite : en cas de surcharge d'une ligne (32 sprites / 34 tiles),
-    ; la PPU abandonne les derniers. Elements de jeu d'abord, radar en dernier.
+    ; la PPU abandonne les derniers : curseurs et ballon d'abord.
     jsr oam_begin
     jsr draw_cursors
 .if DEBUG
@@ -47,17 +45,6 @@ build_sprites:
     cpy #NUM_PLAYERS + 1
     bne @l
     jsr draw_ball_shadow
-.if DEBUG
-    ldx #3 * 2
-    jsr prof_mark
-.endif
-    lda m_state
-    cmp #MS_END
-    beq :+
-    lda opt_radar
-    beq :+
-    jsr draw_radar
-:
 .if DEBUG
     ldx #4 * 2
     jsr prof_mark
@@ -383,105 +370,3 @@ draw_cursors:
     jne @pad
     rts
 
-; -----------------------------------------------------------------------------
-;  draw_radar : mini-radar en bas a droite (points puis fond)
-; -----------------------------------------------------------------------------
-draw_radar:
-    .a16
-    .i16
-    stz t2
-    ; ballon
-    lda #SPR_DOTW | PAL_BALL | OBJ_PRIO
-    sta t1
-    lda b_y
-    jsr radar_y
-    sta t0
-    lda b_x
-    jsr radar_x
-    jsr oam_add
-    ; joueurs
-    ldx #0
-@l: lda p_state,x
-    cmp #PS_OUT
-    beq @n
-    lda #SPR_DOTA | PAL_BALL | OBJ_PRIO
-    ldy p_team,x
-    beq :+
-    lda #SPR_DOTB | PAL_BALL | OBJ_PRIO
-:   sta t1
-    lda p_y,x
-    jsr radar_y
-    sta t0
-    lda p_x,x
-    jsr radar_x
-    phx
-    jsr oam_add
-    plx
-@n: inx
-    inx
-    cpx #NUM_PLAYERS*2
-    bne @l
-    ; fond 64x32 : 4 x 2 sprites 16x16
-    lda #1
-    sta t2
-    lda #RADAR_Y
-    sta t0
-    lda #SPR_PANEL_TL | PAL_BALL | OBJ_PRIO
-    jsr radar_row
-    lda #RADAR_Y + 16
-    sta t0
-    lda #SPR_PANEL_BL | PAL_BALL | OBJ_PRIO
-    jsr radar_row
-    rts
-
-; radar_row : A = tile du coin gauche (le bord est tile + 2), t0 = y
-radar_row:
-    .a16
-    sta t6
-    sta t1
-    lda #RADAR_X
-    jsr oam_add
-    lda t6
-    clc
-    adc #2
-    sta t1
-    lda #RADAR_X + 16
-    jsr oam_add
-    lda #RADAR_X + 32
-    jsr oam_add
-    lda t6
-    ora #$4000                  ; coin droit = coin gauche retourne
-    sta t1
-    lda #RADAR_X + 48
-    jsr oam_add
-    rts
-
-; radar_x / radar_y : A = coordonnee monde (12.4) -> position ecran du point
-radar_x:
-    .a16
-    lsr a                       ; / 8 pixels (coordonnees toujours positives)
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    sec
-    sbc #FIELD_L / 8
-    clc
-    adc #RADAR_X + 3
-    rts
-radar_y:
-    .a16
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    sec
-    sbc #FIELD_T / 8
-    clc
-    adc #RADAR_Y + 2
-    rts

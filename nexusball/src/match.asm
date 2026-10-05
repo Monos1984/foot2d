@@ -581,11 +581,9 @@ goal_scored:
     rts
 
 ; -----------------------------------------------------------------------------
-;  pause_menu : RESUME / RADAR / QUIT MATCH. Carry = 1 pour quitter.
+;  pause_menu : RESUME / TEAM SETUP / QUIT MATCH. Carry = 1 pour quitter.
 ; -----------------------------------------------------------------------------
-;  pause_menu : RESUME / TEAM SETUP / RADAR / QUIT MATCH. Carry = 1 pour quitter.
-; -----------------------------------------------------------------------------
-PAUSE_ITEMS = 4
+PAUSE_ITEMS = 3
 
 pause_menu:
     .a16
@@ -627,7 +625,7 @@ pause_menu:
     jsr fill_tiles
     pla
     inc a
-    cmp #15
+    cmp #14
     bne @fill
     ldx #TPOS(13, 10)
     ldy #.loword(str_pause)
@@ -639,12 +637,6 @@ pause_menu:
     ldy #.loword(str_teamset)
     jsr print_panel
     ldx #TPOS(12, 13)
-    ldy #.loword(str_radar_on)
-    lda opt_radar
-    bne :+
-    ldy #.loword(str_radar_off)
-:   jsr print_panel
-    ldx #TPOS(12, 14)
     ldy #.loword(str_quit)
     jsr print_panel
     ; curseur
@@ -679,16 +671,12 @@ pause_menu:
 :   lda t7
     bit #JOY_START
     bne @resume
-    bit #JOY_SELECT
-    bne @radar
     and #(JOY_A | JOY_B)
     beq @wait
     lda pause_sel
     beq @resume
     cmp #1
     beq @team
-    cmp #2
-    beq @radar
     ; quitter
     jsr pause_restore
     sec
@@ -703,12 +691,6 @@ pause_menu:
     jsr hud_draw_static
     jsr hud_update
     jsr pause_restore_clear
-    jmp @draw
-@radar:
-    lda opt_radar
-    eor #1
-    sta opt_radar
-    jsr save_options
     jmp @draw
 @resume:
     jsr pause_restore
@@ -748,8 +730,6 @@ str_goal1:  .byte "SCORE! +1", 0
 str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
 str_resume: .byte "RESUME", 0
-str_radar_on:  .byte "RADAR ON ", 0
-str_radar_off: .byte "RADAR OFF", 0
 str_quit:   .byte "QUIT MATCH", 0
 str_teamset: .byte "TEAM SETUP", 0
 .segment "CODE"

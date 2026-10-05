@@ -53,8 +53,6 @@ TR = [
     ("SCORE! +2", "POINTS! +2", 12),
     ("RESUME", "REPRENDRE", 10),
     ("TEAM SETUP", "EFFECTIF", 0),
-    ("RADAR ON ", "RADAR OUI", 0),
-    ("RADAR OFF", "RADAR NON", 0),
     ("QUIT MATCH", "QUITTER", 0),
     ("HELD TOO LONG!", "PORT TROP LONG!", 28),
     ("FOUL!", "FAUTE!", 28),
