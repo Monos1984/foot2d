@@ -354,12 +354,52 @@ def build_field(st):
                     im.put(x, y, 3)
                 if (y // 16) % 2:
                     im.put(x, y, 1) if im.get(x, y) == 2 else None
-    # reflets des projecteurs : bandes verticales tramees
-    for lx in range(FIELD_L + 40, FIELD_R, 112):
-        for y in range(FIELD_T + 8, FIELD_B - 8):
-            for x in range(lx, lx + 16):
-                if (x + y) % 4 == 0 and im.get(x, y) in (1, 2):
-                    im.put(x, y, 3)
+    # eclairage : 4 halos de projecteurs (tramage clair) et bords assombris (vignette)
+    bayer = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+    pools = [(FIELD_L + 120, FIELD_T + 60), (FIELD_R - 120, FIELD_T + 60),
+             (FIELD_L + 120, FIELD_B - 50), (FIELD_R - 120, FIELD_B - 50)]
+    for y in range(FIELD_T, FIELD_B + 1):
+        for x in range(FIELD_L, FIELD_R + 1):
+            c = im.get(x, y)
+            if c not in (1, 2):
+                continue
+            light = max(0.0, 1.0 - min(((x - px) / 70.0) ** 2 + ((y - py) / 46.0) ** 2 for px, py in pools))
+            edge = min(x - FIELD_L, FIELD_R - x, (y - FIELD_T) * 2, (FIELD_B - y) * 2)
+            dark = max(0.0, 1.0 - edge / 28.0)
+            b = bayer[y & 3][x & 3] / 16.0
+            if light * 0.55 > b and c == 2:
+                im.put(x, y, 3)                      # halo
+            elif dark * 0.8 > b:
+                im.put(x, y, 1)                      # vignette
+    # raquettes : hachures (zone reservee aux gardiens)
+    for gx, sgn in ((FIELD_L, 1), (FIELD_R, -1)):
+        for y in range(FIELD_CY - ZONE_R, FIELD_CY + ZONE_R + 1):
+            for x in range(FIELD_L, FIELD_R + 1):
+                if (x - gx) * sgn < 0:
+                    continue
+                if (x - gx) ** 2 + (y - FIELD_CY) ** 2 < (ZONE_R - 2) ** 2:
+                    if (x + y * sgn) % 4 == 0:
+                        im.put(x, y, 3)              # hachures claires
+                    elif im.get(x, y) == 2 and (x + y) % 2 == 0:
+                        im.put(x, y, 1)              # fond assombri
+    # emblème central : double hexagone et rayons
+    cx, cy = 256, FIELD_CY
+    for y in range(cy - 30, cy + 31):
+        for x in range(cx - 34, cx + 35):
+            dx, dy = abs(x - cx), abs(y - cy)
+            hexd = max(dx * 0.866 + dy * 0.5, dy)          # distance "hexagonale"
+            if 27 <= hexd < 28.5 or 20 <= hexd < 21:
+                im.put(x, y, 5 if hexd > 24 else 3)
+            elif hexd < 20 and (dx + dy) % 7 == 0 and im.get(x, y) in (1, 2):
+                im.put(x, y, 3)
+    # liseré neon du perimetre du terrain
+    im.hline(FIELD_L, FIELD_R, FIELD_B, 9)
+    im.hline(FIELD_L, FIELD_R, FIELD_B - 1, 8)
+    im.vline(FIELD_L, FIELD_T, FIELD_B, 9)
+    im.vline(FIELD_R, FIELD_T, FIELD_B, 9)
+    # coins : quarts de cercle
+    for (qx, qy) in ((FIELD_L, FIELD_T), (FIELD_R, FIELD_T), (FIELD_L, FIELD_B), (FIELD_R, FIELD_B)):
+        im.ellipse(qx, qy, 12, 12, 4, thick=1.0, clip=lambda x, y: FIELD_L < x < FIELD_R and FIELD_T < y < FIELD_B)
     # ombre portee du mur du haut
     for y in range(FIELD_T + 1, FIELD_T + 7):
         for x in range(FIELD_L, FIELD_R + 1):
@@ -810,23 +850,43 @@ def build_logo():
 
 
 PANEL_PAL = [0, c5(4, 6, 16), c5(10, 16, 30), c5(8, 24, 31), c5(31, 16, 4), c5(1, 1, 4),
-             0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+             c5(3, 5, 13),                                   # 6 lignes de balayage
+             c5(12, 20, 31), c5(6, 12, 26),                  # 7-8 degrade de la barre
+             c5(31, 16, 4),                                  # 9 accent orange
+             c5(24, 30, 31),                                 # 10 reflet de la barre
+             0, 0, 0, 0, 0]
 
 
 def panel_tiles():
-    """tuiles des panneaux de menu (BG2, palette 4) : fond, barre, 8 bords."""
+    """tuiles des panneaux de menu (BG2, palette 4) : fond, barre, 8 bords.
+    Fond a lignes de balayage, barre de selection en degrade, cadre neon double a coins
+    biseautes avec accent orange."""
     def t(fn):
         return [fn(x, y) for y in range(8) for x in range(8)]
-    fill = t(lambda x, y: 1)
-    bar = t(lambda x, y: 3 if y == 0 else (2 if y < 7 else 1))
+    fill = t(lambda x, y: 6 if y % 2 else 1)                        # lignes de balayage
+    bar = t(lambda x, y: [3, 10, 7, 7, 8, 8, 8, 2][y])               # degrade lumineux
     def border(left, right, top, bottom):
+        corner = (left or right) and (top or bottom)
         def f(x, y):
-            if (left and x == 0) or (right and x == 7) or (top and y == 0) or (bottom and y == 7):
-                return 5
-            if (left and x == 1) or (right and x == 6) or (top and y == 1) or (bottom and y == 6):
-                corner = (left or right) and (top or bottom)
-                return 4 if corner else 3
-            return 1
+            xx = x if left else 7 - x                                 # distance au bord vertical
+            yy = y if top else 7 - y                                  # distance au bord horizontal
+            if corner:
+                if xx + yy < 3:
+                    return 0                                          # coin biseaute (transparent)
+                if xx + yy == 3:
+                    return 3                                          # biseau neon
+                if xx + yy == 4:
+                    return 2
+                if (xx == 2 and yy in (2, 3)) or (yy == 2 and xx == 3):
+                    return 9                                          # accent orange
+                return 6 if y % 2 else 1
+            if (left or right) and xx == 0 or (top or bottom) and yy == 0:
+                return 3                                              # filet neon exterieur
+            if (left or right) and xx == 1 or (top or bottom) and yy == 1:
+                return 5                                              # creux sombre
+            if (left or right) and xx == 2 or (top or bottom) and yy == 2:
+                return 2                                              # filet interieur
+            return 6 if y % 2 else 1
         return t(f)
     return [fill, bar,
             border(1, 0, 1, 0), border(0, 0, 1, 0), border(0, 1, 1, 0),

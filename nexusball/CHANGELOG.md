@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.14.0 — terrains et menus
+
+- Terrains : éclairage (4 halos de projecteurs tramés, bords assombris), raquettes hachurées
+  (zone réservée aux gardiens visible), emblème hexagonal au centre, liseré néon autour du
+  terrain, quarts de cercle dans les coins (6 stades, 500 à 600 tiles chacun).
+- Menus : nouveaux panneaux (fond à lignes de balayage, cadre néon double à coins biseautés
+  avec accent orange, barre de sélection et bandeau de titre en dégradé lumineux).
+
 ## 0.13.1 — visière transparente, choix des tenues
 
 - Visière transparente : le visage (et la teinte de peau) se voit derrière le verre, cadre
