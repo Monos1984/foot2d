@@ -382,6 +382,16 @@ st_foul:
     bne @w
     lda #MS_PLAY
     sta m_state
+    lda ko_active
+    beq @w
+    lda ko_mode
+    beq @w
+    lda #SFX_WHISTLE            ; reprise : coup franc
+    jsr sfx_play
+    ldy #.loword(str_fk)
+    jsr show_msg
+    lda #(T_MSG / 3)
+    sta msg_time
 @w: clc
     rts
 
@@ -951,6 +961,7 @@ pause_restore:
 .segment "RODATA"
 str_ready:  .byte "READY", 0
 str_go:     .byte "GO! PASS!", 0
+str_fk:     .byte "FREE KICK!", 0
 str_half:   .byte "HALF TIME", 0
 str_overtime: .byte "OVERTIME - GOLDEN SCORE", 0
 str_goal1:  .byte "SCORE! +1", 0

@@ -6,6 +6,7 @@
   lumineuses sur la trajectoire (tiles OBJ des points du radar réutilisées, 30 OBJ au plus).
 - Coup d'envoi : le bandeau « GO! PASS! » (« GO ! PASSE ! ») rappelle que le porteur doit
   passer (il reste immobile jusqu'à la passe).
+- Coup franc : coup de sifflet et bandeau « FREE KICK! » (« COUP FRANC ! ») à la reprise du jeu.
 
 - Compétitions : le score de l'équipe extérieure est plafonné à 99 comme celui de l'équipe à
   domicile (affichage sur 2 chiffres, mot de passe).

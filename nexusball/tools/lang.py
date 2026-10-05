@@ -49,6 +49,7 @@ TR = [
     # match
     ("READY", "PRÊTS", 0),
     ("GO! PASS!", "GO ! PASSE !", 12),
+    ("FREE KICK!", "COUP FRANC !", 12),
     ("HALF TIME", "MI-TEMPS", 0),
     ("OVERTIME - GOLDEN SCORE", "PROLONGATION - BUT EN OR", 28),
     ("SCORE! +1", "POINT! +1", 0),
