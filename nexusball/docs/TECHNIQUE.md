@@ -25,11 +25,11 @@ Ordre d'écriture = ordre d'affichage **et** priorité de conservation quand une
 la limite matérielle (32 OBJ et 34 tranches de 8 px par ligne : la PPU abandonne les derniers) :
 
 1. curseurs P1 / P2 (2 OBJ 8×8)
-2. ballon (1 OBJ 16×16)
+2. ballon (1 OBJ 16×16) et sa traînée quand il est rapide (2 OBJ 8×8)
 3. joueurs, du plus proche au plus lointain (12 × 2 OBJ 16×16)
 4. ombre du ballon (1 OBJ 16×16)
 
-Total maximal : 28 OBJ sur 128 (le mini-radar a été retiré en 0.12.2). Pire cas sur une
+Total maximal : 30 OBJ sur 128 (le mini-radar a été retiré en 0.12.2). Pire cas sur une
 ligne : 12 joueurs alignés = 24 OBJ / 48 tranches → les joueurs les plus lointains perdent des
 morceaux en premier ; le ballon et les curseurs ne disparaissent jamais.
 La version `DEBUG=1` affiche le nombre d'OBJ de chaque frame.

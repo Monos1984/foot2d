@@ -283,7 +283,70 @@ draw_ball:
     sec
     sbc #8
     jsr oam_add
+    ; trainee neon derriere un ballon libre et rapide
+    lda b_owner
+    cmp #NO_OWNER
+    bne @nt
+    lda b_vx
+    ABS_A
+    sta t6
+    lda b_vy
+    ABS_A
+    clc
+    adc t6
+    cmp #TRAIL_SPEED
+    bcc @nt
+    lda #SPR_TRAIL1 | PAL_BALL | OBJ_PRIO
+    ldy #1                      ; 1 puis 2 frames de trajectoire en arriere
+    jsr ball_trail
+    lda #SPR_TRAIL2 | PAL_BALL | OBJ_PRIO
+    ldy #2
+    jsr ball_trail
+@nt:
     rts
+
+; ball_trail : A = tile + attributs, Y = recul (en frames de vitesse)
+ball_trail:
+    .a16
+    .i16
+    sta t1
+    stz t2
+    sty t6
+    ; y = b_y - b_z - vy * recul
+    lda #0
+    ldx t6
+:   clc
+    adc b_vy
+    dex
+    bne :-
+    sta t7
+    lda b_y
+    sec
+    sbc b_z
+    sec
+    sbc t7
+    ASR_A 4
+    sec
+    sbc scroll_y
+    sec
+    sbc #8
+    sta t0
+    lda #0
+    ldx t6
+:   clc
+    adc b_vx
+    dex
+    bne :-
+    sta t7
+    lda b_x
+    sec
+    sbc t7
+    ASR_A 4
+    sec
+    sbc scroll_x
+    sec
+    sbc #4
+    jmp oam_add
 
 draw_ball_shadow:
     .a16

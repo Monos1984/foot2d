@@ -1,6 +1,9 @@
 # NEXUS BALL — CHANGELOG
 
-## 0.17.1 — corrections
+## 0.17.1 — corrections, traînée du ballon
+
+- Traînée néon derrière le ballon libre et rapide (tirs, longues passes) : deux traces
+  lumineuses sur la trajectoire (tiles OBJ des points du radar réutilisées, 30 OBJ au plus).
 
 - Compétitions : le score de l'équipe extérieure est plafonné à 99 comme celui de l'équipe à
   domicile (affichage sur 2 chiffres, mot de passe).
