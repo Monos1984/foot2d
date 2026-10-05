@@ -230,20 +230,35 @@ load_kits:
     bne :+
     lda #1
     sta kit_away+2
-:   ldx #0
+:   ; choix impose dans l'ecran de choix des equipes (0 auto, 1 domicile, 2 exterieur)
+    ldx #0
+@pick:
+    lda kit_pick,x
+    beq :+
+    dec a
+    sta kit_away,x
+:   inx
+    inx
+    cpx #4
+    bne @pick
+    ldx #0
 @side:
     phx
     txa
     lsr a
     sta t5
     jsr team_rec
+    lda t5
+    asl a
+    tax
+    lda kit_away,x              ; tenue exterieure possible pour les deux equipes
+    sta t6
     tya
     clc
     adc #T_KIT
-    ldx t5
+    ldx t6
     beq :+
-    ldx kit_away+2
-    beq :+
+    clc
     adc #10
 :   sta t6                      ; 5 couleurs
     ; CGRAM 128 + 16*cote + 5..8 et +10

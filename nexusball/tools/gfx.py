@@ -540,12 +540,20 @@ def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
     for x in range(7 + L, 10 + L):                         # crete metallique
         im.put(x, hy - 4, METAL)
     im.put(8 + L, hy - 4, WHITE)
-    for x in range(9 + L, 13 + L):                         # visiere
-        im.put(x, hy, VISOR)
-        im.put(x, hy + 1, VISOR if x < 12 + L else NEON)
-    im.put(12 + L, hy, NEON)
-    im.put(10 + L, hy + 2, SKIN)                           # menton
-    im.put(11 + L, hy + 2, SKINS)
+    # visiere transparente : le visage se voit derriere le verre (cadre et reflet neon)
+    im.put(9 + L, hy, VISOR)
+    im.put(10 + L, hy, SKIN)
+    im.put(11 + L, hy, OUT)                                # oeil
+    im.put(12 + L, hy, NEON)                               # reflet
+    im.put(9 + L, hy + 1, VISOR)
+    im.put(10 + L, hy + 1, SKIN)
+    im.put(11 + L, hy + 1, SKIN)
+    im.put(12 + L, hy + 1, VISOR)
+    im.put(9 + L, hy - 1, VISOR)                           # bord superieur du verre
+    im.put(10 + L, hy - 1, VISOR)
+    im.put(11 + L, hy - 1, VISOR)
+    im.put(10 + L, hy + 2, SKINS)                          # menton
+    im.put(11 + L, hy + 2, SKIN)
     im.vline(8 + L, hy + 4, sh - 2, METALD)                # col
     # membres avant
     leg(9 + L, legs[0], True)

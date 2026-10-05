@@ -383,3 +383,4 @@ prof_last:  .res 2
 sort_ok:    .res 2
 oam_prev:   .res 2
 oam_lim:    .res 2
+kit_pick:   .res 4          ; tenue choisie par cote : 0 auto, 1 domicile, 2 exterieur

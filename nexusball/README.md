@@ -79,6 +79,9 @@ Documentation technique (règles arrêtées, OAM, VBlank, SRAM, PAL/NTSC, tests)
 | **START** | pause | pause |
 | **X / Y** près d'un ballon libre | | reprise de volée / tir en l'air |
 
+Au choix des équipes : gauche / droite = équipe, haut / bas = côté, X = tenue domicile /
+extérieur.
+
 OPTIONS propose 3 configurations de boutons (TYPE A ci-dessus, B et C) et la langue
 (ENGLISH / FRANÇAIS, sauvegardée en SRAM). Le menu RULES / RÈGLES explique les règles en 5 pages.
 

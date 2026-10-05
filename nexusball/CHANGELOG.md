@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.13.1 — visière transparente, choix des tenues
+
+- Visière transparente : le visage (et la teinte de peau) se voit derrière le verre, cadre
+  et reflet néon.
+- Choix des équipes : X (ou Y) change la tenue de la fiche active (domicile / extérieur), pour
+  les deux équipes, avec mise à jour immédiate des joueurs affichés et des plaques du HUD. Sans
+  choix, la règle automatique reste (l'équipe extérieure change si les couleurs sont proches).
+
 ## 0.13.0 — joueurs du futur
 
 - Nouveaux sprites des joueurs (même gabarit 16×32, 16 poses) : casque à coque aux couleurs de

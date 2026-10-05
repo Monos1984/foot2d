@@ -67,9 +67,22 @@ team_select:
     sta t7
     beq @loop
     bit #JOY_B
-    bne @back
+    jne @back
     bit #(JOY_A | JOY_START)
-    bne @done
+    jne @done
+    bit #(JOY_X | JOY_Y)
+    beq @nokit
+    ; X / Y : tenue domicile <-> exterieur pour la fiche active
+    jsr ui_click
+    lda ts_side
+    asl a
+    tax
+    lda kit_away,x              ; tenue actuelle (0 domicile, 1 exterieur)
+    eor #1
+    inc a                       ; -> 1 domicile, 2 exterieur
+    sta kit_pick,x
+    bra @reload
+@nokit:
     bit #(JOY_UP | JOY_DOWN)
     beq @lr
     jsr ui_click
@@ -94,8 +107,10 @@ team_select:
 :   cmp team_id,x
     beq @loop
     sta team_id,x
+    stz kit_pick,x              ; nouvelle equipe : tenue automatique
     lda ts_side
     jsr team_defaults
+@reload:
     ; maillots (CGRAM) : ecran force eteint le temps de l'ecriture, juste apres le VBlank
     jsr wait_frame
     sep #$20
@@ -252,6 +267,20 @@ ts_draw_card:
     lda #9
     jsr ts_pos
     jsr print
+    ; tenue (X pour changer)
+    lda #UI_A
+    sta t0
+    lda #10
+    jsr ts_pos
+    lda ts_cur_side
+    asl a
+    tay
+    lda kit_away,y
+    ldy #.loword(str_kit_h)
+    cmp #0
+    beq :+
+    ldy #.loword(str_kit_a)
+:   jsr print
     ; style et niveau
     lda #UI_HI
     sta t0
@@ -468,7 +497,9 @@ ts_frames:  .byte SPR_RUN1, SPR_RUN2, SPR_RUN3, SPR_RUN2
 ts_stat_ofs: .byte 0, 1, 2, 5
 ts_stat_names: .word .loword(str_ts_spd), .loword(str_ts_pow), .loword(str_ts_pas), .loword(str_ts_def)
 str_tsel:       .byte "TEAM SELECT", 0
-str_tsel_help:  .byte "<> TEAM   UP/DOWN SIDE   A OK", 0
+str_tsel_help:  .byte "<>TEAM UP/DOWN SIDE X KIT A OK", 0
+str_kit_h:      .byte "HOME KIT", 0
+str_kit_a:      .byte "AWAY KIT", 0
 str_ts_spd:     .byte "SPD", 0
 str_ts_pow:     .byte "POW", 0
 str_ts_pas:     .byte "PAS", 0

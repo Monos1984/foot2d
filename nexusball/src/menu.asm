@@ -9,6 +9,8 @@ MENU_COL   = 8
 title_screen:
     .a16
     .i16
+    stz kit_pick                ; tenues automatiques (choix refait a chaque match amical)
+    stz kit_pick+2
     jsr safe_screen_off
     jsr bg3_clear
     jsr oam_clear
