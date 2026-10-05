@@ -48,7 +48,7 @@ TR = [
     ("<> PAGE    B BACK", "<> PAGE    B RETOUR", 20),
     # match
     ("READY", "PRÊTS", 0),
-    ("GO!", "PARTEZ!", 10),
+    ("GO! PASS!", "GO ! PASSE !", 12),
     ("HALF TIME", "MI-TEMPS", 0),
     ("OVERTIME - GOLDEN SCORE", "PROLONGATION - BUT EN OR", 28),
     ("SCORE! +1", "POINT! +1", 0),

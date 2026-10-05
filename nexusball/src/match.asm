@@ -950,7 +950,7 @@ pause_restore:
 
 .segment "RODATA"
 str_ready:  .byte "READY", 0
-str_go:     .byte "GO!", 0
+str_go:     .byte "GO! PASS!", 0
 str_half:   .byte "HALF TIME", 0
 str_overtime: .byte "OVERTIME - GOLDEN SCORE", 0
 str_goal1:  .byte "SCORE! +1", 0
