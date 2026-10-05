@@ -78,6 +78,18 @@ l'écriture puis réécrite en dernier, avec une génération +1. Au chargement,
 plus récente est retenue : une coupure pendant l'écriture laisse l'autre copie intacte. Les
 anciennes sauvegardes (sans copie B) restent lisibles.
 
+## 5 bis. Mot de passe des compétitions (`src/password.asm`)
+
+Flux de bits (poids faible d'abord) : emplacement 2, type 1, durée 2, difficulté 2, stade 3,
+regarder 1 ; présence des équipes 16 (+1 drapeau et 8 pour les équipes créées) ; par
+participant humain 1 (+ manette 1) ; graine 12 ; terminé 1 (sinon journée 4, match 4) ;
+exceptions (matchs CPU dont le résultat diffère de la simulation, ex. matchs regardés) ;
+scores des matchs humains dans l'ordre du calendrier (0-7 : 4 bits, 8-23 : 6, 24+ : 9 ;
+vainqueur aux tirs au but si coupe et égalité) ; CRC-16 réduit à 10 bits. 5 bits par
+caractère (A-Z sans I/O, 2-9), brouillés par une table et par le dernier caractère.
+Le décodage reconstruit la compétition en rejouant le calendrier (`sim_seed` + `sim_match`)
+et refuse tout flux incohérent (contrôle, longueur, bits restants, équipes créées absentes).
+
 ## 6. PAL / NTSC
 
 - Vitesses et accélérations : tables NTSC dans `include/region.inc`, table PAL calculée à

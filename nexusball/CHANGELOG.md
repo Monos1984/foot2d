@@ -1,5 +1,20 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.17.0 — mot de passe des compétitions
+
+- Chaque compétition (CHAMPIONSHIP, CUP, CUSTOM) affiche un **mot de passe** sur l'écran de
+  la journée ; PASSWORD dans le menu de la compétition permet de le saisir (grille de 32
+  caractères, A ajoute, B efface, START valide) et reprend la compétition au même point.
+  Alternative à la sauvegarde pour les supports sans mémoire de sauvegarde.
+- Les matchs CPU contre CPU sont simulés à partir d'une graine (12 bits) et du numéro du
+  match : ils se recalculent à l'identique, le mot de passe ne garde que les réglages, les
+  équipes, la position dans le calendrier et les scores des matchs humains (et des matchs CPU
+  regardés). 12 à 16 caractères en début de championnat de 8 équipes ; contrôle CRC 10 bits.
+- Sauvegarde des compétitions en version 4 (graine ajoutée) ; les sauvegardes version 3
+  restent lisibles.
+- Tests : aller-retour mot de passe -> compétition identique (ligue, coupe, perso, en cours
+  et terminées, avec match humain), mots de passe altérés refusés.
+
 ## 0.16.0 — confirmation dans les menus, animations des joueurs
 
 - Retour au menu principal confirmé partout où un choix peut être perdu (« MAIN MENU? »

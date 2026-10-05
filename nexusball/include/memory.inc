@@ -208,6 +208,7 @@ c_ctrl:     .res 24         ; par equipe : 0 absente, 1 CPU, 2 P1, 3 P2
 c_res:      .res 240        ; scores (domicile, exterieur), $FF = non joue
 c_br:       .res 32         ; coupe : participant par case du tableau
 c_so:       .res 16         ; coupe : vainqueur aux tirs au but (0 dom, 1 ext, $FF aucun)
+c_seed:     .res 2          ; graine des matchs simules (mot de passe)
 comp_data_end:
 ; classement (calcule)
 st_order:   .res 16
@@ -387,5 +388,43 @@ oam_prev:   .res 2
 oam_lim:    .res 2
 kit_pick:   .res 4          ; tenue choisie par cote : 0 auto, 1 domicile, 2 exterieur
 pc_sel:     .res 2
+; ---- mot de passe des competitions
+pw_buf:     .res 64
+pw_txt:     .res 100
+pw_exm:     .res 16
+pw_pos:     .res 2
+pw_err:     .res 2
+pw_h:       .res 2
+pw_v:       .res 2
+pw_n:       .res 2
+pw_b:       .res 2
+pw_bitv:    .res 2
+pw_max:     .res 2
+pw_k:       .res 2
+pw_v2:      .res 2
+pw_v3:      .res 2
+pw_cnt:     .res 2
+pw_r:       .res 2
+pw_m:       .res 2
+pw_tr:      .res 2
+pw_tm:      .res 2
+pw_done:    .res 2
+pw_sr:      .res 2
+pw_sm:      .res 2
+pw_s0:      .res 2
+pw_s1:      .res 2
+pw_s2:      .res 2
+pw_s7:      .res 2
+pw_sh:      .res 2
+pw_sa:      .res 2
+pw_len:     .res 2
+pw_len_ok:  .res 2
+pw_row:     .res 2
+pw_cur:     .res 2
+pw_kx:      .res 2
+pw_ky:      .res 2
+cm_has:     .res 2
+pw_key:     .res 2
+cs_sz:      .res 2
 cf_title:   .res 2          ; titre de la confirmation
 cf_menu:    .res 2          ; 1 : confirmation dans un menu (ui_wait)

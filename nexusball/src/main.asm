@@ -49,6 +49,7 @@
 .include "audio.asm"
 .include "comp.asm"
 .include "editor.asm"
+.include "password.asm"
 .segment "CODE"
 .include "tsel.asm"
 .include "result.asm"

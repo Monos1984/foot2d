@@ -8,7 +8,7 @@
 MODE_PRESET  = 3            ; start_match : manettes deja reglees
 SRAM_COMP    = $A06100      ; 3 emplacements de $400 octets
 COMP_SIZE    = comp_data_end - comp_data
-COMP_VERSION = 3
+COMP_VERSION = 4            ; 4 : + graine (c_seed) ; la version 3 reste lisible
 NUM_CITEMS   = 21           ; 16 equipes + TYPE, LENGTH, DIFFICULTY, STADIUM, START
 
 .segment "RODATA"
@@ -24,11 +24,14 @@ comp_menu:
     .i16
     sta c_slot_sel
     jsr comp_load
-    bcc @new
-    ; CONTINUE / NEW / BACK
+    lda #0
+    rol a
+    sta cm_has                  ; 1 : competition sauvegardee (CONTINUE)
+    ; [CONTINUE] / NEW / PASSWORD / BACK
     stz ui_sel
     jsr safe_screen_off
     jsr bg3_clear
+    jsr oam_clear
     jsr ui_fill
     jsr comp_title
     jsr screen_on
@@ -36,17 +39,32 @@ comp_menu:
     lda #UI_ATTR
     sta t0
     ldx #TPOS(4, 8)
+    lda cm_has
+    beq :+
     ldy #.loword(str_c_cont)
     jsr print
     ldx #TPOS(4, 9)
+:   phx
     ldy #.loword(str_c_new)
     jsr print
-    ldx #TPOS(4, 10)
+    pla
+    clc
+    adc #64
+    pha
+    tax
+    ldy #.loword(str_c_pw)
+    jsr print
+    pla
+    clc
+    adc #64
+    tax
     ldy #.loword(str_back)
     jsr print
     lda #.loword(cm_rows)
     sta t3
-    lda #3
+    lda cm_has
+    clc
+    adc #3
     sta t4
     lda ui_sel
     jsr ui_cursor
@@ -56,8 +74,11 @@ comp_menu:
     beq @loop
     and #JOY_B
     bne @back
+    lda cm_has
+    clc
+    adc #3
+    tay
     lda ui_sel
-    ldy #3
     jsr ui_updown
     cmp ui_sel
     beq :+
@@ -67,9 +88,15 @@ comp_menu:
     and #(JOY_A | JOY_START)
     beq @loop
     lda ui_sel
+    clc
+    adc #1
+    sec
+    sbc cm_has                  ; 0 CONTINUE, 1 NEW, 2 PASSWORD, 3 BACK
     beq @cont
     cmp #1
     beq @new
+    cmp #2
+    beq @pw
 @back:
     jsr menu_confirm
     jcc @loop
@@ -78,9 +105,16 @@ comp_menu:
     jmp comp_hub
 @new:
     jmp comp_new
+@pw:
+    jsr pw_entry
+    bcc :+
+    jsr comp_save
+    jmp comp_hub
+:   lda c_slot_sel
+    jmp comp_menu
 
 .segment "RODATA"
-cm_rows: .byte 8, 9, 10
+cm_rows: .byte 8, 9, 10, 11
 .segment "CODE2"
 
 ; comp_title : titre de la competition (ligne 1)
@@ -567,6 +601,13 @@ stad_name:
 comp_create:
     .a16
     .i16
+    jsr rand
+    and #$0FFF
+    sta c_seed
+; comp_build : participants, calendrier et tirage au sort (graine c_seed)
+comp_build:
+    .a16
+    .i16
     ; participants dans l'ordre des equipes
     ldx #0
     ldy #0
@@ -622,7 +663,10 @@ comp_create:
     inc c_nn
 :   rts
 @cup:
-    ; tirage au sort (melange de Fisher-Yates)
+    ; tirage au sort (melange de Fisher-Yates), reproductible a partir de la graine
+    lda c_seed
+    eor #$3C5A
+    sta rng
     ldx #0
 @i: sep #$20
     .a8
@@ -1154,6 +1198,16 @@ hub_draw:
     inc hub_i
     brl @m
 @menu:
+    ; mot de passe de la competition (lignes 14-19)
+    jsr pw_encode
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(4, 14)
+    ldy #.loword(str_pw)
+    jsr print
+    stz pw_cur
+    lda #15
+    jsr pw_show
     lda #UI_ATTR
     sta t0
     ldx #TPOS(4, 23)
@@ -1266,6 +1320,8 @@ comp_play:
     bcs @human
     lda c_watch
     bne @human
+    lda t2
+    jsr sim_seed
     jsr sim_match
     jsr comp_store
 @skip:
@@ -2141,10 +2197,19 @@ comp_check:
     bne @no
     lda f:SRAM_COMP+4,x
     cmp #COMP_VERSION
-    bne @no
+    bne @v3
     lda f:SRAM_COMP+6,x
     cmp #COMP_SIZE
     bne @no
+    bra @sz
+@v3:
+    cmp #3
+    bne @no
+    lda f:SRAM_COMP+6,x
+    cmp #COMP_SIZE - 2
+    bne @no
+@sz:
+    sta cs_sz
     lda #$1234
     sta t4
     ldy #0
@@ -2156,7 +2221,7 @@ comp_check:
     inx
     iny
     iny
-    cpy #COMP_SIZE
+    cpy cs_sz
     bcc @c
     lda f:SRAM_COMP+8,x
     cmp t4
@@ -2270,6 +2335,9 @@ comp_load:
     lda c_slot_sel
     jsr comp_pick
     bcc @no
+    stz c_seed                  ; (version 3 : pas de graine)
+    lda f:SRAM_COMP+6,x
+    sta cs_sz
     ldy #0
 @k: lda f:SRAM_COMP+8,x
     sta comp_data,y
@@ -2277,7 +2345,7 @@ comp_load:
     inx
     iny
     iny
-    cpy #COMP_SIZE
+    cpy cs_sz
     bcc @k
     lda c_slot
     cmp c_slot_sel
@@ -2313,6 +2381,7 @@ str_c_over:     .byte "COMPETITION OVER", 0
 str_c_table:    .byte "TABLE", 0
 str_c_bracket:  .byte "BRACKET", 0
 str_c_save:     .byte "SAVE & EXIT", 0
+str_c_pw:       .byte "PASSWORD", 0
 str_c_watch:    .byte "WATCH CPU MATCHES", 0
 str_c_playas:   .byte "PLAY AS", 0
 str_c_home:     .byte "HOME", 0
