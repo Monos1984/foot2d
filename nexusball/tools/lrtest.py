@@ -235,7 +235,7 @@ def main():
                             err("p_human_extra")
                     st = rd("p_state", c * 2)
                     pos = (rd("p_x", c * 2), rd("p_y", c * 2))
-                    if ms == 1 and st == 0 and pos == lastpos[pd]:
+                    if ms == 1 and st == 0 and pos == lastpos[pd] and not rd("ko_active"):  # engagement : tireur immobile (regle)
                         stuck[pd] += 1
                         maxstuck = max(maxstuck, stuck[pd])
                         if stuck[pd] == 120:

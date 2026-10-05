@@ -1630,7 +1630,10 @@ comp_after_match:
     lda #99
 :   sta cs_hs
     lda score+2
-    sta cs_as
+    cmp #99
+    bcc :+
+    lda #99
+:   sta cs_as
     ldy #0
     lda so_goals
     cmp so_goals+2

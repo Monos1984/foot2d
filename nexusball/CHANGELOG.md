@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.17.1 — corrections
+
+- Compétitions : le score de l'équipe extérieure est plafonné à 99 comme celui de l'équipe à
+  domicile (affichage sur 2 chiffres, mot de passe).
+- Banc de test : l'alerte « joueur immobile 2 s » ignore les engagements (coup d'envoi, coup
+  franc), où le tireur reste immobile par règle. Les alertes restantes viennent d'un joueur
+  poussé contre un mur, pas d'une perte de contrôle.
+
 ## 0.17.0 — mot de passe des compétitions
 
 - Chaque compétition (CHAMPIONSHIP, CUP, CUSTOM) affiche un **mot de passe** sur l'écran de
