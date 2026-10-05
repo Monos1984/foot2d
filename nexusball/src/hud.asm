@@ -267,6 +267,27 @@ hud_update:
     ldx #TPOS(15, 2)
     jsr print_digit
 @msg:
+.if DEBUG
+    ; DEBUG=1 : nombre d'OBJ de la frame precedente, porteur, etat du match (ligne 27)
+    lda #HUD_ATTR
+    sta t0
+    lda oam_used
+    ldx #TPOS(22, 27)
+    jsr print_num2
+    lda b_owner
+    and #$00FF
+    cmp #100
+    bcc :+
+    lda #99
+:   ldx #TPOS(25, 27)
+    jsr print_num2
+    lda m_state
+    ldx #TPOS(28, 27)
+    jsr print_digit
+    lda ko_active
+    ldx #TPOS(30, 27)
+    jsr print_digit
+.endif
     ; effacement du message
     lda msg_time
     beq @d

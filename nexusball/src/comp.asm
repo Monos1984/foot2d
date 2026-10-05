@@ -1036,12 +1036,12 @@ hub_draw:
 @round:
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(4, 3)
     ldy #.loword(str_c_round)
     lda c_type
     beq :+
-    jsr cup_round_name
-:   jsr print
+    jsr cup_round_name          ; (ecrase X)
+:   ldx #TPOS(4, 3)
+    jsr print
     lda c_type
     bne :+
     lda c_round
@@ -2116,16 +2116,118 @@ comp_sram:
     tax
     rts
 
+; Sauvegarde A/B : chaque emplacement existe en deux copies ($A06100 et $A06D00).
+; On ecrit toujours la copie la plus ancienne (ou invalide) avec un numero de generation
+; +1, la signature en dernier : une coupure pendant l'ecriture laisse l'autre copie intacte.
+; Bloc : +0 "NXCP", +4 version, +6 taille, +8 donnees, +8+N checksum, +10+N generation.
+COMP_B = $C00                   ; ecart entre les copies A et B
+
+; comp_check : X = offset de la copie -> C = 1 si valide, A = generation. Preserve X.
+comp_check:
+    .a16
+    .i16
+    phx
+    lda f:SRAM_COMP,x
+    cmp #('N' | ('X' << 8))
+    bne @no
+    lda f:SRAM_COMP+2,x
+    cmp #('C' | ('P' << 8))
+    bne @no
+    lda f:SRAM_COMP+4,x
+    cmp #COMP_VERSION
+    bne @no
+    lda f:SRAM_COMP+6,x
+    cmp #COMP_SIZE
+    bne @no
+    lda #$1234
+    sta t4
+    ldy #0
+@c: lda f:SRAM_COMP+8,x
+    clc
+    adc t4
+    sta t4
+    inx
+    inx
+    iny
+    iny
+    cpy #COMP_SIZE
+    bcc @c
+    lda f:SRAM_COMP+8,x
+    cmp t4
+    bne @no
+    lda f:SRAM_COMP+10,x
+    plx
+    sec
+    rts
+@no:
+    plx
+    clc
+    rts
+
+; comp_pick : A = emplacement -> X = offset de la copie la plus recente valide (C = 1),
+; cs_old = offset de la copie a reecrire, cs_gen = generation suivante
+comp_pick:
+    .a16
+    .i16
+    jsr comp_sram
+    stx cs_a
+    txa
+    clc
+    adc #COMP_B
+    sta cs_b
+    ldx cs_a
+    jsr comp_check
+    stz cs_va
+    bcc :+
+    sta cs_ga
+    inc cs_va
+:   ldx cs_b
+    jsr comp_check
+    stz cs_vb
+    bcc :+
+    sta cs_gb
+    inc cs_vb
+:   lda cs_va
+    beq @b                      ; A invalide : B si valide
+    lda cs_vb
+    beq @a                      ; seulement A
+    lda cs_gb
+    sec
+    sbc cs_ga
+    bmi @a                      ; A plus recente
+@b: lda cs_vb
+    beq @none
+    lda cs_gb
+    inc a
+    sta cs_gen
+    lda cs_a
+    sta cs_old
+    ldx cs_b
+    sec
+    rts
+@a: lda cs_ga
+    inc a
+    sta cs_gen
+    lda cs_b
+    sta cs_old
+    ldx cs_a
+    sec
+    rts
+@none:
+    stz cs_gen
+    lda cs_a
+    sta cs_old
+    clc
+    rts
+
 comp_save:
     .a16
     .i16
     lda c_slot
-    jsr comp_sram
-    stx t3
-    lda #('N' | ('X' << 8))
-    sta f:SRAM_COMP,x
-    lda #('C' | ('P' << 8))
-    sta f:SRAM_COMP+2,x
+    jsr comp_pick
+    ldx cs_old
+    lda #0
+    sta f:SRAM_COMP,x           ; copie invalidee pendant l'ecriture
     lda #COMP_VERSION
     sta f:SRAM_COMP+4,x
     lda #COMP_SIZE
@@ -2146,6 +2248,13 @@ comp_save:
     bcc @l
     lda t4
     sta f:SRAM_COMP+8,x
+    lda cs_gen
+    sta f:SRAM_COMP+10,x
+    ldx cs_old
+    lda #('C' | ('P' << 8))
+    sta f:SRAM_COMP+2,x
+    lda #('N' | ('X' << 8))     ; signature en dernier : la copie devient valide
+    sta f:SRAM_COMP,x
     rts
 
 ; comp_load : c_slot_sel -> carry = 1 si une competition valide a ete chargee
@@ -2153,39 +2262,8 @@ comp_load:
     .a16
     .i16
     lda c_slot_sel
-    jsr comp_sram
-    stx t3
-    lda f:SRAM_COMP,x
-    cmp #('N' | ('X' << 8))
-    bne @no
-    lda f:SRAM_COMP+2,x
-    cmp #('C' | ('P' << 8))
-    bne @no
-    lda f:SRAM_COMP+4,x
-    cmp #COMP_VERSION
-    bne @no
-    lda f:SRAM_COMP+6,x
-    cmp #COMP_SIZE
-    bne @no
-    ; checksum
-    lda #$1234
-    sta t4
-    ldy #0
-@c: lda f:SRAM_COMP+8,x
-    clc
-    adc t4
-    sta t4
-    inx
-    inx
-    iny
-    iny
-    cpy #COMP_SIZE
-    bcc @c
-    lda f:SRAM_COMP+8,x
-    cmp t4
-    bne @no
-    ; copie
-    ldx t3
+    jsr comp_pick
+    bcc @no
     ldy #0
 @k: lda f:SRAM_COMP+8,x
     sta comp_data,y

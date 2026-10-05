@@ -65,6 +65,10 @@ carry_turnover:
     bra :++
 :   lda near_team,y
 :   jsr take_ball
+    lda b_owner
+    jsr fk_start                ; meme sequence qu'une faute : coup franc
+    lda #SFX_BUZZER
+    jsr sfx_play
     lda b_owner                 ; equipe fautive = adversaire du nouveau porteur
     asl a
     tax
@@ -394,18 +398,11 @@ call_foul:
     ldy #.loword(str_foul)
     jmp foul_msg
 @major:
-    ; exclusion temporaire de 20 secondes de jeu (une seule a la fois)
-    lda sent_off
-    cmp #NO_OWNER
-    beq :+
-    ldy #.loword(str_foul)
-    jmp foul_msg
-:   lda cp
-    lsr a
-    sta sent_off
-    lda #20
-    sta sent_t
+    ; exclusion temporaire de 20 secondes de jeu (un minuteur par joueur :
+    ; plusieurs exclusions simultanees possibles)
     ldx cp
+    lda #20
+    sta p_pen,x
     lda #PS_OUT
     sta p_state,x
     ; la manette qui le controlait passe a un milieu
@@ -416,16 +413,7 @@ call_foul:
     cmp cp
     bne @np
     lda p_team,x
-    beq :+
-    lda #TEAM_SIZE
-:   clc
-    adc #3
-    sta t0
-    asl a
-    cmp cp
-    bne :+
-    inc t0                      ; le milieu choisi est l'exclu : le suivant
-:   lda t0
+    jsr first_active            ; premier joueur de champ present
     jsr set_ctrl
     ldx cp
 @np:
@@ -449,15 +437,43 @@ foul_msg:
     pla
     jmp show_tmsg
 
-; return_sent_off : fin d'exclusion, retour pres de son propre but
-return_sent_off:
+; first_active : A = equipe -> A = premier joueur de champ (milieux d'abord) non exclu
+first_active:
     .a16
     .i16
-    lda sent_off
+    beq :+
+    lda #TEAM_SIZE
+:   sta fa_base
+    ldy #0
+@l: lda fa_order,y
+    and #$00FF
+    clc
+    adc fa_base
+    pha
     asl a
     tax
-    lda #NO_OWNER
-    sta sent_off
+    lda p_state,x
+    cmp #PS_OUT
+    bne @ok
+    pla
+    iny
+    cpy #5
+    bne @l
+    lda fa_base                 ; tous exclus (impossible) : le gardien
+    rts
+@ok:
+    pla
+    rts
+
+.segment "RODATA"
+fa_order: .byte 3, 4, 2, 5, 1
+.segment "CODE"
+
+; return_player : X = joueur*2, fin d'exclusion : retour le long du mur haut, a son poste
+return_player:
+    .a16
+    .i16
+    stz p_pen,x
     stz p_state,x
     stz p_vx,x
     stz p_vy,x
@@ -467,8 +483,21 @@ return_sent_off:
     asl a
     asl a
     sta p_x,x
+    ; pas de retour sur le ballon : mur du bas si le ballon est pres du mur du haut
     lda #(FIELD_T + 6) * FP
     sta p_y,x
+    lda b_y
+    cmp #(FIELD_T + 48) * FP
+    bcs @ok
+    lda b_x
+    sec
+    sbc p_x,x
+    ABS_A
+    cmp #40 * FP
+    bcs @ok
+    lda #(FIELD_B - 2) * FP
+    sta p_y,x
+@ok:
     rts
 
 ; -----------------------------------------------------------------------------

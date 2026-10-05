@@ -120,12 +120,49 @@ result_screen:
     jsr print_digit
 @noso:
     lda rs_mode
+    jeq @nowin
+    ; vainqueur (score, puis tirs au but) ou match nul
+    lda score
+    cmp score+2
+    bne @cmp
+    lda so_active
+    beq @draw
+    lda so_goals
+    cmp so_goals+2
+    beq @draw
+@cmp:
+    lda #0
+    bcs :+
+    lda #1
+:   sta rs_s
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(4, 23)
+    ldy #.loword(str_winner)
+    jsr print
+    lda #TXT_ATTR + $0400
+    ldy rs_s
     beq :+
+    lda #TXT_ATTR + $0C00
+:   sta t0
+    lda rs_s
+    jsr team_rec
+    ldx #TPOS(14, 23)
+    jsr print
+    bra @ps
+@draw:
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(12, 23)
+    ldy #.loword(str_draw)
+    jsr print
+@ps:
     lda #UI_ATTR
     sta t0
-    ldx #TPOS(10, 24)
+    ldx #TPOS(10, 25)
     ldy #.loword(str_press_start)
     jsr print
+@nowin:
 :   lda #1
     sta bg3_dirty
     jsr screen_on
@@ -134,9 +171,11 @@ result_screen:
     jsr oam_begin
     jsr oam_finish
     jsr crowd_update
-    inc rs_t
     lda rs_t
-    cmp #30
+    clc
+    adc rc+RC_TDEC              ; temps logique (identique en PAL / NTSC)
+    sta rs_t
+    cmp #TU_SEC / 2
     bcc @w                      ; pas de saut accidentel
     lda joy_new
     ora joy_new+2
@@ -145,14 +184,14 @@ result_screen:
     lda rs_mode
     bne :+
     lda rs_t
-    cmp #300                    ; mi-temps : 5 s
+    cmp #TU_SEC * 5             ; mi-temps : 5 s
     bcs @out
     bra @w
 :   lda game_mode
     cmp #MODE_CPU
     bne @w
     lda rs_t
-    cmp #600                    ; demo CPU : 10 s
+    cmp #TU_SEC * 10            ; demo CPU : 10 s
     bcc @w
 @out:
     lda rs_mode
@@ -277,4 +316,7 @@ rs_stat:
     inc rs_row
     rts
 
+.segment "RODATA"
+str_winner:     .byte "WINNER", 0
+str_draw:       .byte "DRAW", 0
 .segment "CODE"

@@ -60,8 +60,12 @@ start_match:
     sta m_len
     sta m_sec
     stz m_acc
-    lda #NO_OWNER
-    sta sent_off
+    ldx #0
+:   stz p_pen,x
+    inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne :-
     ; equipe qui engage : tirage au sort (alea melange au temps passe sur le titre)
     lda rng
     eor nmi_count
@@ -133,8 +137,10 @@ match_frame:
     and #JOY_START
     beq @nopause
     jsr pause_menu
-    bcc @nopause
+    bcc :+
     rts                         ; quitter
+:   stz joy_new                 ; reprise : le bouton de sortie n'est pas une action
+    stz joy_new+2
 @nopause:
     lda m_timer
     sec
@@ -358,14 +364,22 @@ clock_update:
     bcc @ok
     sbc #TU_SEC
     sta m_acc
-    ; exclusion temporaire (secondes de jeu)
-    lda sent_off
-    cmp #NO_OWNER
+    ; exclusions temporaires (secondes de jeu, un minuteur par joueur)
+    ldx #0
+@pen:
+    lda p_pen,x
     beq :+
-    dec sent_t
+    dec a
+    sta p_pen,x
     bne :+
-    jsr return_sent_off
-:   dec m_sec
+    phx
+    jsr return_player
+    plx
+:   inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne @pen
+    dec m_sec
     bne @ok
     jsr period_over
     sec

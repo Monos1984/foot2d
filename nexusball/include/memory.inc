@@ -358,3 +358,24 @@ gk_x0:      .res 2
 zc_t:       .res 2          ; temps du ballon dans une raquette
 zc_zone:    .res 2
 zc_team:    .res 2
+b_prevy:    .res 2
+b_prevz:    .res 2
+rt_y:       .res 2          ; point de franchissement du plan de l'anneau
+rt_z:       .res 2
+rc_num:     .res 2
+rc_den:     .res 2
+p_pen:      .res NUM_PLAYERS*2   ; exclusion temporaire restante (s)
+fa_base:    .res 2
+sq_new:     .res 2
+sq_pri:     .res 2
+cs_a:       .res 2          ; sauvegarde A/B des competitions
+cs_b:       .res 2
+cs_va:      .res 2
+cs_vb:      .res 2
+cs_ga:      .res 2
+cs_gb:      .res 2
+cs_gen:     .res 2
+cs_old:     .res 2
+oam_used:   .res 2
+cam_t:      .res 2
+ad_t:       .res 2

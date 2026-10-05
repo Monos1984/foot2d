@@ -71,9 +71,31 @@ sfx_play:
     .i16
     and #$00FF
     phx
+    sta sq_new
+    ; priorite : 2 haute (score, buzzers, sifflet, musique...), 1 moyenne, 0 basse
+    tax
+    lda f:sfx_prio,x
+    and #$00FF
+    sta sq_pri
     ldx snd_qn
     cpx #SND_QLEN * 2
+    bcc @room
+    ; file pleine : un son important remplace la derniere commande, sinon il est perdu
+    lda sq_pri
+    cmp #2
+    bne @full
+    ldx #(SND_QLEN - 1) * 2
+    lda sq_new
+    sta snd_q,x
+    bra @full
+@room:
+    ; sons secondaires : pas de retard accumule (file deja chargee -> ignore)
+    lda sq_pri
+    bne @add
+    cpx #3 * 2
     bcs @full
+@add:
+    lda sq_new
     sta snd_q,x
     inx
     inx
@@ -131,6 +153,19 @@ snd_flush:
     dec a
     sta snd_qn
 @d: rts
+
+.segment "DATA0"
+; priorite de chaque commande son (index = numero de commande)
+sfx_prio:
+    .repeat 256, i
+        .if i = SFX_GOAL || i = SFX_WHISTLE || i = SFX_BUZZER || i = SFX_BUZZLONG || i = SFX_HORN || i = SFX_OK || i >= $F0
+            .byte 2
+        .elseif i = SFX_BOUNCE || i = SFX_WALL || i = SFX_CATCH || i = SFX_MENU || i = SFX_OOH || i = SFX_CHEER || i = SFX_BOO
+            .byte 0
+        .else
+            .byte 1
+        .endif
+    .endrepeat
 
 .segment "GFX"
 spc_bin: .incbin "data/gen/spc.bin"

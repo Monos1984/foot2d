@@ -1,5 +1,28 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.12.0 — fiabilisation (audit « Correctifs et améliorations »)
+
+- But : passage dans l'anneau testé au point exact de franchissement du plan (interpolation de
+  Y et Z entre deux frames), plus de but refusé / accordé à tort sur les tirs rapides.
+- Port > 4 s : même séquence qu'une faute (buzzer, arrêt court, coup franc avec adversaires à
+  distance) au lieu d'un simple changement de porteur.
+- OAM : curseurs, ballon et joueurs écrits avant le radar (le radar perd ses sprites en premier
+  si une ligne est surchargée).
+- Exclusions : un minuteur par joueur, plusieurs exclusions simultanées ; retour sans
+  réapparaître sur le ballon ; la manette passe au premier coéquipier présent.
+- Audio : priorités dans la file des sons (un point / une fin de match ne sont jamais perdus,
+  les petits bruitages ne s'accumulent plus).
+- SRAM : compétitions sauvegardées en double (copies A / B avec numéro de génération, signature
+  écrite en dernier).
+- PAL / NTSC : anticipation et amortissement de la caméra en temps réel identique ; durées des
+  écrans de publicité et de score en temps logique.
+- Pause : les boutons de sortie de pause ne déclenchent plus d'action.
+- Fin de match : ligne WINNER / DRAW (après tirs au but si besoin).
+- Compétition : nom du tour de coupe mal placé (écrasait le titre) corrigé.
+- Build : vérification automatique de la ROM (`tools/romcheck.py`), version `DEBUG=1` avec
+  affichage de contrôle, arborescence `assets/` pour les futurs graphismes, documentation
+  technique `docs/TECHNIQUE.md`, README à jour.
+
 ## 0.11.6 — gardien et ballon au sol
 
 - Correction : après un arrêt manqué, le gardien ne pouvait plus ramasser le ballon tant que

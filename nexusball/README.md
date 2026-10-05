@@ -7,7 +7,7 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 ![Titre](docs/screen_title.png) ![Match](docs/screen_match.png) ![Fin](docs/screen_fulltime.png)
 ![Setup](docs/screen_setup.png) ![Tactiques](docs/screen_tactics.png) ![Effectif](docs/screen_subs.png) ![Tirs au but](docs/screen_shootout.png) ![Stade](docs/screen_stadium.png) ![Classement](docs/screen_table.png) ![Coupe](docs/screen_bracket.png) ![Compétition](docs/screen_comp.png) ![Créer une équipe](docs/screen_create_team.png) ![Créer un joueur](docs/screen_create_player.png)
 
-## État : Milestones 0 → 8 (contenu complet ; finition / équilibrage = Milestone 9)
+## État : version 0.12.0 — contenu complet, phase de stabilisation (Milestone 9)
 
 | Élément | État |
 |---|---|
@@ -22,7 +22,11 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | Passe à la main (interdite vers l'avant), passe au pied lobée, tir visé | ✅ |
 | Port du ballon limité à 4 s (curseur clignotant à 3 s) | ✅ |
 | Charges, duel POWER/CONTROL/DEFENSE, ballon lâché ou arraché | ✅ |
-| Fautes : par derrière, gardien dans sa zone, contact tardif ; avantage ; faute grave = exclusion 20 s | ✅ |
+| Fautes : par derrière, gardien dans sa zone, contact tardif ; avantage ; faute grave = exclusion 20 s (plusieurs exclusions simultanées) | ✅ |
+| Coup franc (faute, port > 4 s) : tireur immobile, adversaires à 40 px | ✅ |
+| Raquettes réservées aux gardiens, ballon 4 s au plus dans une raquette | ✅ |
+| Coup d'envoi à deux joueurs dans le rond central | ✅ |
+| Détection du but au point exact de franchissement du plan de l'anneau | ✅ |
 | Gardiens IA : placement, plongeon, capter / repousser, relance | ✅ |
 | IA d'équipe (soutien, pressing, zone, poursuite) à fréquence réduite | ✅ |
 | Fatigue légère (sprint / STAMINA), caractéristiques 1–9 | ✅ |
@@ -54,7 +58,12 @@ Cahier des charges : [`docs/cahier_des_charges_v0.2.md`](docs/cahier_des_charges
 | Compétitions : WATCH CPU MATCHES, choix du camp (PLAY AS) quand une manette possède les deux équipes | ✅ |
 | Finition : graphismes finaux, équilibrage, tests sur matériel réel | ⏳ Milestone 9 |
 
-Graphismes temporaires générés (lisibles, contraste bleu/orange) — les graphismes finaux viendront au milestone 6.
+Les graphismes sont encore en cours de production (générés par script). Les graphismes finaux
+et la finition de la présentation font partie des derniers milestones ; le pipeline prévu est
+décrit dans [`assets/README.md`](assets/README.md).
+
+Documentation technique (règles arrêtées, OAM, VBlank, SRAM, PAL/NTSC, tests) :
+[`docs/TECHNIQUE.md`](docs/TECHNIQUE.md).
 
 ## Commandes
 
@@ -82,9 +91,18 @@ Prérequis : `cc65` (ca65 / ld65) et `python3` (sans module externe).
 ./build.sh
 ```
 
-Produit `build/nexusball.sfc` (en-tête Europe) et `build/nexusball_ntsc.sfc` (en-tête USA).
+Une seule commande enchaîne : génération des graphismes, compression LZSS, équipes, pilote SPC700,
+calendriers, textes (EN/FR), assemblage, édition de liens, checksum puis **vérification**
+(`tools/romcheck.py` : taille, mapping HiROM FastROM, SRAM 32 Kio, région, checksum, vecteurs,
+segments). Le script s'arrête à la première erreur.
+
+Produit `build/nexusball.sfc` (en-tête Europe / PAL) et `build/nexusball_ntsc.sfc` (en-tête USA).
 Le code est identique : la console / l'émulateur est détecté au démarrage (`STAT78`).
 Les ROMs construites sont aussi versionnées dans `build/` pour être testées directement.
+
+`DEBUG=1 ./build.sh` produit `build/nexusball_debug*.sfc` (non versionnées) : affichage de
+contrôle en match (nombre d'OBJ, porteur, état du match, coup d'envoi en cours). La version
+normale ne contient pas ce code.
 
 ## Organisation
 
@@ -93,9 +111,11 @@ include/   registres, constantes, constantes de région (region.inc), carte mém
 src/       main.asm (inclut tous les modules), boot, nmi, video, input, math, region, text,
            save, menu, ui, comp, editor, match, shootout, audio, formation, player, ball, goalkeeper, ai, rules,
            camera, hud, sprites, teams
-tools/     gfx.py (stades, sprites, police, tables), teams.py (équipes), sched.py (calendriers), spc.py (assembleur
-           SPC700 + pilote audio + BRR), checksum.py,
-           lrtest.py (banc de test headless libretro), fixbranch.py (outil de dev)
+tools/     gfx.py + scenes.py (stades, sprites, police, décors), teams.py (équipes), sched.py
+           (calendriers), spc.py (assembleur SPC700 + pilote audio + BRR), lang.py (traduction FR,
+           règles), lz.py, checksum.py, romcheck.py, lrtest.py (banc de test headless libretro,
+           commande `bot` = test de stress), balance.sh, fixbranch.py (outil de dev)
+assets/    sources des futurs graphismes définitifs (voir assets/README.md)
 data/gen/  données générées (non versionnées)
 docs/      cahier des charges, référence visuelle, captures
 ```

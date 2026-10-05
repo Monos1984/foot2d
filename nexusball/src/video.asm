@@ -186,6 +186,10 @@ oam_add:
 oam_finish:
     .a16
     .i16
+    lda oam_ptr
+    lsr a
+    lsr a
+    sta oam_used                ; nombre d'OBJ de la frame (controle / debug)
     ldx oam_ptr
     lda #$F000
 @l: cpx #512

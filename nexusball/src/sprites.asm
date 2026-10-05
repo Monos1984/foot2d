@@ -1,7 +1,8 @@
 ; =============================================================================
 ;  sprites.asm - construction de l'OAM : radar, curseurs, joueurs et ballon
 ;  tries par profondeur (y), ombres.
-;  Ordre OAM = ordre d'affichage (le premier est devant).
+;  Ordre OAM = ordre d'affichage (le premier est devant) et priorite en cas de
+;  surcharge : curseurs, ballon, joueurs (par profondeur), ombre, radar.
 ; =============================================================================
 
 OBJ_PRIO   = $3000              ; priorite 3
@@ -13,25 +14,20 @@ ENT_BALL   = NUM_PLAYERS
 build_sprites:
     .a16
     .i16
+    ; ordre OAM = priorite : en cas de surcharge d'une ligne (32 sprites / 34 tiles),
+    ; la PPU abandonne les derniers. Elements de jeu d'abord, radar en dernier.
     jsr oam_begin
-    lda m_state
-    cmp #MS_END
-    beq :+
-    lda opt_radar
-    beq :+
-    jsr draw_radar
-:   jsr draw_cursors
+    jsr draw_cursors
+    jsr draw_ball
     jsr sort_entities
-    ; entites, de la plus proche (y grand) a la plus lointaine
+    ; joueurs, du plus proche (y grand) au plus lointain
     ldy #0
 @l: phy
     lda sort_buf,y
     and #$00FF
     cmp #ENT_BALL
-    bne :+
-    jsr draw_ball
-    bra @n
-:   asl a
+    beq @n
+    asl a
     tax
     jsr draw_player
 @n: ply
@@ -39,7 +35,13 @@ build_sprites:
     cpy #NUM_PLAYERS + 1
     bne @l
     jsr draw_ball_shadow
-    jsr oam_finish
+    lda m_state
+    cmp #MS_END
+    beq :+
+    lda opt_radar
+    beq :+
+    jsr draw_radar
+:   jsr oam_finish
     rts
 
 ; -----------------------------------------------------------------------------

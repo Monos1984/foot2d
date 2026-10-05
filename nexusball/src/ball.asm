@@ -129,6 +129,10 @@ ball_update:
     rts
 
 @free:
+    lda b_y
+    sta b_prevy
+    lda b_z
+    sta b_prevz
     lda b_x
     sta b_prevx
     clc
@@ -211,7 +215,9 @@ ball_update:
 :   lda b_x
     cmp #FIELD_L * FP
     bcs @rgt
-    ; plan du but gauche
+    ; plan du but gauche : point exact de franchissement (interpolation)
+    lda #FIELD_L * FP
+    jsr ring_cross
     jsr ring_test
     bcc @bl
     ; but pour l'equipe qui attaque vers la gauche
@@ -240,6 +246,8 @@ ball_update:
 @rgt:
     cmp #(FIELD_R + 1) * FP
     bcc @pick
+    lda #(FIELD_R + 1) * FP
+    jsr ring_cross
     jsr ring_test
     bcc @br
     lda team_dir
@@ -300,11 +308,74 @@ wall_bounce:
     adc t0
     rts
 
+; ring_cross : A = x du plan de l'anneau (12.4). Calcule rt_y / rt_z, la position du
+; ballon a l'instant exact ou il franchit ce plan entre la frame precedente
+; (b_prevx/y/z) et la position actuelle (interpolation lineaire, fraction sur 7 bits).
+ring_cross:
+    .a16
+    .i16
+    sec
+    sbc b_prevx
+    ABS_A
+    sta rc_num                  ; distance parcourue avant le plan
+    lda b_x
+    sec
+    sbc b_prevx
+    ABS_A
+    sta rc_den                  ; distance parcourue pendant la frame
+@red:
+    cmp #256
+    bcc :+
+    lsr rc_num                  ; diviseur sur 8 bits
+    lsr rc_den
+    lda rc_den
+    bra @red
+:   lda rc_den
+    beq @now                    ; pas de deplacement en x : position actuelle
+    lda rc_num
+    cmp rc_den
+    bcs @now                    ; deja au-dela (ne devrait pas arriver)
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a                       ; num * 128
+    ldx rc_den
+    jsr divu                    ; fraction 0..127
+    sta t7
+    lda b_y
+    sec
+    sbc b_prevy
+    jsr smul                    ; dy * f / 256
+    asl a                       ; -> dy * f / 128
+    clc
+    adc b_prevy
+    sta rt_y
+    lda b_z
+    sec
+    sbc b_prevz
+    jsr smul
+    asl a
+    clc
+    adc b_prevz
+    bpl :+
+    lda #0
+:   sta rt_z
+    rts
+@now:
+    lda b_y
+    sta rt_y
+    lda b_z
+    sta rt_z
+    rts
+
 ; ring_test : carry = 1 si le ballon passe dans l'anneau (dy^2 + dz^2 < r^2)
 ring_test:
     .a16
     .i16
-    lda b_y
+    lda rt_y
     ASR_A 4
     sec
     sbc #FIELD_CY
@@ -314,7 +385,7 @@ ring_test:
     tay
     jsr mulu8                   ; dy^2
     sta t0
-    lda b_z
+    lda rt_z
     ASR_A 4
     sec
     sbc #RING_Z

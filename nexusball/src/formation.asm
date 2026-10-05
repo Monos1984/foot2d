@@ -391,15 +391,16 @@ place_kickoff:
     cpx #NUM_PLAYERS*2
     jne @pl
 
-    ; joueur exclu : reste hors du terrain
-    lda sent_off
-    cmp #NO_OWNER
+    ; joueurs exclus : restent hors du terrain
+    ldx #0
+:   lda p_pen,x
     beq :+
-    asl a
-    tax
     lda #PS_OUT
     sta p_state,x
-:
+:   inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne :--
     ; ballon a l'attaquant de l'equipe qui engage
     lda kick_team
     beq :+

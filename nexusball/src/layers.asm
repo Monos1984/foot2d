@@ -184,14 +184,15 @@ ad_show:
     rep #$20
     .a16
     jsr screen_on
-    ldy #0
-@w: phy
-    jsr wait_frame
-    ply
-    iny
-    cpy #20
+    stz ad_t                    ; duree en temps logique (identique en PAL / NTSC)
+@w: jsr wait_frame
+    lda ad_t
+    clc
+    adc rc+RC_TDEC
+    sta ad_t
+    cmp #TU_SEC / 3
     bcc @w
-    cpy #200
+    cmp #TU_SEC * 10 / 3
     bcs @end
     lda joy_new
     ora joy_new+2
