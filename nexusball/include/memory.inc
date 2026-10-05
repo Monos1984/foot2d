@@ -387,3 +387,5 @@ oam_prev:   .res 2
 oam_lim:    .res 2
 kit_pick:   .res 4          ; tenue choisie par cote : 0 auto, 1 domicile, 2 exterieur
 pc_sel:     .res 2
+cf_title:   .res 2          ; titre de la confirmation
+cf_menu:    .res 2          ; 1 : confirmation dans un menu (ui_wait)

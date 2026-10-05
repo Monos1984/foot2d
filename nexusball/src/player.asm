@@ -1552,17 +1552,37 @@ player_anim:
     lda #SPR_CHARGE
     brl @set
 :   cmp #PS_KICK
-    jeq @keep
+    bne @nokick
+    ; accompagnement apres la frappe / le lancer
+    lda p_timer,x
+    cmp #T_KICKANIM / 2
+    jcs @keep
+    lda p_spr,x
+    cmp #SPR_KICK
+    bne :+
+    lda #SPR_KICK2
+    brl @set
+:   cmp #SPR_THROW
+    jne @keep
+    lda #SPR_THROW2
+    brl @set
+@nokick:
     cmp #PS_DIVE
     jeq @keep
     cmp #PS_CELEB
     bne :+
+    lda nmi_count
+    and #$0008
+    beq @cel1
+    lda #SPR_CELEB2
+    brl @set
+@cel1:
     lda #SPR_CELEB
     brl @set
 :   lda p_z,x
     beq :+
     lda #SPR_JUMP
-    bra @set
+    brl @set
 :   ; vitesse
     lda p_vx,x
     ABS_A
@@ -1591,26 +1611,40 @@ player_anim:
     lda #SPR_CARRYS
     bra @set
 :   lda p_anim,x
-    and #$0040
-    beq :+
-    lda #SPR_CARRY2
-    bra @set
-:   lda #SPR_CARRY1
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$0003                  ; (anim >> 5) & 3
+    tay
+    lda carry_cycle,y
+    and #$00FF
     bra @set
 @noball:
     lda t0
     cmp #8
-    bcs :+
-    lda #SPR_STAND
+    bcs @run
+    ; a l'arret : respiration (decalee d'un joueur a l'autre)
+    txa
+    asl a
+    asl a
+    asl a
+    adc nmi_count
+    and #$0020
+    beq :+
+    lda #SPR_STAND2
     bra @set
-:   lda p_anim,x
+:   lda #SPR_STAND
+    bra @set
+@run:
+    lda p_anim,x
     lsr a
     lsr a
     lsr a
     lsr a
     lsr a
-    lsr a
-    and #$0003                  ; (anim >> 6) & 3
+    and #$0007                  ; (anim >> 5) & 7
     tay
     lda run_cycle,y
     and #$00FF
@@ -1620,7 +1654,9 @@ player_anim:
     rts
 
 run_cycle:
-    .byte SPR_RUN1, SPR_RUN2, SPR_RUN3, SPR_RUN2
+    .byte SPR_RUN1, SPR_RUNAM, SPR_RUN2, SPR_RUNBM, SPR_RUN3, SPR_RUNBM, SPR_RUN4, SPR_RUNAM
+carry_cycle:
+    .byte SPR_CARRY1, SPR_CARRYP, SPR_CARRY2, SPR_CARRYP
 
 ; -----------------------------------------------------------------------------
 ;  map_buttons : A = boutons appuyes -> A = actions standard selon opt_ctrl

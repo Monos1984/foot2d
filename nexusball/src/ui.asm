@@ -220,9 +220,14 @@ match_setup:
     .i16
     stz ui_sel
     lda #0
+@ts:
     jsr team_select             ; d'abord le choix visuel des equipes
     bcc @redraw_all
-    jmp title_screen
+    jsr menu_confirm
+    bcs :+
+    lda ts_side
+    bra @ts
+:   jmp title_screen
 @redraw_all:
     jsr safe_screen_off
     jsr bg3_clear
@@ -249,9 +254,13 @@ match_setup:
     bra @loop
 :   lda t7
     bit #JOY_B
-    beq :+
+    beq @nob
+    jsr menu_confirm
+    bcc @loop
     jmp title_screen
-:   bit #JOY_START
+@nob:
+    lda t7
+    bit #JOY_START
     beq :+
     jmp start_match             ; START : on joue tout de suite
 :   lda ui_sel

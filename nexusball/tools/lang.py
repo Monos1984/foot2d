@@ -57,6 +57,7 @@ TR = [
     ("TEAM SETUP", "EFFECTIF", 0),
     ("QUIT MATCH", "QUITTER", 0),
     ("QUIT MATCH?", "QUITTER ?", 0),
+    ("MAIN MENU?", "RETOUR MENU ?", 13),
     ("NO", "NON", 3),
     ("YES", "OUI", 0),
     ("HELD TOO LONG!", "PORT TROP LONG!", 28),

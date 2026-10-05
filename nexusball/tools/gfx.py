@@ -658,7 +658,7 @@ def player_frames():
     f = []
     f.append(figure((6, -6), (15, -15)))                       # 0 stand
     f.append(figure((42, -42), (-35, 40), lean=1))             # 1 run1
-    f.append(figure((5, -5), (5, -5), lean=1))                 # 2 run2
+    f.append(figure((5, -5), (5, -5), lean=1, crouch=1))       # 2 run2 (appui : corps bas)
     f.append(figure((-42, 42), (40, -35), lean=1))             # 3 run3
     f.append(figure((85, -10), (-60, 60), lean=-1))            # 4 kick
     f.append(figure((10, -15), (120, 100)))                    # 5 throw / pass
@@ -672,8 +672,16 @@ def player_frames():
     f.append(figure((-42, 42), (100, 90), lean=1))             # 13 carry run2
     f.append(figure((6, -6), (100, 90)))                       # 14 carry stand
     f.append(figure((30, -30), (-90, 90)))                     # 15 jump
+    f.append(figure((24, -22), (-20, 24), lean=1))             # 16 run : jambe avant qui descend
+    f.append(figure((-22, 24), (24, -20), lean=1))             # 17 run : jambe arriere qui descend
+    f.append(figure((-5, 5), (-5, 5), lean=1, crouch=1))       # 18 run : second appui
+    f.append(figure((5, -5), (100, 90), lean=1, crouch=1))     # 19 carry : appui
+    f.append(figure((115, -5), (-80, 75), lean=-1))            # 20 kick : accompagnement
+    f.append(figure((15, -20), (60, -50), lean=1))             # 21 throw : bras relache
+    f.append(figure((6, -6), (10, -10), crouch=1))             # 22 stand : respiration
+    f.append(figure((-25, 25), (165, 120)))                    # 23 celebrate : bras qui s'agitent
     out = [outline(im) for im in f]
-    for k in range(16):
+    for k in range(len(out)):
         if k != 15:
             with_shadow(out[k], rx=6 if k in (7, 9) else 5)
     return out
@@ -696,46 +704,27 @@ def small_tiles():
     return t
 
 
-def panel_frames():
-    """radar : coin haut-gauche, haut, coin bas-gauche, bas (16x16, palette 4)."""
-    def mk(top, bottom, left):
-        im = Img(16, 16, 9)
-        if top:
-            im.hline(0, 15, 0, 10)
-        if bottom:
-            im.hline(0, 15, 15, 10)
-        if left:
-            im.vline(0, 0, 15, 10)
-        return im
-    return [mk(1, 0, 1), mk(1, 0, 0), mk(0, 1, 1), mk(0, 1, 0)]
-
-
 def build_obj():
     """feuille OBJ 128x128 :
-    joueurs : cadre k (16x32) -> tile haut = (k//8)*64 + (k%8)*2, tile bas = haut + 32
-    panneaux du radar (16x16) : tiles 128.. ; petites tiles 8x8 : 160.."""
+    joueurs : 24 cadres k (16x32) -> tile haut = (k//8)*64 + (k%8)*2, tile bas = haut + 32
+    ballon ovale 16x16 : tiles 192.. ; petites tiles 8x8 : 224.. ; ombre ovale : 238"""
     sheet = Img(128, 128, 0)
     for k, im in enumerate(player_frames()):
         bx, by = (k % 8) * 16, (k // 8) * 32
         for y in range(32):
             for x in range(16):
                 sheet.put(bx + x, by + y, im.get(x, y))
-    for k, im in enumerate(panel_frames()):
-        bx, by = k * 16, 64
-        for y in range(16):
-            for x in range(16):
-                sheet.put(bx + x, by + y, im.get(x, y))
     st = small_tiles()
     order = ["ball", "shadow", "cur1", "cur2", "dotA", "dotB", "dotW", "warn", "ballhi"]
     for i, name in enumerate(order):
-        tx, ty = (160 + i) % 16, (160 + i) // 16
+        tx, ty = (224 + i) % 16, (224 + i) // 16
         for r, row in enumerate(st[name]):
             for c, ch in enumerate(row):
                 v = 0 if ch == "." else int(ch, 16)
                 sheet.put(tx * 8 + c, ty * 8 + r, v)
-    # ballon ovale 16x16 : 4 orientations x 2 phases de rotation (tiles 176 + 2*f), ombre (208)
+    # ballon ovale 16x16 : 4 orientations x 2 phases de rotation (tiles 192 + 2*f), ombre (238)
     for f, im in enumerate(ball_frames()):
-        bx, by = f * 16, 88
+        bx, by = f * 16, 96
         for y in range(16):
             for x in range(16):
                 sheet.put(bx + x, by + y, im.get(x, y))
@@ -743,7 +732,7 @@ def build_obj():
         for x in range(16):
             dx, dy = (x - 7.5) / 6.5, (y - 9.5) / 3.0
             if dx * dx + dy * dy <= 1.0:
-                sheet.put(x, 104 + y, 5)
+                sheet.put(112 + x, 112 + y, 5)
     data = bytearray()
     for ty in range(16):
         for tx in range(16):

@@ -427,6 +427,8 @@ create_player:
     beq @loop
     bit #JOY_B
     beq :+
+    jsr menu_confirm
+    bcc @loop
     jmp title_screen
 :   lda ed_slot
     ldy #ED_PL_N
@@ -1107,6 +1109,8 @@ create_team:
     beq @loop
     bit #JOY_B
     beq :+
+    jsr menu_confirm
+    bcc @loop
     jmp title_screen
 :   lda ed_slot
     ldy #ED_TM_N

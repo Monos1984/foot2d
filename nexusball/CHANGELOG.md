@@ -1,5 +1,15 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.16.0 — confirmation dans les menus, animations des joueurs
+
+- Retour au menu principal confirmé partout où un choix peut être perdu (« MAIN MENU? »
+  NO / YES, NO par défaut) : choix des équipes, réglages du match, menus des compétitions
+  (B, BACK, SAVE & EXIT), listes des éditeurs de joueurs et d'équipes.
+- Joueurs : 24 cadres d'animation au lieu de 16 — course en 8 phases (appuis avec corps
+  abaissé, jambes intermédiaires), course avec ballon en 4 phases, accompagnement après la
+  frappe et le lancer, respiration à l'arrêt (décalée d'un joueur à l'autre), célébration
+  animée. Les tiles OBJ du radar retiré sont réutilisées (ballon et petites tiles déplacés).
+
 ## 0.15.0 — confirmation, choix des équipes, gardiens
 
 - Pause : QUIT MATCH demande une confirmation (QUIT MATCH? NO / YES, NO par défaut) ;

@@ -71,6 +71,8 @@ comp_menu:
     cmp #1
     beq @new
 @back:
+    jsr menu_confirm
+    jcc @loop
     jmp title_screen
 @cont:
     jmp comp_hub
@@ -166,6 +168,8 @@ cs_loop:
     beq cs_loop
     and #JOY_B
     beq :+
+    jsr menu_confirm
+    bcc cs_loop
     jmp title_screen
 :   lda vt_n
     clc
@@ -986,6 +990,8 @@ comp_hub_at:
     beq @play
     cmp #1
     beq @table
+    jsr menu_confirm
+    jcc @loop
     jsr comp_save
     jmp title_screen
 @table:

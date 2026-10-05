@@ -628,44 +628,7 @@ pause_menu:
     cpx #(PZ_ROWS*64)
     bne @sv
 @draw:
-    ; cadre neon (tiles du bandeau, palette 5) : lignes PZ_ROW .. PZ_ROW+6, colonnes 8..23
-    lda #TXT_ATTR + $1400
-    sta bn_attr
-    lda #16
-    sta bn_w
-    ldx #TPOS(8, PZ_ROW)
-    lda #HT_BN_TL
-    ldy #HT_BN_T
-    jsr bn_row
-    ldx #TPOS(8, PZ_ROW + 6)
-    lda #HT_BN_BL
-    ldy #HT_BN_B
-    jsr bn_row
-    lda #PZ_ROW + 1
-@side:
-    pha
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    clc
-    adc #8 * 2
-    tax
-    lda #HT_BN_L + TXT_ATTR + $1400
-    sta bg3_map,x
-    lda #HT_BN_R + TXT_ATTR + $1400
-    sta bg3_map + 15*2,x
-    inx
-    inx
-    ldy #14
-    lda #TXT_ATTR + TXT_PANEL
-    jsr fill_tiles
-    pla
-    inc a
-    cmp #PZ_ROW + 6
-    bne @side
+    jsr pz_frame
     ; titre en cyan et filet dore
     lda #TXT_ATTR + TXT_PANEL + $1400
     sta t0
@@ -776,6 +739,10 @@ pause_menu:
 pause_confirm:
     .a16
     .i16
+    lda #.loword(str_quit_q)
+    sta cf_title
+    stz cf_menu
+cf_run:
     stz pc_sel                  ; NO par defaut
 @draw:
     ; interieur du cadre (lignes PZ_ROW+1 .. PZ_ROW+5) efface
@@ -801,7 +768,7 @@ pause_confirm:
     lda #TXT_ATTR + TXT_PANEL + $1400
     sta t0
     ldx #TPOS(10, PZ_ROW + 1)
-    ldy #.loword(str_quit_q)
+    ldy cf_title
     jsr print
     ldx #TPOS(10, PZ_ROW + 2)
     ldy #12
@@ -854,11 +821,16 @@ pause_confirm:
     lda #1
     sta bg3_dirty
 @wait:
-    jsr build_sprites
+    lda cf_menu
+    beq :+
+    jsr ui_wait
+    bra :++
+:   jsr build_sprites
     jsr wait_frame
     lda joy_new
     ora joy_new+2
     sta t7
+:   lda t7
     beq @wait
     lda pc_sel
     ldy #2
@@ -879,6 +851,75 @@ pause_confirm:
 @no:
     clc
     rts
+
+
+; pz_frame : cadre neon (tiles du bandeau, palette 5), interieur vide
+pz_frame:
+    .a16
+    .i16
+    ; cadre neon (tiles du bandeau, palette 5) : lignes PZ_ROW .. PZ_ROW+6, colonnes 8..23
+    lda #TXT_ATTR + $1400
+    sta bn_attr
+    lda #16
+    sta bn_w
+    ldx #TPOS(8, PZ_ROW)
+    lda #HT_BN_TL
+    ldy #HT_BN_T
+    jsr bn_row
+    ldx #TPOS(8, PZ_ROW + 6)
+    lda #HT_BN_BL
+    ldy #HT_BN_B
+    jsr bn_row
+    lda #PZ_ROW + 1
+@pf_side:
+    pha
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #8 * 2
+    tax
+    lda #HT_BN_L + TXT_ATTR + $1400
+    sta bg3_map,x
+    lda #HT_BN_R + TXT_ATTR + $1400
+    sta bg3_map + 15*2,x
+    inx
+    inx
+    ldy #14
+    lda #TXT_ATTR + TXT_PANEL
+    jsr fill_tiles
+    pla
+    inc a
+    cmp #PZ_ROW + 6
+    bne @pf_side
+    rts
+
+; menu_confirm : dans un menu, "MAIN MENU?" NO / YES -> C = 1 si YES (lignes BG3 restaurees si NO)
+menu_confirm:
+    .a16
+    .i16
+    jsr ui_click
+    ldx #0
+@sv:
+    lda bg3_map + PZ_ROW*64,x
+    sta f:PAUSE_SAVE,x
+    inx
+    inx
+    cpx #(PZ_ROWS*64)
+    bne @sv
+    jsr pz_frame
+    lda #.loword(str_menu_q)
+    sta cf_title
+    lda #1
+    sta cf_menu
+    jsr cf_run
+    bcs :+
+    jsr pause_restore
+    clc
+:   rts
 
 ; pause_restore_clear : apres un ecran plein, la zone sauvegardee devient vide
 pause_restore_clear:
@@ -914,6 +955,7 @@ str_goal1:  .byte "SCORE! +1", 0
 str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
 str_quit_q:  .byte "QUIT MATCH?", 0
+str_menu_q:  .byte "MAIN MENU?", 0
 str_no:      .byte "NO", 0
 str_yes:     .byte "YES", 0
 confirm_items: .word .loword(str_no), .loword(str_yes)
