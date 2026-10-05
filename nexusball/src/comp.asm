@@ -108,6 +108,12 @@ comp_menu:
 @pw:
     jsr pw_entry
     bcc :+
+    lda cm_has                  ; une competition sauvegardee serait remplacee
+    beq @pws
+    lda #.loword(str_over_q)
+    jsr menu_confirm_t
+    bcc :+
+@pws:
     jsr comp_save
     jmp comp_hub
 :   lda c_slot_sel

@@ -901,6 +901,10 @@ pz_frame:
 menu_confirm:
     .a16
     .i16
+    lda #.loword(str_menu_q)
+; menu_confirm_t : A = question -> C = 1 si YES
+menu_confirm_t:
+    sta cf_title
     jsr ui_click
     ldx #0
 @sv:
@@ -911,8 +915,6 @@ menu_confirm:
     cpx #(PZ_ROWS*64)
     bne @sv
     jsr pz_frame
-    lda #.loword(str_menu_q)
-    sta cf_title
     lda #1
     sta cf_menu
     jsr cf_run
@@ -956,6 +958,7 @@ str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
 str_quit_q:  .byte "QUIT MATCH?", 0
 str_menu_q:  .byte "MAIN MENU?", 0
+str_over_q:  .byte "REPLACE SAVE?", 0
 str_no:      .byte "NO", 0
 str_yes:     .byte "YES", 0
 confirm_items: .word .loword(str_no), .loword(str_yes)

@@ -10,6 +10,8 @@
   match : ils se recalculent à l'identique, le mot de passe ne garde que les réglages, les
   équipes, la position dans le calendrier et les scores des matchs humains (et des matchs CPU
   regardés). 12 à 16 caractères en début de championnat de 8 équipes ; contrôle CRC 10 bits.
+- Si une compétition est déjà sauvegardée, valider un mot de passe demande « REPLACE SAVE? »
+  (NO par défaut : la sauvegarde est conservée).
 - Sauvegarde des compétitions en version 4 (graine ajoutée) ; les sauvegardes version 3
   restent lisibles.
 - Tests : aller-retour mot de passe -> compétition identique (ligue, coupe, perso, en cours
