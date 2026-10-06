@@ -99,6 +99,22 @@ camera_scroll:
     bcc :+
     lda #CAM_MAX_Y
 :   sta scroll_y
+    ; tremblement de l'ecran (but) : 2 px verticaux une frame sur deux, vers l'interieur
+    lda shake_t
+    beq @ns
+    dec shake_t
+    lda frame
+    and #$0002
+    beq @ns
+    lda scroll_y
+    cmp #2
+    bcs :+
+    adc #2
+    bra :++
+:   sbc #2
+:   sta scroll_y
+@ns:
+    lda scroll_y
     ; tribunes (BG2) : parallaxe horizontale (moitie de la vitesse)
     sta bg2_vofs
     lda scroll_x

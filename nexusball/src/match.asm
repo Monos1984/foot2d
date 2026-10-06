@@ -549,6 +549,8 @@ goal_scored:
     jsr sfx_play
     lda #SFX_HORN               ; corne de but
     jsr sfx_play
+    lda #24                     ; l'ecran tremble
+    sta shake_t
     ldy #.loword(str_goal1)
     lda b_points
     cmp #2

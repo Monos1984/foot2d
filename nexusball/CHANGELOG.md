@@ -1,5 +1,10 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.17.2 — tremblement de l'écran
+
+- But : l'écran tremble brièvement (2 px verticaux pendant ~0,4 s, terrain et tribunes ;
+  le HUD reste fixe), en plus de la corne et du bandeau.
+
 ## 0.17.1 — corrections, traînée du ballon
 
 - Traînée néon derrière le ballon libre et rapide (tirs, longues passes) : deux traces

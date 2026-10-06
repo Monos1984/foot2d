@@ -424,6 +424,7 @@ pw_cur:     .res 2
 pw_kx:      .res 2
 pw_ky:      .res 2
 cm_has:     .res 2
+shake_t:    .res 2          ; frames de tremblement de l'ecran
 pw_key:     .res 2
 cs_sz:      .res 2
 cf_title:   .res 2          ; titre de la confirmation
