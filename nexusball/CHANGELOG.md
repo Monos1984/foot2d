@@ -1,5 +1,14 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.18.0 — présentation des équipes, écran de fin
+
+- Nouvel écran de présentation avant chaque match : nom du stade, fiches des deux équipes
+  (tenue, niveau, style, statistiques), « VS » qui clignote ; trois joueurs de chaque équipe
+  entrent en courant depuis les bords puis attendent et célèbrent, clameur du public quand
+  tout le monde est en place. START / A / B pour passer (après 1 s), 7 s au plus.
+- Écrans de mi-temps et de fin de match : deux joueurs de chaque équipe en bas de l'écran ;
+  à la fin, le vainqueur célèbre et le perdant baisse la tête (match nul : ils attendent).
+
 ## 0.17.2 — tremblement de l'écran
 
 - But : l'écran tremble brièvement (2 px verticaux pendant ~0,4 s, terrain et tribunes ;

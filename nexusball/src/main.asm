@@ -50,6 +50,7 @@
 .include "comp.asm"
 .include "editor.asm"
 .include "password.asm"
+.include "intro.asm"
 .segment "CODE"
 .include "tsel.asm"
 .include "result.asm"

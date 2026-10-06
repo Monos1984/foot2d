@@ -14,6 +14,8 @@ result_screen:
     .a16
     .i16
     sta rs_mode
+    lda #$FF
+    sta rs_win                  ; pas de vainqueur (match nul / mi-temps)
     jsr screen_off
     jsr oam_clear
     jsr bg3_clear
@@ -141,9 +143,10 @@ result_screen:
     bcs :+
     lda #1
 :   sta rs_s
+    sta rs_win
     lda #UI_HI
     sta t0
-    ldx #TPOS(4, 23)
+    ldx #TPOS(6, 23)
     ldy #.loword(str_winner)
     jsr print
     lda #TXT_ATTR + $0400
@@ -153,7 +156,7 @@ result_screen:
 :   sta t0
     lda rs_s
     jsr team_rec
-    ldx #TPOS(14, 23)
+    ldx #TPOS(15, 23)
     jsr print
     bra @ps
 @draw:
@@ -175,6 +178,7 @@ result_screen:
     stz rs_t
 @w: jsr wait_frame
     jsr oam_begin
+    jsr rs_sprites
     jsr oam_finish
     jsr crowd_update
     lda rs_t
@@ -326,3 +330,98 @@ rs_stat:
 str_winner:     .byte "WINNER", 0
 str_draw:       .byte "DRAW", 0
 .segment "CODE"
+
+; rs_sprites : trois joueurs de chaque equipe de part et d'autre de l'ecran :
+; le vainqueur celebre, le perdant baisse la tete, sinon ils attendent (respiration).
+rs_sprites:
+    .a16
+    .i16
+    stz ts_k
+@l: lda ts_k
+    tay
+    cpy #2
+    jeq @skip
+    cpy #5
+    jeq @skip
+    lda rs_spx,y
+    and #$00FF
+    sta ts_x
+    ldx #0                      ; equipe du joueur
+    cpy #3
+    bcc :+
+    inx
+:   cpx rs_win
+    bne @nw
+    ; vainqueur : celebration decalee d'un joueur a l'autre
+    lda ts_k
+    asl a
+    asl a
+    asl a
+    adc frame
+    and #$0008
+    beq :+
+    lda #SPR_CELEB2
+    bra @spr
+:   lda #SPR_CELEB
+    bra @spr
+@nw:
+    lda rs_win
+    cmp #$FF
+    beq @wait
+    lda #SPR_STUMBLE            ; perdant : tete basse
+    bra @spr
+@wait:
+    lda ts_k
+    asl a
+    asl a
+    asl a
+    adc frame
+    and #$0020
+    beq :+
+    lda #SPR_STAND2
+    bra @spr
+:   lda #SPR_STAND
+@spr:
+    sta ts_t
+    lda ts_k
+    tay
+    lda ts_spp,y
+    and #$00FF
+    xba
+    asl a                       ; palette << 9
+    ora #OBJ_PRIO
+    ora ts_t
+    ldx ts_k
+    cpx #3
+    bcc :+
+    ora #$4000                  ; equipe de droite : tournee vers la gauche
+:   sta ts_attr
+    sta t1
+    lda #1
+    sta t2
+    lda #RS_SPY
+    sta t0
+    lda ts_x
+    jsr oam_add
+    lda ts_attr
+    clc
+    adc #32
+    sta t1
+    lda #1
+    sta t2
+    lda #RS_SPY + 16
+    sta t0
+    lda ts_x
+    jsr oam_add
+@skip:
+    inc ts_k
+    lda ts_k
+    cmp #6
+    jne @l
+    rts
+
+RS_SPY = 170
+
+.segment "RODATA"
+rs_spx:     .byte 4, 22, 0, 234, 216, 0
+.segment "CODE2"

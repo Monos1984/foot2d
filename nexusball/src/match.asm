@@ -10,6 +10,8 @@ start_match:
     .i16
     stz sort_ok                 ; ordre d'affichage a reinitialiser
     jsr screen_off
+    jsr match_intro             ; presentation des equipes
+    jsr screen_off
     lda #0
     jsr ad_show                 ; publicites avant le match
     jsr layers_match
