@@ -18,6 +18,12 @@ start_shootout:
     stz so_taken+2
     lda #1
     sta so_active
+    ldx #0                      ; fin des exclusions (prolongation a 5 contre 5)
+:   stz p_pen,x
+    inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne :-
     lda first_kick
     sta so_team
     lda #4

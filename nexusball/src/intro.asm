@@ -233,3 +233,298 @@ in_sprites:
 .segment "RODATA"
 in_start:   .word .loword(-24), .loword(-56), .loword(-88), 280, 312, 344
 .segment "CODE2"
+
+; =============================================================================
+;  coin_toss : A = 0 debut du match (engagement + cotes), 1 prolongation (engagement)
+;  Piece holographique aux couleurs des deux equipes : elle monte en tournant, ralentit
+;  et retombe sur la face du gagnant. -> ct_win (equipe qui engage), ct_side (1 : cotes
+;  inverses, debut du match seulement).
+; =============================================================================
+CT_Y = 92                       ; hauteur de la piece au repos (ecran)
+
+coin_toss:
+    .a16
+    .i16
+    sta ct_mode
+    ; alea melange au temps passe dans les menus
+    lda rng
+    eor nmi_count
+    ora #$0100
+    sta rng
+    jsr rand
+    and #$0001
+    sta ct_win
+    stz ct_side
+    lda ct_mode
+    bne :+
+    jsr rand
+    and #$0001
+    sta ct_side
+:   jsr safe_screen_off
+    jsr bg3_clear
+    jsr oam_clear
+    jsr ui_fill
+    jsr load_kits
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(2, 1)
+    ldy #.loword(str_toss_title)
+    jsr print
+    ; equipes : a gauche et a droite, a leurs couleurs
+    lda #TXT_ATTR + $0400
+    sta t0
+    lda #0
+    jsr team_rec
+    ldx #TPOS(2, 5)
+    jsr print
+    lda #TXT_ATTR + $0C00
+    sta t0
+    lda #1
+    jsr ct_right_name
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(15, 5)
+    ldy #.loword(str_c_vs)
+    jsr print
+    ; etat de la piece
+    stz ct_q
+    lda ct_win
+    asl a
+    clc
+    adc #16
+    sta ct_qn                   ; 16 ou 18 quarts de tour : finit sur la face du gagnant
+    lda #2
+    sta ct_d
+    stz ct_y
+    lda #.loword(-72)
+    sta ct_vy
+    stz ct_land
+    stz ct_done
+    stz ct_t
+    jsr screen_on
+    lda #SFX_KICK
+    jsr sfx_play
+@loop:
+    jsr oam_begin
+    jsr ct_sprite
+    jsr oam_finish
+    jsr wait_frame
+    lda bg1_mode
+    beq :+
+    jsr crowd_update
+:   ; vol : gravite jusqu'au retour au sol
+    lda ct_land
+    bne @spin
+    lda ct_vy
+    clc
+    adc #2
+    sta ct_vy
+    clc
+    adc ct_y
+    sta ct_y
+    bmi @spin
+    stz ct_y
+    inc ct_land
+    lda #SFX_CATCH
+    jsr sfx_play
+@spin:
+    lda ct_q
+    cmp ct_qn
+    bcs @res
+    dec ct_d
+    bne @res
+    inc ct_q
+    lda ct_q
+    lsr a
+    lsr a
+    lsr a
+    clc
+    adc #2
+    sta ct_d                    ; la rotation ralentit
+@res:
+    lda ct_done
+    bne @wait
+    lda ct_land
+    beq @loop
+    lda ct_q
+    cmp ct_qn
+    bcc @loop
+    ; resultat
+    inc ct_done
+    lda #SFX_CHEER
+    jsr sfx_play
+    jsr ct_result
+    bra @loop
+@wait:
+    lda ct_t
+    clc
+    adc rc+RC_TDEC
+    sta ct_t
+    cmp #TU_SEC * 4
+    bcs @end
+    cmp #TU_SEC / 2
+    jcc @loop
+    lda joy_new
+    ora joy_new+2
+    and #(JOY_START | JOY_A | JOY_B)
+    jeq @loop
+@end:
+    jsr oam_clear
+    rts
+
+; ct_right_name : A = equipe, ligne 5, alignee a droite (colonne 30)
+ct_right_name:
+    .a16
+    .i16
+    jsr team_rec
+    sty ct_ptr
+    ldx #0
+:   lda a:0,y
+    and #$00FF
+    beq :+
+    inx
+    iny
+    bra :-
+:   txa
+    eor #$FFFF
+    sec
+    adc #30
+    asl a
+    clc
+    adc #TPOS(0, 5)
+    tax
+    ldy ct_ptr
+    jmp print
+
+; ct_result : texte du resultat (engagement, sens d'attaque)
+ct_result:
+    .a16
+    .i16
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(4, 18)
+    ldy #.loword(str_ct_kick)
+    jsr print
+    lda #TXT_ATTR + $0400
+    ldy ct_win
+    beq :+
+    lda #TXT_ATTR + $0C00
+:   sta t0
+    lda ct_win
+    jsr team_rec
+    ldx #TPOS(15, 18)
+    jsr print
+    lda ct_mode
+    bne @d
+    ; sens d'attaque sous chaque nom
+    lda #TXT_ATTR + $0400
+    sta t0
+    ldy #.loword(str_ct_r)
+    lda ct_side
+    beq :+
+    ldy #.loword(str_ct_l)
+:   ldx #TPOS(2, 7)
+    jsr print
+    lda #TXT_ATTR + $0C00
+    sta t0
+    ldy #.loword(str_ct_l)
+    lda ct_side
+    beq :+
+    ldy #.loword(str_ct_r)
+:   ldx #TPOS(26, 7)
+    jsr print
+@d: lda #UI_ATTR
+    sta t0
+    ldx #TPOS(10, 25)
+    ldy #.loword(str_press_start)
+    jsr print
+    lda #1
+    sta bg3_dirty
+    rts
+
+; ct_sprite : piece (face equipe 0, tranche, face equipe 1, tranche retournee) + ombre
+ct_sprite:
+    .a16
+    .i16
+    lda ct_q
+    and #$0003
+    tax
+    lda ct_tiles,x
+    and #$00FF
+    ora #OBJ_PRIO
+    cpx #2
+    bne :+
+    ora #$0200                  ; palette 1 : couleurs de l'equipe de droite
+:   cpx #3
+    bne :+
+    ora #$4000
+:   sta t1
+    lda #1
+    sta t2
+    lda ct_y
+    ASR_A 4
+    clc
+    adc #CT_Y
+    sta t0
+    lda #120
+    jsr oam_add
+    ; quatre etincelles en orbite tant que la piece tourne
+    lda ct_done
+    bne @sh
+    stz ct_i
+@o: lda ct_i
+    asl a
+    adc frame
+    lsr a
+    and #$0007
+    sta ct_k
+    lda #SPR_TRAIL2 | PAL_BALL | OBJ_PRIO
+    sta t1
+    stz t2
+    ldy ct_k
+    lda spk_dy,y
+    and #$00FF
+    sta t7
+    lda #36
+    jsr smul
+    sta ct_k2
+    lda ct_y
+    ASR_A 4
+    clc
+    adc #CT_Y + 4
+    clc
+    adc ct_k2
+    sta t0
+    ldy ct_k
+    lda spk_dx,y
+    and #$00FF
+    sta t7
+    lda #36
+    jsr smul
+    clc
+    adc #124
+    jsr oam_add
+    lda ct_i
+    clc
+    adc #2
+    sta ct_i
+    cmp #8
+    bne @o
+@sh:
+    ; ombre au sol
+    lda #SPR_OSHADOW | PAL_BALL | $2000
+    sta t1
+    lda #1
+    sta t2
+    lda #CT_Y + 6
+    sta t0
+    lda #120
+    jmp oam_add
+
+.segment "RODATA"
+ct_tiles:     .byte SPR_COIN, SPR_COINE, SPR_COIN, SPR_COINE
+str_toss_title: .byte "COIN TOSS", 0
+str_ct_kick:  .byte "KICK OFF", 0
+str_ct_r:     .byte ">>>", 0
+str_ct_l:     .byte "<<<", 0
+.segment "CODE2"

@@ -11,6 +11,8 @@ start_match:
     stz sort_ok                 ; ordre d'affichage a reinitialiser
     jsr screen_off
     jsr match_intro             ; presentation des equipes
+    lda #0
+    jsr coin_toss               ; tirage au sort : engagement et cotes
     jsr screen_off
     lda #0
     jsr ad_show                 ; publicites avant le match
@@ -37,8 +39,9 @@ start_match:
     sta pad_team
 :
 @pads_ok:
-    stz team_dir
-    lda #1
+    lda ct_side                 ; cotes tires au sort
+    sta team_dir
+    eor #1
     sta team_dir+2
     stz score
     stz score+2
@@ -70,13 +73,8 @@ start_match:
     inx
     cpx #NUM_PLAYERS * 2
     bne :-
-    ; equipe qui engage : tirage au sort (alea melange au temps passe sur le titre)
-    lda rng
-    eor nmi_count
-    ora #$0100
-    sta rng
-    jsr rand
-    and #$0001
+    ; equipe qui engage : tirage au sort (coin_toss)
+    lda ct_win
     sta kick_team
     sta first_kick
 
@@ -286,7 +284,7 @@ st_goal:
 st_half:
     .a16
     lda m_timer
-    bne @w
+    jne @w
     ; publicites de la mi-temps (pas avant la prolongation)
     lda m_half
     cmp #1
@@ -304,6 +302,20 @@ st_half:
     bra :+
 @noad:
     stz ad_flag
+    lda m_half
+    cmp #2
+    bne :+
+    ; prolongation : nouveau tirage au sort, un joueur de moins par equipe
+    lda #1
+    jsr coin_toss
+    jsr screen_off
+    jsr ensure_stadium_bg
+    jsr layers_match
+    jsr bg2_crowd_map
+    jsr bg3_clear
+    jsr ot_remove
+    lda #1
+    sta ad_flag
 :   ; changement de cote, l'autre equipe engage
     lda team_dir
     eor #1
@@ -316,6 +328,12 @@ st_half:
     sta kick_team
     jsr halftime_rest
     inc m_half
+    lda m_half
+    cmp #3
+    bne :+
+    lda ct_win                  ; prolongation : le gagnant du tirage engage
+    sta kick_team
+:
     lda m_len
     ldy m_half
     cpy #3
@@ -330,6 +348,38 @@ st_half:
     jsr camera_snap
     jsr screen_on
 @w: clc
+    rts
+
+; ot_remove : prolongation a 5 contre 5 (le joueur 1 de chaque equipe sort jusqu'a la fin)
+ot_remove:
+    .a16
+    .i16
+    ldx #1 * 2
+    jsr @one
+    ldx #(TEAM_SIZE + 1) * 2
+@one:
+    stx cp
+    lda #$7FFF
+    sta p_pen,x
+    lda #PS_OUT
+    sta p_state,x
+    ; la manette qui le controlait passe a un autre joueur
+    ldy #0
+@pad:
+    lda ctrl,y
+    and #$00FF
+    asl a
+    cmp cp
+    bne @np
+    ldx cp
+    lda p_team,x
+    jsr first_active
+    jsr set_ctrl
+@np:
+    iny
+    iny
+    cpy #4
+    bne @pad
     rts
 
 ; halftime_rest : a la pause, toute la fatigue des effectifs est divisee par 2

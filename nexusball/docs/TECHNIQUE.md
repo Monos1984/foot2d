@@ -13,6 +13,8 @@ il décrit l'état du moteur, les décisions prises et ce qui reste à valider s
 | Port du ballon | 4 s au plus. Au-delà : buzzer, bandeau, arrêt court (`MS_FOUL`), ballon à l'adversaire le plus proche et **coup franc** (même séquence qu'une faute, `fk_start`). |
 | Coup franc | Le tireur ne bouge pas (passe / tir autorisés), les adversaires sont tenus à 40 px, 6 s au plus. |
 | Raquettes | Réservées aux gardiens (les joueurs de champ sont repoussés sur le bord). Le ballon ne peut pas y rester 4 s : sinon l'adversaire engage au centre. |
+| Tirage au sort | Avant le match (engagement et côtés) et avant la prolongation (engagement). |
+| Prolongation | 5 contre 5 (joueur 1 de chaque équipe sorti, `ot_remove`), but en or, puis tirs au but. |
 | Coup d'envoi | Deux joueurs dans le rond central ; le porteur doit passer à son partenaire ; personne d'autre n'entre dans le rond avant la réception (6 s au plus). |
 | Exclusions | Faute grave = 20 s de jeu, **un minuteur par joueur** (`p_pen`) : plusieurs exclusions simultanées possibles. Retour au poste le long du mur du haut, ou du bas si le ballon est près du haut. |
 | Chronomètre | Arrêté pendant les engagements : coup d'envoi, arrêt de jeu après faute, coup franc ; il repart quand la passe / le tir d'engagement est joué (ou après 6 s de sécurité). |

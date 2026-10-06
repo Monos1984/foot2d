@@ -426,6 +426,21 @@ pw_kx:      .res 2
 pw_ky:      .res 2
 cm_has:     .res 2
 rs_win:     .res 2          ; ecran de score : equipe gagnante ($FF aucune)
+ct_mode:    .res 2          ; tirage au sort
+ct_win:     .res 2
+ct_side:    .res 2
+ct_q:       .res 2
+ct_qn:      .res 2
+ct_d:       .res 2
+ct_y:       .res 2
+ct_vy:      .res 2
+ct_land:    .res 2
+ct_done:    .res 2
+ct_t:       .res 2
+ct_ptr:     .res 2
+ct_i:       .res 2
+ct_k:       .res 2
+ct_k2:      .res 2
 in_x:       .res 12         ; presentation : x des joueurs
 in_t:       .res 2
 in_arr:     .res 2

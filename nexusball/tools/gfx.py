@@ -723,6 +723,26 @@ def build_obj():
             for c, ch in enumerate(row):
                 v = 0 if ch == "." else int(ch, 16)
                 sheet.put(tx * 8 + c, ty * 8 + r, v)
+    # piece du tirage au sort (palettes des equipes) : face (tile 234) et tranche (236)
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x - 7.5, y - 7.5
+            d = (dx * dx + dy * dy) ** 0.5
+            if d <= 7.6:
+                if d > 6.4:
+                    c = OUT
+                elif d > 5.0:
+                    c = METAL if dx + dy < 0 else METALD
+                else:
+                    c = KITH if dx + dy < -4 else KIT if dx + dy < 3 else KITD
+                    # hexagone neon au centre
+                    ax, ay = abs(dx), abs(dy)
+                    if 1.6 < max(ax * 0.87 + ay * 0.5, ay) < 2.8:
+                        c = NEON if dx + dy < 0 else WHITE
+                sheet.put(80 + x, 112 + y, c)
+            if abs(dx) <= 2.0 and abs(dy) <= 7.4:
+                c = OUT if abs(dx) > 1.2 or abs(dy) > 6.6 else (NEON if abs(dy) < 1 else METAL)
+                sheet.put(96 + x, 112 + y, c)
     # ballon ovale 16x16 : 4 orientations x 2 phases de rotation (tiles 192 + 2*f), ombre (238)
     for f, im in enumerate(ball_frames()):
         bx, by = f * 16, 96

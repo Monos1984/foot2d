@@ -1,5 +1,14 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.19.0 — tirage au sort, prolongation à 5 contre 5
+
+- Tirage au sort « futuriste » avant chaque match : pièce holographique aux couleurs des deux
+  équipes, qui monte en tournant entourée d'étincelles, ralentit et retombe sur la face du
+  gagnant. Le gagnant engage ; les côtés sont aussi tirés (flèches >>> / <<< sous les noms).
+- Prolongation : nouveau tirage au sort pour l'engagement, et un joueur de champ de moins par
+  équipe (5 contre 5, comme au hockey) jusqu'à la fin ; tout le monde revient pour les tirs au
+  but. Règles (EN / FR) mises à jour.
+
 ## 0.18.0 — présentation des équipes, écran de fin
 
 - Nouvel écran de présentation avant chaque match : nom du stade, fiches des deux équipes

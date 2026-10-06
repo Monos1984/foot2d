@@ -118,6 +118,8 @@ SPR_DOTW    = 230
 SPR_WARN    = 231
 SPR_BALLHI  = 232
 SPR_OSHADOW = 238
+SPR_COIN    = 234            ; piece du tirage au sort (face / tranche, palettes 0-1)
+SPR_COINE   = 236
 
 ; ---- VRAM (adresses en mots)
 VRAM_BG1_CHR = $0000
