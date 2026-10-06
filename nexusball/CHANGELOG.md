@@ -4,6 +4,8 @@
 
 - But : l'écran tremble brièvement (2 px verticaux pendant ~0,4 s, terrain et tribunes ;
   le HUD reste fixe), en plus de la corne et du bandeau.
+- Statistiques de fin de match : nouvelle ligne SAVES (« ARRÊTS ») — parades des gardiens par
+  équipe (captés et repoussés).
 
 ## 0.17.1 — corrections, traînée du ballon
 

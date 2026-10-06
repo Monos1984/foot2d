@@ -81,6 +81,7 @@ TR = [
     ("SO ", "TAB", 0),
     ("SHOTS", "TIRS", 0),
     ("FOULS", "FAUTES", 6),
+    ("SAVES", "ARRÊTS", 6),
     ("FULL TIME", "FIN DU MATCH", 16),
     ("PRESS START", "APPUIE START", 13),
     # avant-match

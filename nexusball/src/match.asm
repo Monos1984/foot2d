@@ -45,6 +45,7 @@ start_match:
 :   stz st_shots,x
     stz st_poss,x
     stz st_fouls,x
+    stz st_saves,x
     inx
     inx
     cpx #4

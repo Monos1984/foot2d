@@ -121,6 +121,12 @@ gk_try:
     sta p_y,x
 @catch:
     inc dbg_saves
+    lda p_team,x                ; statistiques : arrets par equipe
+    asl a
+    tay
+    lda st_saves,y
+    inc a
+    sta st_saves,y
     lda #SFX_SAVE
     jsr sfx_play
     lda #SFX_OOH

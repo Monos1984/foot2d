@@ -749,6 +749,7 @@ str_so_res:     .byte "SHOOTOUT ", 0
 str_st_shots:   .byte "SHOTS", 0
 str_st_poss:    .byte "POSS.", 0
 str_st_fouls:   .byte "FOULS", 0
+str_st_saves:   .byte "SAVES", 0
 str_fulltime:   .byte "FULL TIME", 0
 str_press_start: .byte "PRESS START", 0
 .segment "CODE"

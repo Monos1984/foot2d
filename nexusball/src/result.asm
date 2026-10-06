@@ -102,6 +102,12 @@ result_screen:
     sta rs_b
     ldy #.loword(str_st_fouls)
     jsr rs_stat
+    lda st_saves
+    sta rs_a
+    lda st_saves+2
+    sta rs_b
+    ldy #.loword(str_st_saves)
+    jsr rs_stat
     ; tirs au but
     lda so_active
     beq @noso
