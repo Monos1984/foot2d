@@ -430,6 +430,11 @@ in_x:       .res 12         ; presentation : x des joueurs
 in_t:       .res 2
 in_arr:     .res 2
 in_cheer:   .res 2
+spk_t:      .res 2          ; etincelles du but
+spk_x:      .res 2
+spk_y:      .res 2
+spk_r:      .res 2
+spk_i:      .res 2
 shake_t:    .res 2          ; frames de tremblement de l'ecran
 pw_key:     .res 2
 cs_sz:      .res 2

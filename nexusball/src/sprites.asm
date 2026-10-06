@@ -21,6 +21,7 @@ build_sprites:
     jsr prof_mark
 .endif
     jsr draw_ball
+    jsr draw_sparks
 .if DEBUG
     ldx #1 * 2
     jsr prof_mark
@@ -347,6 +348,70 @@ ball_trail:
     sec
     sbc #4
     jmp oam_add
+
+; draw_sparks : gerbe d'etincelles qui s'ecarte de l'anneau apres un but (8 x 8x8)
+SPK_T = 28
+
+draw_sparks:
+    .a16
+    .i16
+    lda spk_t
+    beq @d
+    dec spk_t
+    lda #SPK_T
+    sec
+    sbc spk_t
+    asl a
+    asl a                       ; rayon x2 (pour smul)
+    sta spk_r
+    stz spk_i
+@l: ldy spk_i
+    ; tile : grande trace puis petite, scintillement en fin de vie
+    lda #SPR_TRAIL1 | PAL_BALL | OBJ_PRIO
+    ldx spk_t
+    cpx #SPK_T / 2
+    bcs :+
+    lda frame
+    and #$0001
+    bne @n
+    lda #SPR_TRAIL2 | PAL_BALL | OBJ_PRIO
+:   sta t1
+    stz t2
+    lda spk_dy,y
+    and #$00FF
+    sta t7
+    lda spk_r
+    jsr smul
+    clc
+    adc spk_y
+    sec
+    sbc scroll_y
+    sec
+    sbc #4
+    sta t0
+    ldy spk_i
+    lda spk_dx,y
+    and #$00FF
+    sta t7
+    lda spk_r
+    jsr smul
+    clc
+    adc spk_x
+    sec
+    sbc scroll_x
+    sec
+    sbc #4
+    jsr oam_add
+@n: inc spk_i
+    lda spk_i
+    cmp #8
+    bne @l
+@d: rts
+
+.segment "RODATA"
+spk_dx: .byte 120, 85, 0, <(-85), <(-120), <(-85), 0, 85
+spk_dy: .byte 0, 85, 120, 85, 0, <(-85), <(-120), <(-85)
+.segment "CODE"
 
 draw_ball_shadow:
     .a16

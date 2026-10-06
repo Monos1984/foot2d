@@ -554,6 +554,16 @@ goal_scored:
     jsr sfx_play
     lda #24                     ; l'ecran tremble
     sta shake_t
+    lda b_x                     ; gerbe d'etincelles a l'anneau
+    ASR_A 4
+    sta spk_x
+    lda b_y
+    sec
+    sbc b_z
+    ASR_A 4
+    sta spk_y
+    lda #SPK_T
+    sta spk_t
     ldy #.loword(str_goal1)
     lda b_points
     cmp #2

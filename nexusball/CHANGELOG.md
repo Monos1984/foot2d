@@ -8,6 +8,7 @@
   tout le monde est en place. START / A / B pour passer (après 1 s), 7 s au plus.
 - Écrans de mi-temps et de fin de match : deux joueurs de chaque équipe en bas de l'écran ;
   à la fin, le vainqueur célèbre et le perdant baisse la tête (match nul : ils attendent).
+- But : gerbe de 8 étincelles néon qui s'écarte de l'anneau (en plus du tremblement).
 
 ## 0.17.2 — tremblement de l'écran
 
