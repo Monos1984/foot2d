@@ -1114,6 +1114,7 @@ hub_draw:
     jsr comp_rounds
     ldx #TPOS(13, 3)
     jsr print_num2
+    jsr hub_position
 :   ; matchs de la journee
     stz hub_i
     stz near_tmp+4              ; ligne
@@ -1250,6 +1251,58 @@ hub_draw:
     ldy #.loword(str_c_save)
     jsr print
     jmp hub_cursor
+
+; hub_position : ligue, apres la 1re journee : place du premier participant humain
+; ("POS 3/8", ligne 3)
+hub_position:
+    .a16
+    .i16
+    lda c_round
+    bne :+
+    lda c_match
+    bne :+
+    rts
+:   ldx #0
+@h: cpx c_n
+    bcc :+
+    rts                         ; pas d'humain
+:   phx
+    jsr part_ctrl
+    plx
+    cmp #2
+    bcs @f
+    inx
+    bra @h
+@f: stx hub_i
+    jsr compute_table
+    ldx #0
+@s: lda st_order,x
+    and #$00FF
+    cmp hub_i
+    beq @p
+    inx
+    cpx c_n
+    bcc @s
+    rts
+@p: inx
+    phx
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(18, 3)
+    ldy #.loword(str_c_pos)
+    jsr print
+    pla
+    ldx #TPOS(22, 3)
+    jsr print_num2
+    lda #('/' - 32 + UI_HI)
+    sta bg3_map + TPOS(24, 3)
+    lda c_n
+    cmp #10
+    bcs :+
+    ldx #TPOS(25, 3)
+    jmp print_digit
+:   ldx #TPOS(25, 3)
+    jmp print_num2
 
 ; hub_team : A = participant, X = colonne, near_tmp+2 = ligne -> nom court (couleur si humain)
 hub_team:
@@ -2396,6 +2449,7 @@ str_c_table:    .byte "TABLE", 0
 str_c_bracket:  .byte "BRACKET", 0
 str_c_save:     .byte "SAVE & EXIT", 0
 str_c_pw:       .byte "PASSWORD", 0
+str_c_pos:      .byte "POS", 0
 str_c_watch:    .byte "WATCH CPU MATCHES", 0
 str_c_playas:   .byte "PLAY AS", 0
 str_c_home:     .byte "HOME", 0

@@ -1,5 +1,12 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.6 — place au classement
+
+- Championnat : l'écran de la journée affiche la place de l'équipe du joueur au classement
+  (« POS 3/8 », « PL. » en français) dès que des matchs ont été joués.
+- Vérifié : RESTART depuis la pause fonctionne aussi en compétition (présentation, match,
+  résultat enregistré une seule fois).
+
 ## 0.20.5 — étoile du match
 
 - Écran de fin de match : ligne « STAR » (« ÉTOILE ») avec le joueur qui a marqué le plus de
