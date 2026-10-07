@@ -456,7 +456,12 @@ cr_ptr:     .res 2
 tf_t:       .res 2          ; ecran titre : animation
 tf_x:       .res 2
 tf_y:       .res 2
-pz_restart: .res 2          ; pause : rejouer le match
+pz_restart: .res 2
+p_pts:      .res NUM_PLAYERS*2   ; points marques par joueur (etoile du match)
+rs_bv:      .res 2
+rs_bp:      .res 2
+rs_bt:      .res 2
+rs_name:    .res 10          ; pause : rejouer le match
 shake_t:    .res 2          ; frames de tremblement de l'ecran
 pw_key:     .res 2
 cs_sz:      .res 2

@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.5 — étoile du match
+
+- Écran de fin de match : ligne « STAR » (« ÉTOILE ») avec le joueur qui a marqué le plus de
+  points (nom aux couleurs de son équipe, points marqués). Points comptés par joueur à chaque
+  but (`p_pts`).
+
 ## 0.20.4 — rejouer le match
 
 - Menu pause : nouvelle entrée RESTART (« REJOUER ») avec confirmation (NO par défaut) : le

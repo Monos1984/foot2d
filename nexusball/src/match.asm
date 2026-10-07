@@ -69,6 +69,7 @@ start_match:
     stz m_acc
     ldx #0
 :   stz p_pen,x
+    stz p_pts,x
     inx
     inx
     cpx #NUM_PLAYERS * 2
@@ -646,6 +647,17 @@ goal_scored:
     plp
     beq :+
     ldx #$FF
+:   cpx #$FF                    ; points du marqueur (etoile du match)
+    beq :+
+    phx
+    txa
+    asl a
+    tax
+    lda p_pts,x
+    clc
+    adc b_points
+    sta p_pts,x
+    plx
 :   lda gs_team
     jsr show_tmsg
     lda #T_GOAL

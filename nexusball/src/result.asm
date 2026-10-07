@@ -129,6 +129,7 @@ result_screen:
 @noso:
     lda rs_mode
     jeq @nowin
+    jsr rs_star
     ; vainqueur (score, puis tirs au but) ou match nul
     lda score
     cmp score+2
@@ -328,6 +329,8 @@ rs_stat:
 
 .segment "RODATA"
 str_winner:     .byte "WINNER", 0
+str_star:       .byte "STAR", 0
+str_pts:        .byte "PTS", 0
 str_draw:       .byte "DRAW", 0
 .segment "CODE"
 
@@ -419,6 +422,84 @@ rs_sprites:
     cmp #6
     jne @l
     rts
+
+; rs_star : joueur qui a marque le plus de points (ligne 22) : STAR  NOM  n PTS
+rs_star:
+    .a16
+    .i16
+    stz rs_bv
+    ldx #0
+@l: lda p_pts,x
+    cmp rs_bv
+    bcc :+
+    beq :+
+    sta rs_bv
+    stx rs_bp
+:   inx
+    inx
+    cpx #NUM_PLAYERS * 2
+    bne @l
+    lda rs_bv
+    bne :+
+    rts
+:   ; nom (8 caracteres au plus, espaces de fin retires)
+    ldx rs_bp
+    jsr lineup_index
+    lda lineup,y
+    pha
+    ldx rs_bp
+    lda p_team,x
+    sta rs_bt
+    plx
+    jsr roster_rec
+    ldx #0
+:   lda a:0,y
+    sep #$20
+    .a8
+    sta rs_name,x
+    rep #$20
+    .a16
+    and #$00FF
+    beq :+
+    iny
+    inx
+    cpx #8
+    bne :-
+:   sep #$20
+    .a8
+    stz rs_name,x
+@tr:
+    dex
+    bmi @nt
+    lda rs_name,x
+    cmp #' '
+    bne @nt
+    stz rs_name,x
+    bra @tr
+@nt:
+    rep #$20
+    .a16
+    lda #UI_HI
+    sta t0
+    ldx #TPOS(6, 22)
+    ldy #.loword(str_star)
+    jsr print
+    lda #TXT_ATTR + $0400
+    ldy rs_bt
+    beq :+
+    lda #TXT_ATTR + $0C00
+:   sta t0
+    ldx #TPOS(12, 22)
+    ldy #.loword(rs_name)
+    jsr print_raw
+    lda #UI_ATTR
+    sta t0
+    lda rs_bv
+    ldx #TPOS(21, 22)
+    jsr print_num2
+    ldx #TPOS(24, 22)
+    ldy #.loword(str_pts)
+    jmp print
 
 RS_SPY = 170
 
