@@ -415,6 +415,28 @@ spk_dy: .byte 0, 85, 120, 85, 0, <(-85), <(-120), <(-85)
 
 draw_ball_shadow:
     .a16
+    ; ballon haut : petite ombre (indice de hauteur)
+    lda b_z
+    cmp #20 * FP
+    bcc @big
+    lda #SPR_SHADOW | PAL_BALL | $2000
+    sta t1
+    stz t2
+    lda b_y
+    ASR_A 4
+    sec
+    sbc scroll_y
+    sec
+    sbc #5
+    sta t0
+    lda b_x
+    ASR_A 4
+    sec
+    sbc scroll_x
+    sec
+    sbc #4
+    jmp oam_add
+@big:
     lda #SPR_OSHADOW | PAL_BALL | $2000
     sta t1
     lda #1

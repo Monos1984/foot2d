@@ -4,6 +4,8 @@
 
 - Jauge de sprint (R) au-dessus du curseur du joueur contrôlé : 4 niveaux, elle apparaît dès
   que le joueur est fatigué et devient orange quand le sprint n'est plus possible.
+- Ombre du ballon : petite ombre quand le ballon est haut (plus de 20 px), grande ombre
+  ovale près du sol (indice de hauteur pour les lobs et les tirs).
 
 ## 0.20.2 — indicateur de passe
 
