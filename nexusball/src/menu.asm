@@ -70,7 +70,10 @@ title_screen:
 @loop:
     jsr wait_frame
     jsr oam_begin
-    jsr oam_finish
+    lda title_mode
+    beq :+
+    jsr title_ball
+:   jsr oam_finish
     jsr crowd_update
     lda title_mode
     bne @menu
@@ -167,6 +170,38 @@ menu_draw:
     lda t5
     cmp #MENU_ITEMS
     bne @l
+    ; description de l'entree choisie (ligne 23, centree, cyan)
+    ldx #TPOS(0, 23)
+    ldy #32
+    lda #0
+    jsr fill_tiles
+    lda menu_sel
+    asl a
+    tax
+    lda title_desc,x
+    tay
+    jsr tr_str                  ; Y = chaine (traduite si besoin)
+    sty t6
+    ldx #0
+:   lda a:0,y
+    and #$00FF
+    beq :+
+    inx
+    iny
+    bra :-
+:   ldy t6
+    txa
+    eor #$FFFF
+    sec
+    adc #32
+    lsr a                       ; colonne = (32 - longueur) / 2
+    clc
+    adc #23 * 32
+    asl a
+    tax
+    lda #TXT_ATTR + $1400
+    sta t0
+    jsr print_raw
     lda #.loword(title_rows)
     sta t3
     lda #MENU_ITEMS
@@ -174,6 +209,39 @@ menu_draw:
     lda menu_sel
     jsr ui_cursor_col
     rts
+
+title_desc:
+    .word .loword(str_d_exh), .loword(str_d_champ), .loword(str_d_cup)
+    .word .loword(str_d_custom), .loword(str_d_cteam), .loword(str_d_cplayer)
+    .word .loword(str_d_rules), .loword(str_d_opt), .loword(str_d_cred)
+
+; title_ball : ballon ovale qui tourne devant l'entree choisie du menu
+title_ball:
+    .a16
+    .i16
+    lda frame
+    lsr a
+    lsr a
+    lsr a
+    and #$0003
+    asl a
+    asl a                       ; 4 * orientation
+    clc
+    adc #SPR_OVAL | PAL_BALL | OBJ_PRIO
+    sta t1
+    lda #1
+    sta t2
+    lda menu_sel
+    clc
+    adc #MENU_ROW
+    asl a
+    asl a
+    asl a
+    sec
+    sbc #5
+    sta t0
+    lda #(MENU_COL - 2) * 8 - 18
+    jmp oam_add
 
 title_rows:
     .byte MENU_ROW, MENU_ROW + 1, MENU_ROW + 2, MENU_ROW + 3, MENU_ROW + 4, MENU_ROW + 5
@@ -231,8 +299,13 @@ options_redraw:
     jsr ui_fill
     lda #UI_HI
     sta t0
-    ldx #TPOS(12, 3)
+    ldx #TPOS(4, 1)
     ldy #.loword(str_options)
+    jsr print
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(1, 25)
+    ldy #.loword(str_opt_help)
     jsr print
     jsr opt_draw
     jsr screen_on
@@ -427,6 +500,17 @@ str_ch1:        .byte "A:PASS B:KICK Y:SHOOT X:CHARGE", 0
 str_ch2:        .byte "Y:PASS B:KICK A:SHOOT X:CHARGE", 0
 ctrl_help:      .word .loword(str_ch0), .loword(str_ch1), .loword(str_ch2)
 str_project:    .byte " AN OFFGAME PROJECT ", 0
+str_opt_help:   .byte "<> CHANGE       B BACK", 0
+str_cm_help:    .byte "A OK           B BACK", 0
+str_d_exh:      .byte "ONE MATCH, 1 OR 2 PLAYERS", 0
+str_d_champ:    .byte "LEAGUE: EVERYONE PLAYS EVERYONE", 0
+str_d_cup:      .byte "KNOCKOUT: WIN OR GO HOME", 0
+str_d_custom:   .byte "YOUR OWN LEAGUE OR CUP", 0
+str_d_cteam:    .byte "BUILD A TEAM AND ITS COLORS", 0
+str_d_cplayer:  .byte "CREATE A PLAYER", 0
+str_d_rules:    .byte "HOW TO PLAY NEXUS BALL", 0
+str_d_opt:      .byte "LENGTH, CONTROLS, LANGUAGE", 0
+str_d_cred:     .byte "WHO MADE THE GAME", 0
 str_ntsc:       .byte " NTSC 60HZ ", 0
 str_pal:        .byte " PAL 50HZ  ", 0
 credits_text:

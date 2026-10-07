@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.19.2 — menus
+
+- Menu principal : un ballon ovale tourne devant l'entrée choisie, et une ligne de description
+  (EN / FR, centrée, en cyan) explique chaque entrée.
+- Options : titre dans la barre de titre comme les autres écrans, aide en bas
+  (« <> CHANGE  B BACK »).
+- Menus des compétitions : aide en bas (« A OK  B BACK »).
+
 ## 0.19.1 — bandeaux d'action, fin de période
 
 - Bandeau « SAVE! » (« ARRÊT ! ») avec l'équipe et le nom du gardien à chaque parade, et

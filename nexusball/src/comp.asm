@@ -34,6 +34,11 @@ comp_menu:
     jsr oam_clear
     jsr ui_fill
     jsr comp_title
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(1, 25)
+    ldy #.loword(str_cm_help)
+    jsr print
     jsr screen_on
 @draw:
     lda #UI_ATTR
