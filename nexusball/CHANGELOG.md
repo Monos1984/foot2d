@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.7 — météo des stades
+
+- EUROPA ICE : neige (12 flocons qui tombent lentement en dérivant) ; MARS DOME : poussière
+  rouge poussée par le vent. Particules dessinées en dernier dans l'OAM (abandonnées en
+  premier si une ligne déborde) ; 0 frame perdue en NTSC (bsnes, 3000 frames).
+
 ## 0.20.6 — place au classement
 
 - Championnat : l'écran de la journée affiche la place de l'équipe du joueur au classement

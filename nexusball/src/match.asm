@@ -10,6 +10,7 @@ start_match:
     .i16
     stz sort_ok                 ; ordre d'affichage a reinitialiser
     jsr screen_off
+    stz wx_init                 ; meteo a reinitialiser
     jsr match_intro             ; presentation des equipes
     lda #0
     jsr coin_toss               ; tirage au sort : engagement et cotes

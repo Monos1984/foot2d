@@ -46,6 +46,7 @@ build_sprites:
     cpy #NUM_PLAYERS + 1
     bne @l
     jsr draw_ball_shadow
+    jsr draw_weather
 .if DEBUG
     ldx #4 * 2
     jsr prof_mark
@@ -412,6 +413,104 @@ draw_sparks:
 spk_dx: .byte 120, 85, 0, <(-85), <(-120), <(-85), 0, 85
 spk_dy: .byte 0, 85, 120, 85, 0, <(-85), <(-120), <(-85)
 .segment "CODE"
+
+; draw_weather : neige (EUROPA ICE) ou poussiere (MARS DOME), 12 particules en
+; coordonnees ecran, dessinees en dernier (abandonnees en premier si une ligne deborde)
+WX_N = 12
+
+draw_weather:
+    .a16
+    .i16
+    lda stadium_id
+    cmp #2
+    beq @go
+    cmp #1
+    beq @go
+    rts
+@go:
+    lda wx_init
+    bne @run
+    inc wx_init
+    ldx #0
+:   jsr rand
+    and #$00FF
+    sta wx_x,x
+    jsr rand
+    and #$007F
+    clc
+    adc #24
+    sta wx_y,x
+    inx
+    inx
+    cpx #WX_N * 2
+    bne :-
+@run:
+    ldx #0
+@l: stx wx_i
+    lda stadium_id
+    cmp #2
+    bne @dust
+    ; neige : chute lente, derive d'un cote puis de l'autre
+    inc wx_y,x
+    txa
+    asl a
+    asl a
+    asl a
+    adc frame
+    and #$0043
+    cmp #$0040
+    bne :+
+    inc wx_x,x
+:   lda wx_y,x
+    cmp #224
+    bcc @draw
+    lda #24
+    sta wx_y,x
+    jsr rand
+    and #$00FF
+    ldx wx_i
+    sta wx_x,x
+    bra @draw
+@dust:
+    ; poussiere : vent horizontal
+    lda wx_x,x
+    clc
+    adc #2
+    sta wx_x,x
+    lda frame
+    and #$0003
+    bne :+
+    inc wx_y,x
+:   lda wx_x,x
+    cmp #256
+    bcc @draw
+    stz wx_x,x
+    jsr rand
+    and #$007F
+    clc
+    adc #40
+    ldx wx_i
+    sta wx_y,x
+@draw:
+    ldx wx_i
+    lda #SPR_FLAKE | PAL_BALL | OBJ_PRIO
+    ldy stadium_id
+    cpy #2
+    beq :+
+    lda #SPR_DUST | PAL_BALL | OBJ_PRIO
+:   sta t1
+    stz t2
+    lda wx_y,x
+    sta t0
+    lda wx_x,x
+    and #$00FF
+    jsr oam_add
+    ldx wx_i
+    inx
+    inx
+    cpx #WX_N * 2
+    jne @l
+    rts
 
 draw_ball_shadow:
     .a16

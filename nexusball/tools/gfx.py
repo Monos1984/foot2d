@@ -764,6 +764,14 @@ def build_obj():
                 else:
                     c = 1 if x <= lv * 3 // 2 else 4
                 sheet.put(tx + x, ty + y, c)
+    # meteo : flocon (tile 245) et poussiere martienne (246)
+    for tile, rows in ((245, ["........", "........", "...2....", "..212...", "...2....", "........", "........", "........"]),
+                       (246, ["........", "........", "........", "...66...", "....6...", "........", "........", "........"])):
+        tx, ty = tile % 16 * 8, tile // 16 * 8
+        for r, row in enumerate(rows):
+            for c, ch in enumerate(row):
+                if ch != ".":
+                    sheet.put(tx + c, ty + r, int(ch, 16))
     # piece du tirage au sort (palettes des equipes) : face (tile 234) et tranche (236)
     for y in range(16):
         for x in range(16):

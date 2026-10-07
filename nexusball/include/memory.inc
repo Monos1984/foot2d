@@ -457,6 +457,10 @@ tf_t:       .res 2          ; ecran titre : animation
 tf_x:       .res 2
 tf_y:       .res 2
 pz_restart: .res 2
+wx_init:    .res 2          ; meteo du stade
+wx_i:       .res 2
+wx_x:       .res 24
+wx_y:       .res 24
 p_pts:      .res NUM_PLAYERS*2   ; points marques par joueur (etoile du match)
 rs_bv:      .res 2
 rs_bp:      .res 2
