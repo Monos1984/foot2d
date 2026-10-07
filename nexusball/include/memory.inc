@@ -453,6 +453,9 @@ spk_i:      .res 2
 cr_row:     .res 2          ; credits
 cr_col:     .res 2
 cr_ptr:     .res 2
+tf_t:       .res 2          ; ecran titre : animation
+tf_x:       .res 2
+tf_y:       .res 2
 shake_t:    .res 2          ; frames de tremblement de l'ecran
 pw_key:     .res 2
 cs_sz:      .res 2

@@ -72,21 +72,21 @@ def stadium_pal(floor_d, floor, joint, line, long_line, wall_d, wall, wall_l, ne
 
 
 STADIUMS = [
-    dict(name="ORBITAL ARENA", words=("NEXUS", "ARENA"), floor="check",
+    dict(name="ORBITAL ARENA", emblem=(6, 0), words=("NEXUS", "ARENA"), floor="check",
          pal=FIELD_PAL),
-    dict(name="MARS DOME", words=("MARS", "DOME"), floor="stripe",
+    dict(name="MARS DOME", emblem=(5, -90), words=("MARS", "DOME"), floor="stripe",
          pal=stadium_pal((9, 4, 3), (11, 5, 3), (14, 7, 4), (28, 24, 20), (30, 22, 6), (6, 3, 2), (11, 6, 4),
                          (16, 9, 6), (31, 10, 4), (31, 14, 2), (31, 27, 10), ((22, 6, 4), (12, 4, 14), (26, 16, 6)))),
-    dict(name="EUROPA ICE", words=("EUROPA", "ICE"), floor="grid",
+    dict(name="EUROPA ICE", emblem=(6, 30), words=("EUROPA", "ICE"), floor="grid",
          pal=stadium_pal((4, 7, 11), (5, 9, 13), (8, 13, 17), (28, 30, 31), (31, 18, 4), (5, 7, 10), (10, 14, 19),
                          (16, 21, 26), (20, 28, 31), (31, 14, 2), (31, 27, 10), ((6, 14, 24), (24, 26, 30), (4, 8, 16)))),
-    dict(name="ANDROMEDA PRIME", words=("ANDRO", "PRIME"), floor="diamond",
+    dict(name="ANDROMEDA PRIME", emblem=(8, 22.5), words=("ANDRO", "PRIME"), floor="diamond",
          pal=stadium_pal((5, 3, 9), (7, 4, 12), (10, 6, 16), (26, 24, 31), (8, 26, 22), (4, 2, 7), (9, 5, 14),
                          (14, 9, 20), (26, 8, 30), (31, 14, 2), (31, 27, 10), ((20, 6, 24), (6, 10, 26), (28, 16, 28)))),
-    dict(name="TITAN INDUSTRIAL", words=("TITAN", "WORKS"), floor="plate",
+    dict(name="TITAN INDUSTRIAL", emblem=(4, 45), words=("TITAN", "WORKS"), floor="plate",
          pal=stadium_pal((6, 6, 6), (8, 8, 8), (11, 11, 10), (29, 29, 26), (31, 24, 2), (4, 4, 4), (9, 9, 9),
                          (14, 14, 13), (31, 22, 2), (31, 12, 2), (31, 27, 10), ((16, 16, 16), (24, 20, 6), (10, 10, 12)))),
-    dict(name="SOLARIS ARENA", words=("SOLAR", "ARENA"), floor="stripe",
+    dict(name="SOLARIS ARENA", emblem=(12, 0), words=("SOLAR", "ARENA"), floor="stripe",
          pal=stadium_pal((10, 6, 3), (12, 8, 4), (15, 10, 5), (31, 30, 24), (8, 22, 30), (7, 4, 2), (13, 8, 4),
                          (20, 13, 6), (31, 26, 6), (31, 12, 2), (31, 30, 14), ((30, 20, 4), (26, 10, 6), (31, 28, 12)))),
 ]
@@ -382,15 +382,41 @@ def build_field(st):
                         im.put(x, y, 3)              # hachures claires
                     elif im.get(x, y) == 2 and (x + y) % 2 == 0:
                         im.put(x, y, 1)              # fond assombri
-    # emblème central : double hexagone et rayons
+    # mots du stade peints au sol de chaque moitie (tramage discret)
+    w1, w2 = st["words"]
+    for word, mx in ((w1, (FIELD_L + 256) // 2), (w2, (256 + FIELD_R) // 2)):
+        sc = 3
+        tx = mx - (len(word) * 6 * sc - sc) // 2
+        ty = FIELD_CY - 10
+        for ch in word:
+            g = FONT.get(ch)
+            if g:
+                for r, row in enumerate(g):
+                    for k, b in enumerate(row):
+                        if b == "1":
+                            for yy in range(ty + r * sc, ty + r * sc + sc):
+                                for xx in range(tx + k * sc, tx + k * sc + sc):
+                                    if (xx + yy) % 2 == 0 and im.get(xx, yy) in (1, 2):
+                                        im.put(xx, yy, 3)
+            tx += 6 * sc
+    # balises lumineuses le long des lignes de touche
+    for x in range(FIELD_L + 16, FIELD_R - 8, 32):
+        for yy in (FIELD_T + 9, FIELD_B - 4):
+            im.rect(x, yy, x + 1, yy, 9)
+            im.put(x - 1, yy, 8)
+            im.put(x + 2, yy, 8)
+    # emblème central : double polygone (forme propre a chaque stade) et rayons
     cx, cy = 256, FIELD_CY
-    for y in range(cy - 30, cy + 31):
+    ns, rot = st.get("emblem", (6, 0))
+    axes = [(math.cos(math.radians(rot + 360.0 * k / ns)), math.sin(math.radians(rot + 360.0 * k / ns)))
+            for k in range(ns)]
+    for y in range(cy - 32, cy + 33):
         for x in range(cx - 34, cx + 35):
-            dx, dy = abs(x - cx), abs(y - cy)
-            hexd = max(dx * 0.866 + dy * 0.5, dy)          # distance "hexagonale"
+            dx, dy = x - cx, y - cy
+            hexd = max(dx * ax + dy * ay for ax, ay in axes)   # distance "polygonale"
             if 27 <= hexd < 28.5 or 20 <= hexd < 21:
                 im.put(x, y, 5 if hexd > 24 else 3)
-            elif hexd < 20 and (dx + dy) % 7 == 0 and im.get(x, y) in (1, 2):
+            elif hexd < 20 and (abs(dx) + abs(dy)) % 7 == 0 and im.get(x, y) in (1, 2):
                 im.put(x, y, 3)
     # liseré neon du perimetre du terrain
     im.hline(FIELD_L, FIELD_R, FIELD_B, 9)

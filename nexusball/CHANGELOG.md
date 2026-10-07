@@ -1,5 +1,14 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.0 — écran titre animé, stades
+
+- Écran titre : un ballon ovale traverse le ciel en cloche toutes les ~5 s (il tourne, avec
+  sa traînée néon) et des étincelles scintillent sur le logo.
+- Stades : les deux mots du stade sont peints au sol dans chaque moitié (tramage discret),
+  balises lumineuses le long des lignes de touche, et l'emblème central a une forme propre à
+  chaque stade (hexagone, pentagone, hexagone pivoté, octogone, carré, dodécagone).
+  560 à 670 tiles par stade (limite 1024).
+
 ## 0.19.3 — menus (suite)
 
 - Écran titre : « AN OFFGAME PROJECT » retiré ; la description de l'entrée choisie remonte

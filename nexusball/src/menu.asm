@@ -70,7 +70,8 @@ title_screen:
     lda title_mode
     beq :+
     jsr title_ball
-:   jsr oam_finish
+:   jsr title_fx
+    jsr oam_finish
     jsr crowd_update
     lda title_mode
     bne @menu
@@ -211,6 +212,108 @@ title_desc:
     .word .loword(str_d_exh), .loword(str_d_champ), .loword(str_d_cup)
     .word .loword(str_d_custom), .loword(str_d_cteam), .loword(str_d_cplayer)
     .word .loword(str_d_rules), .loword(str_d_opt), .loword(str_d_cred)
+
+; title_fx : un ballon traverse le ciel en cloche (toutes les ~5 s) avec sa trainee,
+; et des etincelles scintillent sur le logo
+TF_LEN = 120                    ; frames de traversee
+
+title_fx:
+    .a16
+    .i16
+    inc tf_t
+    lda tf_t
+    cmp #TF_LEN + 180
+    bcc :+
+    stz tf_t
+:   ; etincelles du logo (position changee toutes les 16 frames, visibles une frame sur deux)
+    lda frame
+    and #$0001
+    bne @ball
+    lda frame
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$0007
+    tay
+    lda #SPR_TRAIL1 | PAL_BALL | OBJ_PRIO
+    sta t1
+    stz t2
+    lda tf_sy,y
+    and #$00FF
+    sta t0
+    lda tf_sx,y
+    and #$00FF
+    jsr oam_add
+@ball:
+    lda tf_t
+    cmp #TF_LEN
+    bcs @d
+    ; x = 2t - 16, y = 84 - t (120 - t) / 64
+    lda #TF_LEN
+    sec
+    sbc tf_t
+    tay
+    lda tf_t
+    jsr mulu8
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    eor #$FFFF
+    sec
+    adc #84
+    sta tf_y
+    lda tf_t
+    asl a
+    sec
+    sbc #16
+    sta tf_x
+    ; trainee
+    lda #SPR_TRAIL2 | PAL_BALL | OBJ_PRIO
+    sta t1
+    stz t2
+    lda tf_y
+    clc
+    adc #4
+    sta t0
+    lda tf_x
+    sec
+    sbc #8
+    jsr oam_add
+    lda #SPR_TRAIL1 | PAL_BALL | OBJ_PRIO
+    sta t1
+    stz t2
+    lda tf_y
+    clc
+    adc #4
+    sta t0
+    lda tf_x
+    sec
+    sbc #1
+    jsr oam_add
+    ; ballon qui tourne
+    lda frame
+    lsr a
+    lsr a
+    and #$0003
+    asl a
+    asl a
+    clc
+    adc #SPR_OVAL | PAL_BALL | OBJ_PRIO
+    sta t1
+    lda #1
+    sta t2
+    lda tf_y
+    sta t0
+    lda tf_x
+    jmp oam_add
+@d: rts
+
+tf_sx: .byte 40, 120, 200, 76, 168, 228, 96, 150
+tf_sy: .byte 22, 14, 30, 56, 48, 20, 64, 36
 
 ; title_ball : ballon ovale qui tourne devant l'entree choisie du menu
 title_ball:
