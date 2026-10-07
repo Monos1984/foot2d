@@ -1,5 +1,10 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.3 — jauge de sprint
+
+- Jauge de sprint (R) au-dessus du curseur du joueur contrôlé : 4 niveaux, elle apparaît dès
+  que le joueur est fatigué et devient orange quand le sprint n'est plus possible.
+
 ## 0.20.2 — indicateur de passe
 
 - Quand un joueur humain porte le ballon, une flèche clignotante à la couleur de sa manette

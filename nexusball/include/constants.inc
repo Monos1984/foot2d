@@ -120,6 +120,7 @@ SPR_BALLHI  = 232
 SPR_OSHADOW = 238
 SPR_COIN    = 234            ; piece du tirage au sort (face / tranche, palettes 0-1)
 SPR_COINE   = 236
+SPR_GAUGE   = 240            ; jauge de sprint 8x8, + niveau (0-4)
 
 ; ---- VRAM (adresses en mots)
 VRAM_BG1_CHR = $0000

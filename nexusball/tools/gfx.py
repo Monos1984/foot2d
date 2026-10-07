@@ -750,6 +750,20 @@ def build_obj():
             for c, ch in enumerate(row):
                 v = 0 if ch == "." else int(ch, 16)
                 sheet.put(tx * 8 + c, ty * 8 + r, v)
+    # jauge de sprint (8x8, tiles 240-244 : niveau 0 a 4)
+    for lv in range(5):
+        tx, ty = (240 + lv) % 16 * 8, (240 + lv) // 16 * 8
+        for x in range(8):
+            sheet.put(tx + x, ty + 4, 5)
+            sheet.put(tx + x, ty + 7, 5)
+            for y in (5, 6):
+                if x == 0 or x == 7:
+                    c = 5
+                elif lv == 0:
+                    c = 6 if x < 3 else 4          # vide : alerte orange
+                else:
+                    c = 1 if x <= lv * 3 // 2 else 4
+                sheet.put(tx + x, ty + y, c)
     # piece du tirage au sort (palettes des equipes) : face (tile 234) et tranche (236)
     for y in range(16):
         for x in range(16):

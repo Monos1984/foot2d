@@ -492,12 +492,59 @@ draw_cursors:
     sbc #4
     jsr oam_add
     ply
+    jsr sprint_gauge
     jsr pass_marker
 @n: iny
     iny
     cpy #4
     jne @pad
     rts
+
+; sprint_gauge : Y = manette, t0 = y du curseur. Jauge de sprint au-dessus du curseur
+; (seulement si le joueur est fatigue) : 4 niveaux, orange quand elle est vide. Preserve Y.
+sprint_gauge:
+    .a16
+    .i16
+    phy
+    jsr @g
+    ply
+    rts
+@g: lda ctrl,y
+    asl a
+    tax
+    lda p_fatigue,x
+    beq @d
+    eor #$FFFF
+    sec
+    adc #2400
+    bpl :+
+    lda #0
+:   ldy #0                      ; niveau = (2400 - fatigue) / 600
+@l: cmp #600
+    bcc :+
+    sbc #600
+    iny
+    bra @l
+:   cpy #5
+    bcc :+
+    ldy #4
+:   tya
+    clc
+    adc #SPR_GAUGE | PAL_BALL | OBJ_PRIO
+    sta t1
+    stz t2
+    lda t0
+    sec
+    sbc #9                      ; barre 3 px au-dessus du curseur
+    sta t0
+    lda p_x,x
+    ASR_A 4
+    sec
+    sbc scroll_x
+    sec
+    sbc #4
+    jmp oam_add
+@d: rts
 
 ; pass_marker : Y = manette. Porteur humain (joueur de champ) en jeu : fleche a la couleur
 ; de la manette sous les pieds du coequipier qui recevrait une passe a la main. Preserve Y.
