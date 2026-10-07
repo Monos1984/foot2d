@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.8 — ambiance de tous les stades
+
+- ANDROMEDA PRIME : lucioles qui montent lentement ; TITAN INDUSTRIAL : étincelles qui
+  tombent vite ; SOLARIS ARENA : scintillements dorés qui apparaissent et disparaissent.
+  (ORBITAL ARENA reste dégagé.) Un seul gestionnaire par mode (table par stade).
+
 ## 0.20.7 — météo des stades
 
 - EUROPA ICE : neige (12 flocons qui tombent lentement en dérivant) ; MARS DOME : poussière

@@ -414,20 +414,21 @@ spk_dx: .byte 120, 85, 0, <(-85), <(-120), <(-85), 0, 85
 spk_dy: .byte 0, 85, 120, 85, 0, <(-85), <(-120), <(-85)
 .segment "CODE"
 
-; draw_weather : neige (EUROPA ICE) ou poussiere (MARS DOME), 12 particules en
-; coordonnees ecran, dessinees en dernier (abandonnees en premier si une ligne deborde)
+; draw_weather : ambiance de chaque stade, 12 particules en coordonnees ecran, dessinees
+; en dernier (abandonnees en premier si une ligne deborde).
+; modes : 0 aucune, 1 neige, 2 poussiere (vent), 3 lucioles qui montent, 4 scintillement,
+; 5 etincelles qui tombent vite
 WX_N = 12
 
 draw_weather:
     .a16
     .i16
-    lda stadium_id
-    cmp #2
-    beq @go
-    cmp #1
-    beq @go
+    ldx stadium_id
+    lda wx_modes,x
+    and #$00FF
+    bne :+
     rts
-@go:
+:   sta wx_m
     lda wx_init
     bne @run
     inc wx_init
@@ -438,7 +439,7 @@ draw_weather:
     jsr rand
     and #$007F
     clc
-    adc #24
+    adc #40
     sta wx_y,x
     inx
     inx
@@ -446,11 +447,15 @@ draw_weather:
     bne :-
 @run:
     ldx #0
-@l: stx wx_i
-    lda stadium_id
-    cmp #2
-    bne @dust
-    ; neige : chute lente, derive d'un cote puis de l'autre
+wx_loop:
+    stx wx_i
+    lda wx_m
+    asl a
+    tay
+    lda wx_tick,y
+    sta wx_jmp
+    jmp (wx_jmp)
+wx_snow:
     inc wx_y,x
     txa
     asl a
@@ -463,16 +468,24 @@ draw_weather:
     inc wx_x,x
 :   lda wx_y,x
     cmp #224
-    bcc @draw
-    lda #24
+    jcc wx_draw
+    bra wx_top
+wx_spark:
+    lda wx_y,x
+    clc
+    adc #3
+    sta wx_y,x
+    cmp #224
+    jcc wx_draw
+wx_top:
+    lda #32
     sta wx_y,x
     jsr rand
     and #$00FF
     ldx wx_i
     sta wx_x,x
-    bra @draw
-@dust:
-    ; poussiere : vent horizontal
+    jmp wx_draw
+wx_dust:
     lda wx_x,x
     clc
     adc #2
@@ -483,7 +496,7 @@ draw_weather:
     inc wx_y,x
 :   lda wx_x,x
     cmp #256
-    bcc @draw
+    jcc wx_draw
     stz wx_x,x
     jsr rand
     and #$007F
@@ -491,26 +504,76 @@ draw_weather:
     adc #40
     ldx wx_i
     sta wx_y,x
-@draw:
+    jmp wx_draw
+wx_rise:
+    lda frame
+    and #$0001
+    bne :+
+    dec wx_y,x
+:   lda wx_y,x
+    cmp #28
+    jcs wx_draw
+    lda #216
+    sta wx_y,x
+    jsr rand
+    and #$00FF
     ldx wx_i
-    lda #SPR_FLAKE | PAL_BALL | OBJ_PRIO
-    ldy stadium_id
-    cpy #2
-    beq :+
-    lda #SPR_DUST | PAL_BALL | OBJ_PRIO
-:   sta t1
+    sta wx_x,x
+    jmp wx_draw
+wx_twinkle:
+    ; visible 16 frames sur 64 (decale), nouvelle place a chaque cycle
+    txa
+    asl a
+    asl a
+    asl a
+    adc frame
+    and #$003F
+    bne :+
+    jsr rand
+    and #$00FF
+    ldx wx_i
+    sta wx_x,x
+    jsr rand
+    and #$007F
+    clc
+    adc #48
+    ldx wx_i
+    sta wx_y,x
+:   ldx wx_i
+    txa
+    asl a
+    asl a
+    asl a
+    adc frame
+    and #$0030
+    jne wx_next
+wx_draw:
+    ldx wx_i
+    ldy wx_m
+    lda wx_tiles,y
+    and #$00FF
+    ora #PAL_BALL | OBJ_PRIO
+    sta t1
     stz t2
     lda wx_y,x
     sta t0
     lda wx_x,x
     and #$00FF
     jsr oam_add
+wx_next:
     ldx wx_i
     inx
     inx
     cpx #WX_N * 2
-    jne @l
+    jne wx_loop
     rts
+
+.segment "RODATA"
+; ORBITAL, MARS, EUROPA, ANDROMEDA, TITAN, SOLARIS
+wx_modes:   .byte 0, 2, 1, 3, 5, 4
+wx_tick:    .word 0, .loword(wx_snow), .loword(wx_dust), .loword(wx_rise), .loword(wx_twinkle), .loword(wx_spark)
+wx_tiles:   .byte 0, SPR_FLAKE, SPR_DUST, SPR_FLAKE, SPR_TRAIL1, SPR_DUST
+.segment "CODE"
 
 draw_ball_shadow:
     .a16
