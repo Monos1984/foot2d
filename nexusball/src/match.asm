@@ -105,7 +105,11 @@ match_loop:
     jsr wait_frame
     jsr match_frame
     bcc match_loop
-    lda comp_active
+    lda pz_restart              ; pause : rejouer le match
+    beq :+
+    stz pz_restart
+    jmp start_match
+:   lda comp_active
     beq :+
     jmp comp_after_match
 :   jmp title_screen
@@ -678,9 +682,9 @@ goal_scored:
 ; -----------------------------------------------------------------------------
 ;  pause_menu : RESUME / TEAM SETUP / QUIT MATCH. Carry = 1 pour quitter.
 ; -----------------------------------------------------------------------------
-PAUSE_ITEMS = 3
+PAUSE_ITEMS = 4
 PZ_ROW      = 8                 ; premiere ligne du cadre de pause
-PZ_ROWS     = 7
+PZ_ROWS     = 8
 
 PAUSE_SAVE  = $7E3000           ; lignes BG3 sauvegardees (WRAM haute)
 CROWD_MATCH = $0C               ; volume de la foule en match
@@ -792,6 +796,21 @@ pause_menu:
     beq @resume
     cmp #1
     beq @team
+    cmp #2
+    bne @quit
+    ; rejouer le match : confirmation
+    lda #.loword(str_restart_q)
+    sta cf_title
+    stz cf_menu
+    jsr cf_run
+    bcs :+
+    jmp @draw
+:   lda #1
+    sta pz_restart
+    jsr pause_restore
+    sec
+    rts
+@quit:
     ; quitter : confirmation
     jsr pause_confirm
     bcs :+
@@ -845,7 +864,7 @@ cf_run:
     jsr fill_tiles
     pla
     inc a
-    cmp #PZ_ROW + 6
+    cmp #PZ_ROW + 7
     bne @cl
     lda #TXT_ATTR + TXT_PANEL + $1400
     sta t0
@@ -939,7 +958,7 @@ cf_run:
 pz_frame:
     .a16
     .i16
-    ; cadre neon (tiles du bandeau, palette 5) : lignes PZ_ROW .. PZ_ROW+6, colonnes 8..23
+    ; cadre neon (tiles du bandeau, palette 5) : lignes PZ_ROW .. PZ_ROW+7, colonnes 8..23
     lda #TXT_ATTR + $1400
     sta bn_attr
     lda #16
@@ -948,7 +967,7 @@ pz_frame:
     lda #HT_BN_TL
     ldy #HT_BN_T
     jsr bn_row
-    ldx #TPOS(8, PZ_ROW + 6)
+    ldx #TPOS(8, PZ_ROW + 7)
     lda #HT_BN_BL
     ldy #HT_BN_B
     jsr bn_row
@@ -975,7 +994,7 @@ pz_frame:
     jsr fill_tiles
     pla
     inc a
-    cmp #PZ_ROW + 6
+    cmp #PZ_ROW + 7
     bne @pf_side
     rts
 
@@ -1042,12 +1061,14 @@ str_goal1:  .byte "SCORE! +1", 0
 str_goal2:  .byte "SCORE! +2", 0
 str_pause:  .byte "PAUSE", 0
 str_quit_q:  .byte "QUIT MATCH?", 0
+str_restart_q: .byte "RESTART?", 0
+str_restart: .byte "RESTART", 0
 str_menu_q:  .byte "MAIN MENU?", 0
 str_over_q:  .byte "REPLACE SAVE?", 0
 str_no:      .byte "NO", 0
 str_yes:     .byte "YES", 0
 confirm_items: .word .loword(str_no), .loword(str_yes)
-pause_items: .word .loword(str_resume), .loword(str_teamset), .loword(str_quit)
+pause_items: .word .loword(str_resume), .loword(str_teamset), .loword(str_restart), .loword(str_quit)
 str_resume: .byte "RESUME", 0
 str_quit:   .byte "QUIT MATCH", 0
 str_teamset: .byte "TEAM SETUP", 0

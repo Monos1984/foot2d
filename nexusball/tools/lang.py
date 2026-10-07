@@ -75,6 +75,8 @@ TR = [
     ("QUIT MATCH", "QUITTER", 0),
     ("QUIT MATCH?", "QUITTER ?", 0),
     ("MAIN MENU?", "RETOUR MENU ?", 13),
+    ("RESTART?", "REJOUER ?", 9),
+    ("RESTART", "REJOUER", 0),
     ("REPLACE SAVE?", "REMPLACER ?", 0),
     ("NO", "NON", 3),
     ("YES", "OUI", 0),

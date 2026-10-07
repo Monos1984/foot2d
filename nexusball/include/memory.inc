@@ -456,6 +456,7 @@ cr_ptr:     .res 2
 tf_t:       .res 2          ; ecran titre : animation
 tf_x:       .res 2
 tf_y:       .res 2
+pz_restart: .res 2          ; pause : rejouer le match
 shake_t:    .res 2          ; frames de tremblement de l'ecran
 pw_key:     .res 2
 cs_sz:      .res 2

@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.4 — rejouer le match
+
+- Menu pause : nouvelle entrée RESTART (« REJOUER ») avec confirmation (NO par défaut) : le
+  match recommence depuis la présentation des équipes, mêmes équipes et réglages (aussi en
+  compétition).
+
 ## 0.20.3 — jauge de sprint
 
 - Jauge de sprint (R) au-dessus du curseur du joueur contrôlé : 4 niveaux, elle apparaît dès
