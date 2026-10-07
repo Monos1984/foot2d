@@ -445,16 +445,16 @@ draw_cursors:
 @pad:
     lda ctrl,y
     cmp #NO_OWNER
-    beq @n
+    jeq @n
     lda m_state
     cmp #MS_END
-    beq @n
+    jeq @n
     lda ctrl,y
     asl a
     tax
     lda p_state,x
     cmp #PS_OUT
-    beq @n
+    jeq @n
     lda ctrl,y
     cmp b_owner
     bne @show
@@ -463,7 +463,7 @@ draw_cursors:
     bcc @show
     lda frame
     and #$0004
-    beq @n
+    jeq @n
 @show:
     phy
     lda ctrl,y
@@ -492,9 +492,60 @@ draw_cursors:
     sbc #4
     jsr oam_add
     ply
+    jsr pass_marker
 @n: iny
     iny
     cpy #4
     jne @pad
     rts
+
+; pass_marker : Y = manette. Porteur humain (joueur de champ) en jeu : fleche a la couleur
+; de la manette sous les pieds du coequipier qui recevrait une passe a la main. Preserve Y.
+pass_marker:
+    .a16
+    .i16
+    lda m_state
+    cmp #MS_PLAY
+    bne @d
+    lda ctrl,y
+    cmp b_owner
+    bne @d
+    asl a
+    tax
+    lda p_role,x
+    beq @d                      ; gardien : relance a part
+    lda frame
+    and #$0008
+    beq @d                      ; clignote
+    phy
+    stx cp
+    jsr find_hand_target
+    ply
+    cmp #NO_OWNER
+    beq @d
+    asl a
+    tax
+    lda #SPR_CUR1 | PAL_BALL | OBJ_PRIO | $8000
+    cpy #0
+    beq :+
+    lda #SPR_CUR2 | PAL_BALL | OBJ_PRIO | $8000
+:   sta t1
+    stz t2
+    lda p_y,x
+    ASR_A 4
+    sec
+    sbc scroll_y
+    clc
+    adc #2
+    sta t0
+    lda p_x,x
+    ASR_A 4
+    sec
+    sbc scroll_x
+    sec
+    sbc #4
+    phy
+    jsr oam_add
+    ply
+@d: rts
 

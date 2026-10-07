@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.2 — indicateur de passe
+
+- Quand un joueur humain porte le ballon, une flèche clignotante à la couleur de sa manette
+  apparaît sous les pieds du coéquipier qui recevrait une passe à la main (même choix que
+  l'action de passe : coéquipier dans la direction du porteur, pas trop en avant).
+
 ## 0.20.1 — joueurs plus grands
 
 - Sprites des joueurs : figure de 27 px au lieu de 24 (jambes et bras plus longs, torse et
