@@ -477,7 +477,14 @@ clock_update:
     cpx #NUM_PLAYERS * 2
     bne @pen
     dec m_sec
-    bne @ok
+    beq @po
+    lda m_sec                   ; 5 dernieres secondes : bip
+    cmp #6
+    bcs @ok
+    lda #SFX_MENU
+    jsr sfx_play
+    bra @ok
+@po:
     jsr period_over
     sec
     rts
@@ -1027,6 +1034,8 @@ pause_restore:
 str_ready:  .byte "READY", 0
 str_go:     .byte "GO! PASS!", 0
 str_fk:     .byte "FREE KICK!", 0
+str_close:  .byte "SO CLOSE!", 0
+str_save:   .byte "SAVE!", 0
 str_half:   .byte "HALF TIME", 0
 str_overtime: .byte "OVERTIME - GOLDEN SCORE", 0
 str_goal1:  .byte "SCORE! +1", 0

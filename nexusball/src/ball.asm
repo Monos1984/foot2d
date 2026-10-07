@@ -601,4 +601,14 @@ near_miss:
     jsr sfx_play
     lda #T_GOAL / 4
     sta crowd_fast
+    ; bandeau court si aucun autre message n'est affiche
+    lda msg_time
+    bne @d
+    lda m_state
+    cmp #MS_PLAY
+    bne @d
+    ldy #.loword(str_close)
+    jsr show_msg
+    lda #T_MSG / 3
+    sta msg_time
 @d: rts

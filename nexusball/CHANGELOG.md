@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.19.1 — bandeaux d'action, fin de période
+
+- Bandeau « SAVE! » (« ARRÊT ! ») avec l'équipe et le nom du gardien à chaque parade, et
+  « SO CLOSE! » (« TOUT PRÈS ! ») sur un tir qui frôle l'anneau (seulement si aucun autre
+  message n'est affiché).
+- Chronomètre en orange dans les 10 dernières secondes, bip à chacune des 5 dernières.
+- Vérifié : le tirage des côtés inverse bien les camps (équipe de gauche qui défend à droite).
+
 ## 0.19.0 — tirage au sort, prolongation à 5 contre 5
 
 - Tirage au sort « futuriste » avant chaque match : pièce holographique aux couleurs des deux

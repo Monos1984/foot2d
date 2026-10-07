@@ -236,9 +236,13 @@ hud_update:
     jsr hud_score
     lda #1
     sta bg3_dirty
-:   ; horloge m:ss
+:   ; horloge m:ss (orange dans les 10 dernieres secondes)
     lda #HUD_ATTR
-    sta t0
+    ldx m_sec
+    cpx #11
+    bcs :+
+    lda #HUD_ATTR + $1000
+:   sta t0
     lda m_sec
     cmp hud_cache+4
     beq @msg

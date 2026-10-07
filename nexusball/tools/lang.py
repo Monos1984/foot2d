@@ -50,6 +50,8 @@ TR = [
     ("READY", "PRÊTS", 0),
     ("GO! PASS!", "GO ! PASSE !", 12),
     ("FREE KICK!", "COUP FRANC !", 12),
+    ("SO CLOSE!", "TOUT PRÈS !", 12),
+    ("SAVE!", "ARRÊT !", 8),
     ("COIN TOSS", "TIRAGE AU SORT", 14),
     ("KICK OFF", "ENGAGEMENT", 10),
     ("HALF TIME", "MI-TEMPS", 0),

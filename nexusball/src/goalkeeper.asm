@@ -121,6 +121,24 @@ gk_try:
     sta p_y,x
 @catch:
     inc dbg_saves
+    ; bandeau : arret du gardien (equipe + nom), si aucun autre message
+    lda msg_time
+    bne :+
+    lda m_state
+    cmp #MS_PLAY
+    bne :+
+    lda p_team,x
+    pha
+    txa
+    lsr a
+    tax
+    pla
+    ldy #.loword(str_save)
+    jsr show_tmsg
+    lda #T_MSG / 3
+    sta msg_time
+    ldx cp
+:
     lda p_team,x                ; statistiques : arrets par equipe
     asl a
     tay
