@@ -457,6 +457,11 @@ tf_t:       .res 2          ; ecran titre : animation
 tf_x:       .res 2
 tf_y:       .res 2
 pz_restart: .res 2
+rp_w:       .res 2          ; ralenti du but
+rp_cnt:     .res 2
+rp_r:       .res 2
+rp_left:    .res 2
+rp_d:       .res 2
 wx_init:    .res 2          ; meteo du stade
 wx_i:       .res 2
 wx_m:       .res 2

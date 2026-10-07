@@ -121,6 +121,7 @@ match_loop:
 ; -----------------------------------------------------------------------------
 new_kickoff:
     .a16
+    stz rp_cnt                  ; ralenti : rien avant l'engagement
     jsr place_kickoff
     lda #MS_KICKOFF
     sta m_state
@@ -190,7 +191,7 @@ match_frame:
 state_tab:
     .word .loword(st_kickoff), .loword(st_play), .loword(st_goal)
     .word .loword(st_half), .loword(st_end), .loword(st_foul)
-    .word .loword(st_shoot)
+    .word .loword(st_shoot), .loword(st_replay)
 
 ; --- coup d'envoi : les joueurs attendent le signal
 st_kickoff:
@@ -219,6 +220,7 @@ st_kickoff:
 
 st_play:
     .a16
+    jsr rp_record               ; positions pour le ralenti des buts
     PROF 0
     ; chronometre arrete pendant un engagement (coup d'envoi, coup franc) : il repart
     ; quand la passe / le tir d'engagement est joue
@@ -271,11 +273,20 @@ st_goal:
     jsr ball_update
     lda m_timer
     bne @w
+    jsr rp_start                ; ralenti du but
+    bcs @w
+    jmp goal_resume
+@w: clc
+    rts
+
+; goal_resume : apres le but (et son ralenti) : engagement, ou fin du match (but en or)
+goal_resume:
+    .a16
     lda m_half
     cmp #3
     beq @golden
     jsr new_kickoff
-@w: clc
+    clc
     rts
 @golden:
     ; but en or : fin du match

@@ -51,6 +51,7 @@
 .include "editor.asm"
 .include "password.asm"
 .include "intro.asm"
+.include "replay.asm"
 .segment "CODE"
 .include "tsel.asm"
 .include "result.asm"

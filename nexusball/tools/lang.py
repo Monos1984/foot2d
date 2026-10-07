@@ -80,6 +80,7 @@ TR = [
     ("STAR", "ÉTOILE", 6),
     ("PTS", "PTS", 0),
     ("POS", "PL.", 0),
+    ("REPLAY", "RALENTI", 7),
     ("REPLACE SAVE?", "REMPLACER ?", 0),
     ("NO", "NON", 3),
     ("YES", "OUI", 0),

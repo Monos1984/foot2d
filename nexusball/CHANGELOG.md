@@ -1,5 +1,13 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.21.0 — ralenti des buts
+
+- Après la célébration d'un but, ralenti de l'action (jusqu'à ~2,5 s avant le but, rejouées
+  1,5 fois plus lentement), « REPLAY » (« RALENTI ») clignotant en bas de l'écran ; A ou B
+  pour passer. Positions des 12 joueurs et du ballon enregistrées une frame sur deux en WRAM
+  haute ($7E:8000, 64 échantillons de 104 octets) ; le ralenti ne commence qu'à partir de
+  l'engagement précédent. 0 frame perdue en NTSC (bsnes, 4000 frames, étincelles de Titan).
+
 ## 0.20.8 — ambiance de tous les stades
 
 - ANDROMEDA PRIME : lucioles qui montent lentement ; TITAN INDUSTRIAL : étincelles qui

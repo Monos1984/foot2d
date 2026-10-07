@@ -63,7 +63,7 @@ complets PAL et NTSC (compteur de frames du jeu = compteur de NMI), contre ~1 % 
 - WRAM basse : `BSS` $0200-$1791 (~5,4 Kio sur 6,5 Kio disponibles avant la pile). Les
   prochains gros buffers doivent aller en WRAM haute ($7E:2000+ ou $7F:xxxx, accès long).
   Déjà en WRAM haute : copie de la tilemap BG2 ($7E:2000), sauvegarde des lignes BG3 du menu
-  pause ($7E:3000), tampon de décompression ($7F:0000).
+  pause ($7E:3000), ralenti des buts ($7E:8000, 6,5 Kio), tampon de décompression ($7F:0000).
 - `build.sh` affiche à chaque build l'occupation de chaque segment (`tools/romcheck.py`).
 
 ## 5. SRAM (32 Kio)
