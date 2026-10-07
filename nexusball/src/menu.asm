@@ -446,6 +446,14 @@ credits_screen:
     jsr safe_screen_off
     jsr bg3_clear
     jsr ui_fill
+    sep #$20                    ; sans le decor (BG1) : le texte reste lisible
+    .a8
+    lda tm_sh
+    and #$FE
+    sta tm_sh
+    stz ts_sh                   ; (BG1 est aussi l'ecran secondaire du panneau translucide)
+    rep #$20
+    .a16
     lda #UI_HI
     sta t0
     ldx #TPOS(4, 1)
@@ -565,7 +573,7 @@ credits_text:
     .byte "PROJECT DIRECTION", 0
     .byte "  JEAN MONOS / OFFGAME", 0
     .byte 0
-    .byte "DESIGN & DEVELOPMENT ASSISTANCE", 0
+    .byte "DESIGN & DEV. ASSISTANCE", 0
     .byte "  CHATGPT - OPENAI", 0
     .byte "  ELEA - OPENAI", 0
     .byte "  CLAUDE - ANTHROPIC", 0

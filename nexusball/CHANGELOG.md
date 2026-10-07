@@ -5,7 +5,9 @@
 - Écran titre : « AN OFFGAME PROJECT » retiré ; la description de l'entrée choisie remonte
   d'une ligne.
 - Crédits : nouveau fond (panneaux des menus), titre dans la barre, lignes centrées, titres
-  en orange et noms en cyan, aide « B BACK » ; le logo ne passe plus sous le texte.
+  en orange et noms en cyan, aide « B BACK » ; le logo ne passe plus sous le texte. Le décor
+  (planète, ville) est masqué derrière les crédits pour la lisibilité, et la ligne la plus
+  longue est raccourcie (« DESIGN & DEV. ASSISTANCE »).
 - Éditeurs (CREATE PLAYER / CREATE TEAM) : titre aligné sur les autres écrans, aide en bas
   des listes (« A EDIT  B BACK »).
 
