@@ -1,5 +1,11 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.20.1 — joueurs plus grands
+
+- Sprites des joueurs : figure de 27 px au lieu de 24 (jambes et bras plus longs, torse et
+  plastron plus hauts, ombre du flanc), dans le même cadre 16×32 ; joueurs au sol recentrés.
+  `FEET_ROW` = 25.
+
 ## 0.20.0 — écran titre animé, stades
 
 - Écran titre : un ballon ovale traverse le ciel en cloche toutes les ~5 s (il tourne, avec

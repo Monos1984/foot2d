@@ -526,8 +526,8 @@ def limb(im, x0, y0, ang, ln, c_up, c_end, width=1):
             im.put(round(x - 0.5), round(y), col)
 
 
-FW, FH = 16, 32          # cadre d'un joueur : 2 sprites 16x16 empiles (figure de 16x24)
-FEET = 22
+FW, FH = 16, 32          # cadre d'un joueur : 2 sprites 16x16 empiles (figure de 16x27)
+FEET = 25
 
 
 def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
@@ -535,20 +535,20 @@ def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
     epaulieres et plastron, combinaison, genouilleres, bottes a semelle lumineuse."""
     im = Img(FW, FH, 0)
     L = lean
-    hip = 16 + crouch
-    sh = 9 + crouch
+    hip = 18 + crouch
+    sh = 10 + crouch
 
     def leg(x0, ang, front):
-        ln = 6.0 - crouch
+        ln = 7.5 - crouch
         a = math.radians(ang)
         dx, dy = math.sin(a), math.cos(a)
         for i in range(int(ln * 3) + 1):
             t = i / (ln * 3) * ln
             x, y = round(x0 + dx * t), round(hip + dy * t)
             c = SHORT if front else KITD
-            if 2.2 < t < 3.6:
+            if 2.8 < t < 4.4:
                 c = METAL if front else METALD          # genouillere
-            if t > ln - 1.8:
+            if t > ln - 2.0:
                 c = BOOT
             im.put(x, y, c)
             im.put(round(x0 + dx * t - 0.5), y, c)
@@ -557,7 +557,7 @@ def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
         im.put(fx - 1, fy + 1, VISOR)
 
     def arm(x0, ang, front):
-        ln = 5.2
+        ln = 6.2
         a = math.radians(ang)
         dx, dy = math.sin(a), math.cos(a)
         for i in range(int(ln * 3) + 1):
@@ -574,9 +574,10 @@ def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
     im.rect(5 + L, sh - 1, 11 + L, hip - 2, KIT)
     im.vline(5 + L, sh, hip - 2, KITD)
     im.vline(11 + L, sh + 1, hip - 3, KITH)
-    im.rect(7 + L, sh, 10 + L, sh + 3, KITD)            # plastron
+    im.rect(7 + L, sh, 10 + L, sh + 4, KITD)            # plastron
     im.hline(7 + L, 10 + L, sh, METAL)
-    im.vline(8 + L, sh + 1, sh + 3, NEON)               # ligne neon
+    im.vline(8 + L, sh + 1, sh + 4, NEON)               # ligne neon
+    im.vline(6 + L, sh + 1, hip - 3, KITD)              # ombre du flanc
     im.put(10 + L, sh + 2, TRIM)
     # epaulieres
     im.rect(4 + L, sh - 1, 6 + L, sh, METAL)
@@ -630,7 +631,7 @@ def figure(legs=(8, -8), arms=(20, -20), lean=0, arm_lift=0, crouch=0):
 def lying(flip=False):
     """joueur allonge (chute) ou en extension (plongeon), 16 px de long."""
     im = Img(FW, FH, 0)
-    y0 = 17
+    y0 = 21
     for y in range(y0 - 3, y0 + 3):                 # casque
         for x in range(0, 6):
             if (x - 2.5) ** 2 + (y - y0) ** 2 <= 6.5:

@@ -81,7 +81,7 @@ MODE_2P     = 1
 MODE_CPU    = 2
 
 ; ---- OBJ (tiles)
-FEET_ROW    = 22             ; ligne des pieds dans le cadre 16x32 d'un joueur
+FEET_ROW    = 25             ; ligne des pieds dans le cadre 16x32 d'un joueur
 SPR_STAND   = 0
 SPR_RUN1    = 2
 SPR_RUN2    = 4
