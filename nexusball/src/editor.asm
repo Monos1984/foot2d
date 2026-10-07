@@ -416,8 +416,13 @@ create_player:
     jsr ui_fill
     lda #UI_HI
     sta t0
-    ldx #TPOS(9, 1)
+    ldx #TPOS(4, 1)
     ldy #.loword(str_cp_title)
+    jsr print
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(1, 25)
+    ldy #.loword(str_ed_lhelp)
     jsr print
     jsr cpl_draw
     jsr screen_on
@@ -610,7 +615,7 @@ pe_edit:
     jsr ui_fill
     lda #UI_HI
     sta t0
-    ldx #TPOS(9, 1)
+    ldx #TPOS(4, 1)
     ldy #.loword(str_cp_title)
     jsr print
     jsr pe_draw
@@ -1098,8 +1103,13 @@ create_team:
     jsr ui_fill
     lda #UI_HI
     sta t0
-    ldx #TPOS(10, 1)
+    ldx #TPOS(4, 1)
     ldy #.loword(str_ct_title)
+    jsr print
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(1, 25)
+    ldy #.loword(str_ed_lhelp)
     jsr print
     jsr ctl_draw
     jsr screen_on
@@ -1275,7 +1285,7 @@ te_edit:
     jsr ui_fill
     lda #UI_HI
     sta t0
-    ldx #TPOS(10, 1)
+    ldx #TPOS(4, 1)
     ldy #.loword(str_ct_title)
     jsr print
     jsr te_draw
@@ -1949,6 +1959,7 @@ kb_chars:       .byte "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-. '"
 str_kb_title:   .byte "ENTER NAME", 0
 str_kb_help:    .byte "A ADD  B DELETE  START DONE", 0
 str_cp_title:   .byte "CREATE PLAYER", 0
+str_ed_lhelp:   .byte "A EDIT         B BACK", 0
 str_ct_title:   .byte "CREATE TEAM", 0
 str_ed_empty:   .byte "---", 0
 str_ed_save:    .byte "SAVE", 0

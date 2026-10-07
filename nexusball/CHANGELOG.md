@@ -1,5 +1,14 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.19.3 — menus (suite)
+
+- Écran titre : « AN OFFGAME PROJECT » retiré ; la description de l'entrée choisie remonte
+  d'une ligne.
+- Crédits : nouveau fond (panneaux des menus), titre dans la barre, lignes centrées, titres
+  en orange et noms en cyan, aide « B BACK » ; le logo ne passe plus sous le texte.
+- Éditeurs (CREATE PLAYER / CREATE TEAM) : titre aligné sur les autres écrans, aide en bas
+  des listes (« A EDIT  B BACK »).
+
 ## 0.19.2 — menus
 
 - Menu principal : un ballon ovale tourne devant l'entrée choisie, et une ligne de description

@@ -28,7 +28,6 @@ TR = [
     ("CREATE PLAYER", "CRÉER UN JOUEUR", 20),
     ("CREDITS", "CRÉDITS", 0),
     ("RULES", "RÈGLES", 8),
-    (" AN OFFGAME PROJECT ", " UN PROJET OFFGAME ", 0),
     # options
     ("MATCH LENGTH    2X  MIN", "DURÉE DU MATCH  2X  MIN", 0),
     ("ON ", "OUI", 0),
@@ -61,6 +60,8 @@ TR = [
     ("HOW TO PLAY NEXUS BALL", "COMMENT JOUER À NEXUS BALL", 26),
     ("LENGTH, CONTROLS, LANGUAGE", "DURÉE, COMMANDES, LANGUE", 0),
     ("WHO MADE THE GAME", "QUI A FAIT LE JEU", 0),
+    ("B BACK", "B RETOUR", 8),
+    ("A EDIT         B BACK", "A MODIFIER     B RETOUR", 23),
     ("<> CHANGE       B BACK", "<> CHOIX        B RETOUR", 24),
     ("A OK           B BACK", "A OK           B RETOUR", 23),
     ("COIN TOSS", "TIRAGE AU SORT", 14),

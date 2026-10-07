@@ -44,9 +44,6 @@ title_screen:
     ; pied de page
     lda #TXT_ATTR
     sta t0
-    ldx #TPOS(7, 22)
-    ldy #.loword(str_project)
-    jsr print
     ldx #TPOS(12, 25)
     ldy #.loword(str_ntsc)
     lda is_pal
@@ -170,8 +167,8 @@ menu_draw:
     lda t5
     cmp #MENU_ITEMS
     bne @l
-    ; description de l'entree choisie (ligne 23, centree, cyan)
-    ldx #TPOS(0, 23)
+    ; description de l'entree choisie (ligne 22, centree, cyan)
+    ldx #TPOS(0, 22)
     ldy #32
     lda #0
     jsr fill_tiles
@@ -196,7 +193,7 @@ menu_draw:
     adc #32
     lsr a                       ; colonne = (32 - longueur) / 2
     clc
-    adc #23 * 32
+    adc #22 * 32
     asl a
     tax
     lda #TXT_ATTR + $1400
@@ -446,31 +443,75 @@ safe_screen_off:
 credits_screen:
     .a16
     .i16
-    jsr screen_off
+    jsr safe_screen_off
     jsr bg3_clear
-    lda #TXT_ATTR
+    jsr ui_fill
+    lda #UI_HI
     sta t0
-    ldy #.loword(credits_text)
-    ldx #TPOS(2, 3)
-@line:
-    phx
+    ldx #TPOS(4, 1)
+    ldy #.loword(str_t_cred)
     jsr print
-    plx
-    iny                         ; saute le 0
-    txa
+    lda #UI_ATTR
+    sta t0
+    ldx #TPOS(1, 25)
+    ldy #.loword(str_cred_help)
+    jsr print
+    ; lignes centrees : titres en orange, noms (lignes indentees) en cyan
+    ldy #.loword(credits_text)
+    lda #3
+    sta cr_row
+@line:
+    lda #UI_HI
+    sta t0
+    lda a:0,y
+    and #$00FF
+    cmp #' '
+    bne @len
+    lda #UI_A
+    sta t0
+@sp:
+    lda a:0,y                   ; espaces de tete ignores
+    and #$00FF
+    cmp #' '
+    bne @len
+    iny
+    bra @sp
+@len:
+    sty cr_ptr
+    ldx #0
+:   lda a:0,y
+    and #$00FF
+    beq :+
+    inx
+    iny
+    bra :-
+:   txa
+    eor #$FFFF
+    sec
+    adc #32
+    lsr a                       ; colonne = (32 - longueur) / 2
+    sta cr_col
+    lda cr_row
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
     clc
-    adc #64
+    adc cr_col
+    asl a
     tax
+    ldy cr_ptr
+    jsr print
+    iny                         ; saute le 0
+    inc cr_row
     lda a:0,y
     and #$00FF
     cmp #$FF
     bne @line
     jsr screen_on
-@w: jsr wait_frame
-    jsr oam_begin
-    jsr oam_finish
-    lda joy_new
-    ora joy_new+2
+@w: jsr ui_wait
+    lda t7
     and #(JOY_START | JOY_A | JOY_B)
     beq @w
     jmp title_screen
@@ -499,8 +540,8 @@ str_ch0:        .byte "B:PASS X:KICK Y:SHOOT A:CHARGE", 0
 str_ch1:        .byte "A:PASS B:KICK Y:SHOOT X:CHARGE", 0
 str_ch2:        .byte "Y:PASS B:KICK A:SHOOT X:CHARGE", 0
 ctrl_help:      .word .loword(str_ch0), .loword(str_ch1), .loword(str_ch2)
-str_project:    .byte " AN OFFGAME PROJECT ", 0
 str_opt_help:   .byte "<> CHANGE       B BACK", 0
+str_cred_help:  .byte "B BACK", 0
 str_cm_help:    .byte "A OK           B BACK", 0
 str_d_exh:      .byte "ONE MATCH, 1 OR 2 PLAYERS", 0
 str_d_champ:    .byte "LEAGUE: EVERYONE PLAYS EVERYONE", 0
