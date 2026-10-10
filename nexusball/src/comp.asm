@@ -8,7 +8,7 @@
 MODE_PRESET  = 3            ; start_match : manettes deja reglees
 SRAM_COMP    = $A06100      ; 3 emplacements de $400 octets
 COMP_SIZE    = comp_data_end - comp_data
-COMP_VERSION = 4            ; 4 : + graine (c_seed) ; la version 3 reste lisible
+COMP_VERSION = 5            ; 5 : 24 equipes officielles (c_ctrl sur 32 equipes)
 NUM_CITEMS   = 21           ; 16 equipes + TYPE, LENGTH, DIFFICULTY, STADIUM, START
 
 .segment "RODATA"
@@ -2264,16 +2264,9 @@ comp_check:
     bne @no
     lda f:SRAM_COMP+4,x
     cmp #COMP_VERSION
-    bne @v3
+    bne @no
     lda f:SRAM_COMP+6,x
     cmp #COMP_SIZE
-    bne @no
-    bra @sz
-@v3:
-    cmp #3
-    bne @no
-    lda f:SRAM_COMP+6,x
-    cmp #COMP_SIZE - 2
     bne @no
 @sz:
     sta cs_sz

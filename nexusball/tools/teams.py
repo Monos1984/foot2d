@@ -44,19 +44,28 @@ TEAMS = [
     ("ORION STARS",    "ORI", "ORION BELT",   (31, 13, 2),  ORANGE, (28, 28, 30), WHITE,  "POWER",     7, 0, (1, 1, 1, 1, 0, 1)),
     ("TITAN CRUSHERS", "TIT", "TITAN",        (14, 4, 4),   RED,    (24, 24, 26), WHITE,  "POWER",     7, 4, (0, 2, 2, 1, 0, 0)),
     ("VEGA STRIKERS",  "VEG", "VEGA PRIME",   (28, 4, 22),  PURPLE, (30, 28, 6),  YELLOW, "OFFENSIVE", 6, 3, (2, 1, 2, 2, 2, 2)),
-    ("ANDROMEDA WOLVES", "AND", "ANDROMEDA",  (12, 12, 16), BLACK,  (8, 22, 30),  CYAN,   "COUNTER",   6, 4, (0, 2, 1, 0, 1, 2)),
+    ("ANDROMEDA WOLF", "AND", "ANDROMEDA",  (12, 12, 16), BLACK,  (8, 22, 30),  CYAN,   "COUNTER",   6, 4, (0, 2, 1, 0, 1, 2)),
     ("MARS UNITED",    "MAR", "MARS",         (26, 6, 3),   RED,    (28, 28, 30), WHITE,  "BALANCED",  6, 0, (1, 1, 1, 1, 2, 1)),
     ("SOLARIS FALCONS", "SOL", "SOLARIS",     (31, 26, 4),  YELLOW, (6, 8, 24),   BLUE,   "SPEED",     6, 1, (2, 0, 1, 1, 1, 2)),
     ("EUROPA ICE",     "EUR", "EUROPA",       (4, 12, 30),  BLUE,   (28, 30, 31), WHITE,  "TECHNICAL", 7, 2, (1, 0, 1, 1, 0, 1)),
     ("SIRIUS RAIDERS", "SIR", "SIRIUS",       (4, 26, 26),  CYAN,   (20, 4, 4),   RED,    "SPEED",     5, 1, (2, 1, 2, 1, 1, 2)),
     ("NOVA PRIME",     "NOV", "NOVA",         (30, 30, 31), WHITE,  (4, 6, 16),   BLUE,   "PASSING",   7, 2, (1, 0, 1, 1, 2, 0)),
-    ("CENTAURI FORCE", "CEN", "ALPHA CENTAURI", (6, 22, 8), GREEN,  (28, 28, 30), WHITE,  "DEFENSIVE", 5, 5, (0, 1, 0, 0, 0, 0)),
+    ("CENTAURI FORCE", "CEN", "A.CENTAURI", (6, 22, 8), GREEN,  (28, 28, 30), WHITE,  "DEFENSIVE", 5, 5, (0, 1, 0, 0, 0, 0)),
     ("LUNAR KNIGHTS",  "LUN", "THE MOON",     (22, 22, 26), WHITE,  (16, 4, 22),  PURPLE, "DEFENSIVE", 5, 4, (0, 1, 1, 0, 1, 1)),
     ("ALPHA DRAKES",   "ALP", "ALPHA DRACO",  (4, 18, 6),   GREEN,  (30, 26, 4),  YELLOW, "OFFENSIVE", 5, 1, (2, 2, 2, 2, 1, 2)),
     ("NEPTUNE STORM",  "NEP", "NEPTUNE",      (2, 6, 20),   BLUE,   (30, 18, 2),  ORANGE, "BALANCED",  5, 0, (1, 1, 1, 1, 1, 1)),
     ("PHOENIX CORE",   "PHO", "PHOENIX",      (31, 6, 6),   RED,    (30, 26, 6),  YELLOW, "COUNTER",   6, 3, (0, 2, 1, 1, 1, 2)),
     ("HELIOS BLADES",  "HEL", "HELIOS",       (31, 20, 2),  ORANGE, (6, 6, 10),   BLACK,  "TECHNICAL", 6, 2, (1, 0, 1, 2, 0, 1)),
     ("CYGNUS RANGERS", "CYG", "CYGNUS",       (18, 8, 28),  PURPLE, (6, 26, 26),  CYAN,   "PASSING",   4, 0, (1, 0, 0, 1, 2, 0)),
+    # systeme solaire et galaxie (0.22)
+    ("TERRA UNITED",   "TER", "EARTH",        (4, 14, 28),  BLUE,   (6, 22, 8),   GREEN,  "BALANCED",  7, 0, (1, 1, 1, 1, 1, 1)),
+    ("JUPITER GIANTS", "JUP", "JUPITER",      (26, 13, 5),  ORANGE, (28, 28, 30), WHITE,  "POWER",     7, 4, (0, 1, 2, 1, 1, 0)),
+    ("SATURN RINGS",   "SAT", "SATURN",       (28, 24, 10), YELLOW, (16, 6, 24),  PURPLE, "TECHNICAL", 6, 2, (1, 0, 1, 1, 0, 1)),
+    ("VENUS INFERNO",  "VEN", "VENUS",        (31, 12, 22), PURPLE, (28, 28, 30), WHITE,  "OFFENSIVE", 5, 3, (2, 2, 2, 2, 2, 2)),
+    ("MERCURY BOLTS",  "MER", "MERCURY",      (18, 18, 20), WHITE,  (28, 4, 4),   RED,    "SPEED",     6, 1, (2, 0, 2, 1, 1, 2)),
+    ("URANUS TIDE",    "URA", "URANUS",       (8, 26, 24),  CYAN,   (2, 5, 16),   BLUE,   "PASSING",   5, 0, (1, 0, 1, 1, 2, 0)),
+    ("PLUTO FROST",    "PLU", "PLUTO",        (2, 5, 16),   BLUE,   (29, 29, 31), WHITE,  "DEFENSIVE", 4, 5, (0, 1, 0, 0, 0, 1)),
+    ("GALAXY ALLSTARS", "GAL", "MILKY WAY",   (6, 6, 8),    BLACK,  (31, 26, 4),  YELLOW, "TECHNICAL", 8, 2, (1, 1, 2, 1, 2, 1)),
 ]
 
 KITCOLS = [
@@ -117,6 +126,8 @@ def main():
            "; enregistrements en banque $C0 (copies a la demande dans trec_buf par team_rec_id)",
            '.segment "DATA0"']
     for ti, (nm, sh, world, col, fam, away, afam, style, level, form, tac) in enumerate(TEAMS):
+        assert len(world) <= 12, world     # largeur des fiches (choix des equipes)
+        assert len(nm) <= 15, nm
         rec = bytearray()
         rec += strfield(nm, 16) + strfield(sh, 4) + strfield(world, 16)
         for c in kit(col) + kit(away):

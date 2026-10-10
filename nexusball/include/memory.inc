@@ -204,7 +204,7 @@ c_champ:    .res 2          ; equipe championne
 c_cur:      .res 2          ; match global en cours (humain)
 c_watch:    .res 2          ; 1 = regarder les matchs CPU contre CPU
 c_teams:    .res 16         ; equipes participantes (index participant -> equipe)
-c_ctrl:     .res 24         ; par equipe : 0 absente, 1 CPU, 2 P1, 3 P2
+c_ctrl:     .res 32         ; par equipe (MAX_TEAMS) : 0 absente, 1 CPU, 2 P1, 3 P2
 c_res:      .res 240        ; scores (domicile, exterieur), $FF = non joue
 c_br:       .res 32         ; coupe : participant par case du tableau
 c_so:       .res 16         ; coupe : vainqueur aux tirs au but (0 dom, 1 ext, $FF aucun)
@@ -253,7 +253,7 @@ kb_max:     .res 2
 kb_x:       .res 2
 kb_y:       .res 2
 vt_n:       .res 2
-vt_list:    .res 24
+vt_list:    .res 32         ; (MAX_TEAMS)
 cs_top:     .res 2
 rep_bits:   .res 2
 rep_t:      .res 2

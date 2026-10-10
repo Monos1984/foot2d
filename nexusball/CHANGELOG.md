@@ -1,5 +1,17 @@
 # NEXUS BALL — CHANGELOG
 
+## 0.22.0 — équipes du système solaire
+
+- 8 nouvelles équipes (24 au total) : TERRA UNITED (la Terre), JUPITER GIANTS, SATURN RINGS,
+  VENUS INFERNO, MERCURY BOLTS, URANUS TIDE, PLUTO FROST et GALAXY ALLSTARS (Voie lactée,
+  la plus forte). Les équipes créées passent aux numéros 24-31.
+- Corrections : « ANDROMEDA WOLVES » était tronqué (16 lettres pour 15 places) → ANDROMEDA
+  WOLF ; le monde « ALPHA CENTAURI » débordait de la fiche du choix des équipes et laissait
+  des lettres → A.CENTAURI (contrôle de longueur ajouté dans tools/teams.py).
+- Compétitions : sauvegarde version 5 (les compétitions et mots de passe des versions
+  précédentes ne sont plus lisibles). Mot de passe : 8 bits de plus (24 équipes).
+- Vérifié : ralenti suivi de la fin du match sur un but en or, ralenti interrompu par A.
+
 ## 0.21.0 — ralenti des buts
 
 - Après la célébration d'un but, ralenti de l'action (jusqu'à ~2,5 s avant le but, rejouées
