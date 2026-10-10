@@ -10,6 +10,9 @@
   des lettres → A.CENTAURI (contrôle de longueur ajouté dans tools/teams.py).
 - Compétitions : sauvegarde version 5 (les compétitions et mots de passe des versions
   précédentes ne sont plus lisibles). Mot de passe : 8 bits de plus (24 équipes).
+- Nouveau stade TERRA PARK (la Terre) : pelouse tondue en bandes avec brins, tribunes bleu,
+  vert et blanc, emblème rond (polygone à 16 côtés). Stocké dans la banque $C3 (DATA3, libre
+  jusqu'ici) ; 7 stades + rotation.
 - Vérifié : ralenti suivi de la fin du match sur un but en or, ralenti interrompu par A.
 
 ## 0.21.0 — ralenti des buts

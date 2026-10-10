@@ -569,8 +569,8 @@ wx_next:
     rts
 
 .segment "RODATA"
-; ORBITAL, MARS, EUROPA, ANDROMEDA, TITAN, SOLARIS
-wx_modes:   .byte 0, 2, 1, 3, 5, 4
+; ORBITAL, MARS, EUROPA, ANDROMEDA, TITAN, SOLARIS, TERRA
+wx_modes:   .byte 0, 2, 1, 3, 5, 4, 0
 wx_tick:    .word 0, .loword(wx_snow), .loword(wx_dust), .loword(wx_rise), .loword(wx_twinkle), .loword(wx_spark)
 wx_tiles:   .byte 0, SPR_FLAKE, SPR_DUST, SPR_FLAKE, SPR_TRAIL1, SPR_DUST
 .segment "CODE"

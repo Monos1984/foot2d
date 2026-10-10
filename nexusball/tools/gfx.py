@@ -89,6 +89,9 @@ STADIUMS = [
     dict(name="SOLARIS ARENA", emblem=(12, 0), words=("SOLAR", "ARENA"), floor="stripe",
          pal=stadium_pal((10, 6, 3), (12, 8, 4), (15, 10, 5), (31, 30, 24), (8, 22, 30), (7, 4, 2), (13, 8, 4),
                          (20, 13, 6), (31, 26, 6), (31, 12, 2), (31, 30, 14), ((30, 20, 4), (26, 10, 6), (31, 28, 12)))),
+    dict(name="TERRA PARK", emblem=(16, 0), words=("TERRA", "PARK"), floor="grass",
+         pal=stadium_pal((3, 10, 4), (4, 13, 5), (7, 17, 7), (30, 31, 30), (8, 22, 31), (5, 7, 10), (10, 14, 18),
+                         (16, 20, 24), (10, 31, 14), (31, 14, 2), (31, 27, 10), ((8, 14, 28), (6, 22, 8), (28, 28, 30)))),
 ]
 
 # couleurs fixes de l'equipement futuriste (index 11-15 de toutes les palettes de joueurs)
@@ -347,6 +350,13 @@ def build_field(st):
                     im.put(x, y, 3)
                 elif ((x + y) // 32 + (x - y) // 32) % 2:
                     im.put(x, y, 1)
+            elif f == "grass":
+                # pelouse tondue : bandes alternees et brins (tramage pseudo-aleatoire)
+                if (x // 32) % 2:
+                    im.put(x, y, 1)
+                k = ((x // 8) + 2 * (y // 8)) % 3          # 3 motifs de brins par tile
+                if ((x & 7) * 3 + (y & 7) * 5 + k * 2) % 11 == 0:
+                    im.put(x, y, 3)
             elif f == "plate":
                 if x % 32 == 0 or y % 16 == 8:
                     im.put(x, y, 3)
@@ -1220,7 +1230,7 @@ def main():
     with open(os.path.join(GEN, "stadiums.inc"), "w") as f:
         f.write("; genere par tools/gfx.py\nNUM_STADIUMS = %d\n" % len(STADIUMS))
         for n, st in enumerate(STADIUMS):
-            seg = "DATA2"
+            seg = "DATA2" if n < 6 else "DATA3"
             f.write('.segment "%s"\nstad%d_chr: .incbin "data/gen/stad%d.chr.lz"\n'
                     'stad%d_map: .incbin "data/gen/stad%d.map.lz"\n' % (seg, n, n, n, n))
         f.write('.segment "DATA0"\n')
